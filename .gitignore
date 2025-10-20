@@ -1,0 +1,10 @@
+vendor/
+writable/logs/*
+writable/cache/*
+writable/session/*
+writable/uploads/*
+.env
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
