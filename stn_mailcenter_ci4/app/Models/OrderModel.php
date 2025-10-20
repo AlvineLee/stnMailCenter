@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class OrderModel extends Model
 {
-    protected $table = 'orders';
+    protected $table = 'tbl_orders';
     protected $primaryKey = 'id';
     protected $useAutoIncrement = true;
     protected $returnType = 'array';
@@ -14,14 +14,20 @@ class OrderModel extends Model
     protected $protectFields = true;
     protected $allowedFields = [
         'user_id',
-        'service_type',
-        'service_name',
+        'customer_id',
+        'department_id',
+        'service_type_id',
+        'order_number',
         'company_name',
         'contact',
         'address',
         'departure_address',
         'departure_detail',
         'departure_contact',
+        'waypoint_address',
+        'waypoint_detail',
+        'waypoint_contact',
+        'waypoint_notes',
         'destination_type',
         'mailroom',
         'destination_address',
@@ -32,8 +38,9 @@ class OrderModel extends Model
         'unit',
         'delivery_content',
         'status',
-        'created_at',
-        'updated_at'
+        'total_amount',
+        'payment_type',
+        'notes'
     ];
 
     // Dates
@@ -46,15 +53,15 @@ class OrderModel extends Model
     // Validation
     protected $validationRules = [
         'user_id' => 'required|integer',
-        'service_type' => 'required|max_length[50]',
-        'service_name' => 'required|max_length[100]',
+        'customer_id' => 'required|integer',
+        'service_type_id' => 'required|integer',
         'company_name' => 'required|max_length[100]',
         'contact' => 'required|max_length[20]',
-        'departure_address' => 'required|max_length[255]',
-        'destination_address' => 'required|max_length[255]',
+        'departure_address' => 'required',
+        'destination_address' => 'required',
         'item_type' => 'required|max_length[50]',
-        'delivery_content' => 'required|max_length[1000]',
-        'status' => 'required|in_list[pending,processing,completed,cancelled]'
+        'delivery_content' => 'required',
+        'status' => 'permit_empty|in_list[pending,processing,completed,cancelled]'
     ];
 
     protected $validationMessages = [
@@ -105,6 +112,31 @@ class OrderModel extends Model
 
     // Callbacks
     protected $allowCallbacks = true;
+    protected $beforeInsert = ['generateOrderNumber'];
+    protected $afterInsert = [];
+    protected $beforeUpdate = [];
+    protected $afterUpdate = [];
+    protected $beforeDelete = [];
+    protected $afterDelete = [];
+
+    /**
+     * 주문번호 자동 생성
+     */
+    protected function generateOrderNumber(array $data)
+    {
+        if (!isset($data['data']['order_number']) || empty($data['data']['order_number'])) {
+            $date = date('Ymd');
+            $prefix = "ORD-{$date}-";
+            
+            $builder = $this->builder();
+            $builder->like('order_number', $prefix);
+            $count = $builder->countAllResults();
+            
+            $data['data']['order_number'] = $prefix . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        }
+        
+        return $data;
+    }
 
     /**
      * 사용자별 주문 목록 조회
@@ -129,9 +161,29 @@ class OrderModel extends Model
     /**
      * 서비스 타입별 주문 목록 조회
      */
-    public function getOrdersByServiceType($serviceType)
+    public function getOrdersByServiceType($serviceTypeId)
     {
-        return $this->where('service_type', $serviceType)
+        return $this->where('service_type_id', $serviceTypeId)
+                   ->orderBy('created_at', 'DESC')
+                   ->findAll();
+    }
+
+    /**
+     * 고객사별 주문 목록 조회
+     */
+    public function getOrdersByCustomer($customerId)
+    {
+        return $this->where('customer_id', $customerId)
+                   ->orderBy('created_at', 'DESC')
+                   ->findAll();
+    }
+
+    /**
+     * 부서별 주문 목록 조회
+     */
+    public function getOrdersByDepartment($departmentId)
+    {
+        return $this->where('department_id', $departmentId)
                    ->orderBy('created_at', 'DESC')
                    ->findAll();
     }

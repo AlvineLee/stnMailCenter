@@ -1,3 +1,4 @@
+
 /* 기본 스타일 및 레이아웃 */
 * {
     margin: 0;
@@ -6,7 +7,7 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     color: #4a5568;
     line-height: 1.4;
@@ -16,6 +17,9 @@ body {
 .container {
     display: flex;
     min-height: 100vh;
+    height: 100vh;
+    position: relative;
+    max-width: none !important;
 }
 
 /* 사이드바 스타일 */
@@ -28,17 +32,103 @@ body {
     height: 100vh;
     overflow-y: auto;
     z-index: 1000;
+    transition: transform 0.3s ease-in-out;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+/* 사이드바 스크롤바 스타일 */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: #f7fafc;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+/* 모바일에서 사이드바 숨김 */
+@media (max-width: 1023px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    /* 모바일에서 사이드바 오버레이 */
+    .sidebar::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+    }
+    
+    .sidebar.open::before {
+        opacity: 1;
+    }
+}
+
+/* 햄버거 메뉴 버튼 스타일 */
+#mobileMenuToggle {
+    transition: all 0.3s ease;
+}
+
+#mobileMenuToggle:hover {
+    background-color: #f8fafc;
+    transform: scale(1.05);
+}
+
+#mobileMenuToggle.active {
+    background-color: #667eea;
+    color: white;
+}
+
+#mobileMenuToggle.active svg {
+    color: white;
+}
+
+/* 햄버거 메뉴 아이콘 애니메이션 */
+#mobileMenuToggle svg {
+    transition: transform 0.3s ease;
+}
+
+#mobileMenuToggle.active svg {
+    transform: rotate(90deg);
 }
 
 .sidebar-header {
-    padding: 20px;
+    padding: 16px;
     border-bottom: 1px solid #e2e8f0;
+    position: relative;
 }
 
 .logo {
     display: flex;
     align-items: center;
     gap: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: opacity 0.2s ease;
+}
+
+.logo:hover {
+    opacity: 0.8;
 }
 
 .logo-icon {
@@ -74,17 +164,29 @@ body {
 }
 
 .user-info {
-    padding: 15px 20px;
+    padding: 12px 20px;
     border-bottom: 1px solid #e2e8f0;
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
+.user-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .user-name {
     font-weight: 600;
     color: #667eea;
     font-size: 14px;
+}
+
+.customer-name {
+    font-weight: 500;
+    color: #718096;
+    font-size: 12px;
 }
 
 .logout-link {
@@ -107,18 +209,17 @@ body {
 }
 
 .nav-item {
-    margin: 2px 0;
+    margin: 1px 0;
 }
 
 .nav-link {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
-    color: #2d3748;
+    padding: 8px 20px;
+    color: #1a202c;
     text-decoration: none;
-    transition: all 0.2s ease;
     position: relative;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .nav-link:hover {
@@ -127,9 +228,9 @@ body {
 }
 
 .nav-item.active .nav-link {
-    background: linear-gradient(90deg, #e6f3ff 0%, #c7d2fe 100%);
-    color: #4c51bf;
-    border-right: 3px solid #4c51bf;
+    background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #64748b;
+    border-right: none;
 }
 
 .nav-icon {
@@ -157,7 +258,6 @@ body {
     overflow: hidden;
     transition: max-height 0.3s ease;
     background: #f8fafc;
-    border-left: 3px solid #e2e8f0;
     margin-left: 20px;
 }
 
@@ -176,14 +276,14 @@ body {
 .submenu a {
     display: flex;
     align-items: center;
-    padding: 8px 20px 8px 40px;
+    padding: 6px 20px 6px 40px;
     color: #4a5568;
     text-decoration: none;
     font-size: 13px;
     font-weight: 600;
-    transition: all 0.2s ease;
-    border-left: 2px solid transparent;
+    border-left: none;
     line-height: 1.4;
+    transition: all 0.2s ease;
 }
 
 .menu-icon {
@@ -203,16 +303,17 @@ body {
 }
 
 .submenu a:hover {
-    color: #2d3748;
-    background: #edf2f7;
-    border-left-color: #667eea;
+    color: #64748b;
+    background: #f8fafc;
+    border-left-color: transparent;
 }
 
 .submenu a.active {
-    color: #667eea;
-    background: #e6f3ff;
-    border-left-color: #667eea;
-    font-weight: 500;
+    color: #64748b;
+    background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+    border-left-color: transparent;
+    font-weight: 700;
+    box-shadow: none;
 }
 
 /* 중첩된 서브메뉴 스타일 */
@@ -221,7 +322,6 @@ body {
     overflow: hidden;
     transition: max-height 0.3s ease;
     background: #f1f5f9;
-    border-left: 2px solid #cbd5e0;
     margin-left: 20px;
 }
 
@@ -256,8 +356,459 @@ body {
 .main-content {
     flex: 1;
     margin-left: 280px;
-    padding: 30px;
+    padding: 10px;
     background: transparent;
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 기본 테이블 스타일 - 모든 리스트를 그리드 형식으로 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fafafa;
+}
+
+thead {
+    background: #f3f4f6;
+    border-bottom: 2px solid #d1d5db;
+}
+
+th {
+    padding: 3px 8px;
+    text-align: center;
+    font-weight: 600;
+    color: #374151;
+    border-right: 1px solid #e5e7eb;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1.1;
+    height: 20px;
+}
+
+th:last-child {
+    border-right: none;
+}
+
+tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+    height: 18px;
+    background: #fafafa;
+}
+
+tbody tr:hover {
+    background: #f9fafb;
+}
+
+tbody tr:nth-child(even) {
+    background: #f5f5f5;
+}
+
+tbody tr:nth-child(even):hover {
+    background: #f3f4f6;
+}
+
+td {
+    padding: 2px 8px;
+    border-right: 1px solid #e5e7eb;
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    line-height: 1.1;
+    height: 18px;
+    text-align: left;
+}
+
+td:last-child {
+    border-right: none;
+}
+
+.action-buttons {
+    white-space: nowrap;
+}
+
+.action-buttons button {
+    margin-right: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    border: 1px solid #d1d5db;
+    border-radius: 2px;
+    background: white;
+    cursor: pointer;
+}
+
+.action-buttons button:hover {
+    background: #f3f4f6;
+}
+
+.status-badge {
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* 공통 검색 버튼 스타일 */
+.search-button {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    padding: 4px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+    min-width: 50px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-button:hover {
+    background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+    transform: translateY(-1px);
+}
+
+.search-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+}
+
+.search-button:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: rgba(79, 70, 229, 0.5);
+}
+
+/* 공통 버튼 스타일 - 검색 버튼과 동일한 크기 */
+button {
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 50px !important;
+    background: #f1f5f9 !important; /* 연한 파스텔 그레이 */
+    color: #475569 !important; /* 진한 그레이 텍스트 */
+    border: 1px solid #e2e8f0 !important; /* 연한 테두리 */
+}
+
+button:hover {
+    background: #e2e8f0 !important; /* 호버 시 조금 더 진한 그레이 */
+    color: #334155 !important;
+}
+
+/* 액션 버튼들 스타일 */
+.action-buttons button {
+    margin-right: 4px !important;
+    padding: 2px 6px !important;
+    font-size: 11px !important;
+    border: 1px solid #e2e8f0 !important; /* 연한 파스텔 테두리 */
+    border-radius: 2px !important;
+    background: #f8fafc !important; /* 연한 파스텔 그레이 */
+    color: #475569 !important; /* 진한 그레이 텍스트 */
+    height: 20px !important;
+    min-width: 40px !important;
+    display: inline-block !important; /* 테이블 내 버튼은 inline-block */
+}
+
+.action-buttons button:hover {
+    background: #f1f5f9 !important; /* 호버 시 조금 더 진한 파스텔 그레이 */
+    color: #334155 !important;
+}
+
+/* 페이징 숫자 버튼 스타일 (동그란 원) */
+.pagination .page-number {
+    padding: 0 !important; /* 동그란 원을 위해 패딩 제거 */
+    font-size: 11px !important; /* 폰트 크기 조금 더 작게 */
+    width: 22px !important; /* 더 작은 원 */
+    height: 22px !important; /* 더 작은 원 */
+    border-radius: 50% !important; /* 완전한 원 모양 */
+    font-weight: 500 !important; /* 페이징은 조금 더 얇게 */
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important; /* flex로 중앙 정렬 */
+    align-items: center !important;
+    justify-content: center !important;
+    background: #f8fafc !important; /* 연한 파스텔 그레이 */
+    color: #64748b !important; /* 중간 톤 그레이 */
+    border: 1px solid #e2e8f0 !important; /* 연한 테두리 */
+    margin: 0 2px !important; /* 버튼 간격 더 좁게 */
+    line-height: 1 !important; /* 텍스트 높이 정규화 */
+    text-align: center !important; /* 텍스트 중앙 정렬 */
+    box-sizing: border-box !important; /* 테두리 포함 크기 계산 */
+    min-width: 22px !important; /* 최소 너비 설정 */
+}
+
+/* 페이징 네비게이션 버튼 스타일 (이전/다음) */
+.pagination .nav-button {
+    padding: 4px 12px !important; /* 네비게이션은 좀 더 넓게 */
+    font-size: 12px !important;
+    height: 22px !important; /* 숫자 버튼과 정확히 같은 높이 */
+    border-radius: 6px !important; /* 네비게이션은 둥근 모서리 */
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 50px !important; /* 네비게이션은 최소 너비 */
+    background: #f8fafc !important; /* 연한 파스텔 그레이 */
+    color: #64748b !important; /* 중간 톤 그레이 */
+    border: 1px solid #e2e8f0 !important; /* 연한 테두리 */
+    margin: 0 3px !important; /* 버튼 간격 */
+}
+
+/* 페이징 숫자 버튼 호버 */
+.pagination .page-number:hover {
+    background: #f1f5f9 !important; /* 호버 시 조금 더 진한 파스텔 그레이 */
+    color: #475569 !important;
+    border-color: #cbd5e1 !important;
+}
+
+/* 페이징 네비게이션 버튼 호버 */
+.pagination .nav-button:hover {
+    background: #f1f5f9 !important; /* 호버 시 조금 더 진한 파스텔 그레이 */
+    color: #475569 !important;
+    border-color: #cbd5e1 !important;
+}
+
+/* 현재 페이지 (숫자 버튼만) */
+.pagination .page-number.active {
+    background: #e2e8f0 !important; /* 현재 페이지는 조금 더 진하게 */
+    color: #334155 !important;
+    border-color: #94a3b8 !important;
+    font-weight: 600 !important;
+}
+
+/* 검색 영역 컴팩트 스타일 */
+.search-compact {
+    padding: 8px 12px !important;
+    margin-bottom: 12px !important;
+}
+
+.search-compact .flex {
+    gap: 8px !important;
+    align-items: center !important;
+}
+
+.search-compact .flex-1 {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.search-compact label {
+    margin-bottom: 0 !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    min-width: fit-content !important;
+}
+
+.search-compact input,
+.search-compact select {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    flex: 1 !important;
+}
+
+.search-compact button {
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+}
+
+.search-button {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+    color: white !important;
+    padding: 4px 12px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    min-width: 50px !important;
+    border: none !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+}
+
+/* 리스트 페이지 공통 스타일 - style_guide.md 기준 */
+.list-page-container {
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+}
+
+.list-table-container {
+    overflow: auto !important;
+    max-height: calc(100vh - 300px) !important;
+}
+
+.list-table-container table {
+    background: #fafafa !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    font-size: 12px !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+}
+
+.list-table-container th {
+    background: #f3f4f6 !important;
+    text-align: center !important;
+    font-size: 11px !important;
+    height: 20px !important;
+    padding: 3px 8px !important;
+}
+
+.list-table-container td {
+    text-align: left !important;
+    font-size: 12px !important;
+    height: 18px !important;
+    padding: 2px 8px !important;
+}
+
+.list-table-container tbody tr {
+    background: #fafafa !important;
+}
+
+.list-table-container tbody tr:nth-child(even) {
+    background: #f5f5f5 !important;
+}
+
+.list-table-container tbody tr:hover {
+    background: #f9fafb !important;
+}
+
+.status-badge {
+    padding: 2px 6px !important;
+    border-radius: 2px !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+}
+
+.status-pending {
+    background: #dbeafe !important;
+    color: #1e40af !important;
+}
+
+.status-processing {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+}
+
+.status-completed {
+    background: #dcfce7 !important;
+    color: #166534 !important;
+}
+
+.status-cancelled {
+    background: #fee2e2 !important;
+    color: #dc2626 !important;
+}
+
+.action-buttons button {
+    padding: 2px 6px !important;
+    font-size: 11px !important;
+    height: 20px !important;
+    min-width: 40px !important;
+    display: inline-block !important;
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.list-pagination {
+    margin-top: 16px !important;
+    flex-shrink: 0 !important;
+}
+
+.pagination {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+
+.pagination .page-number {
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 50% !important;
+    font-size: 11px !important;
+    margin: 0 2px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+    text-decoration: none !important;
+}
+
+.pagination .nav-button {
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 22px !important;
+    border-radius: 6px !important;
+    min-width: 50px !important;
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+    text-decoration: none !important;
+}
+
+.pagination .active {
+    background: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+/* 모바일에서 메인 콘텐츠 전체 너비 사용 */
+@media (max-width: 1023px) {
+    .main-content {
+        margin-left: 0;
+        padding-top: 60px; /* 햄버거 메뉴 버튼 공간 확보 */
+    }
 }
 
 .content-header {
@@ -295,4 +846,727 @@ body {
     .content-header h1 {
         font-size: 24px;
     }
+}
+
+/* 폼 스타일 - 얇고 깔끔하게 */
+.form-container {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    max-width: 600px !important;
+    margin: 0 !important;
+}
+
+.form-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 24px !important;
+    margin-bottom: 16px !important;
+}
+
+.form-field {
+    margin-bottom: 16px !important;
+}
+
+.form-label {
+    display: block !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    margin-bottom: 4px !important;
+}
+
+.form-input, .form-select {
+    width: 100% !important;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    background: white !important;
+    transition: all 0.2s ease !important;
+    box-sizing: border-box !important;
+    color: #374151 !important;
+}
+
+.form-input:focus, .form-select:focus {
+    outline: none !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+.form-input:hover, .form-select:hover {
+    border-color: #9ca3af !important;
+}
+
+.form-textarea {
+    width: 100% !important;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    background: white !important;
+    min-height: 60px !important;
+    resize: vertical !important;
+    transition: all 0.2s ease !important;
+    box-sizing: border-box !important;
+    font-family: inherit !important;
+    color: #374151 !important;
+}
+
+.form-textarea:focus {
+    outline: none !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+.form-textarea:hover {
+    border-color: #9ca3af !important;
+}
+
+.form-actions {
+    display: flex !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    margin-top: 16px !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+}
+
+.form-button {
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    border: 1px solid #e2e8f0 !important;
+    transition: all 0.2s ease !important;
+    min-width: 60px !important;
+}
+
+.form-button-primary {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.form-button-primary:hover {
+    background: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+.form-button-secondary {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.form-button-secondary:hover {
+    background: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+/* 폼 섹션 스타일 - 퀵접수와 동일한 카드 스타일 */
+.form-section {
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    margin-bottom: 0 !important;
+    position: relative !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+    height: fit-content !important;
+}
+
+.form-section::before {
+    display: none !important;
+}
+
+.form-section-title {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    margin-bottom: 16px !important;
+    padding-bottom: 8px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    letter-spacing: -0.025em !important;
+}
+
+/* 필수 필드 표시 */
+.form-label.required::after {
+    content: ' *' !important;
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+}
+
+/* 입력 필드 그룹 */
+.input-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+
+.input-group .form-input {
+    flex: 1 !important;
+}
+
+.input-group .input-suffix {
+    font-size: 12px !important;
+    color: #6b7280 !important;
+    font-weight: 400 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin-left: 8px !important;
+}
+
+/* 플레이스홀더 스타일 */
+.form-input::placeholder, .form-select::placeholder, .form-textarea::placeholder {
+    color: #9ca3af !important;
+    font-weight: 400 !important;
+}
+
+/* 선택 옵션 스타일 */
+.form-select option {
+    padding: 8px !important;
+    background: white !important;
+    color: #1f2937 !important;
+}
+
+/* 드래그 가능한 테이블 헤더 */
+.draggable-header {
+    background: #f3f4f6 !important;
+    text-align: center !important;
+    font-size: 11px !important;
+    height: 20px !important;
+    padding: 3px 8px !important;
+    cursor: move !important;
+    user-select: none !important;
+    position: relative !important;
+}
+
+.drag-handle {
+    position: absolute !important;
+    right: 2px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 10px !important;
+    color: #94a3b8 !important;
+}
+
+/* 계층 구조 스타일 */
+.hierarchy-container {
+    background: #fafafa !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    padding: 16px !important;
+}
+
+.hierarchy-item {
+    margin-bottom: 8px !important;
+}
+
+.hierarchy-item[data-level="1"] {
+    margin-bottom: 6px !important;
+}
+
+.hierarchy-item[data-level="2"] {
+    margin-bottom: 4px !important;
+}
+
+.hierarchy-node {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px !important;
+    background: #f3f4f6 !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+}
+
+.hierarchy-node[data-level="1"] {
+    padding: 6px !important;
+    background: #f9fafb !important;
+    border: 1px solid #e5e7eb !important;
+}
+
+.hierarchy-node[data-level="2"] {
+    padding: 4px !important;
+    background: white !important;
+    border: 1px solid #f3f4f6 !important;
+    cursor: default !important;
+}
+
+.toggle-icon {
+    margin-right: 8px !important;
+    font-size: 12px !important;
+    color: #64748b !important;
+}
+
+.toggle-icon[data-level="2"] {
+    color: #d1d5db !important;
+}
+
+.hierarchy-title {
+    font-weight: 600 !important;
+    color: #1f2937 !important;
+}
+
+.hierarchy-title[data-level="1"] {
+    font-weight: 500 !important;
+    color: #374151 !important;
+}
+
+.hierarchy-title[data-level="2"] {
+    color: #6b7280 !important;
+}
+
+.hierarchy-code {
+    margin-left: auto !important;
+    font-size: 11px !important;
+    color: #64748b !important;
+}
+
+.hierarchy-code[data-level="2"] {
+    color: #9ca3af !important;
+}
+
+.hierarchy-children {
+    margin-left: 20px !important;
+    margin-top: 8px !important;
+}
+
+.hierarchy-children[data-level="1"] {
+    margin-top: 6px !important;
+}
+
+.hierarchy-children[data-level="2"] {
+    margin-top: 4px !important;
+}
+
+/* 트리 구조 스타일 */
+.tree-container {
+    background: white !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.tree-node {
+    position: relative !important;
+    margin: 4px 0 !important;
+}
+
+.tree-node-content {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid transparent !important;
+}
+
+.tree-node-content:hover {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+
+.tree-node-content.expanded {
+    background: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+}
+
+.tree-toggle {
+    width: 20px !important;
+    height: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 8px !important;
+    border-radius: 4px !important;
+    background: #f1f5f9 !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+.tree-toggle:hover {
+    background: #e2e8f0 !important;
+    color: #475569 !important;
+}
+
+.tree-toggle.expanded {
+    background: #3b82f6 !important;
+    color: white !important;
+}
+
+.tree-icon {
+    width: 24px !important;
+    height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 8px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+}
+
+.tree-icon.level-0 {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+    color: white !important;
+}
+
+.tree-icon.level-1 {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: white !important;
+}
+
+.tree-icon.level-2 {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: white !important;
+}
+
+.tree-label {
+    flex: 1 !important;
+    font-weight: 500 !important;
+    color: #1f2937 !important;
+}
+
+.tree-label.level-0 {
+    font-weight: 600 !important;
+    font-size: 14px !important;
+}
+
+.tree-label.level-1 {
+    font-weight: 500 !important;
+    font-size: 13px !important;
+}
+
+.tree-label.level-2 {
+    font-weight: 400 !important;
+    font-size: 12px !important;
+    color: #4b5563 !important;
+}
+
+.tree-code {
+    background: #f3f4f6 !important;
+    color: #6b7280 !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    margin-left: 8px !important;
+}
+
+.tree-children {
+    margin-left: 32px !important;
+    position: relative !important;
+}
+
+.tree-children::before {
+    content: '' !important;
+    position: absolute !important;
+    left: -16px !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 1px !important;
+    background: #e5e7eb !important;
+}
+
+.tree-children .tree-node::before {
+    content: '' !important;
+    position: absolute !important;
+    left: -16px !important;
+    top: 20px !important;
+    width: 12px !important;
+    height: 1px !important;
+    background: #e5e7eb !important;
+}
+
+.tree-children .tree-node:last-child::after {
+    content: '' !important;
+    position: absolute !important;
+    left: -16px !important;
+    top: 20px !important;
+    bottom: 0 !important;
+    width: 1px !important;
+    background: white !important;
+}
+
+/* Items Management Styles */
+.items-management-container {
+    max-width: 1200px;
+    margin: 0;
+    padding: 0rem;
+}
+
+.items-sections-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+/* 반응형 대응 */
+@media (max-width: 1024px) {
+    .items-sections-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .items-management-container {
+        padding: 0rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .items-management-container {
+        padding: 0rem;
+    }
+    
+    .items-section {
+        padding: 0.75rem;
+    }
+    
+    .billing-items-list {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .fee-items-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .billing-items-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .select-all-controls {
+        align-self: flex-end;
+    }
+}
+
+.items-section {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+    padding: 1rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0;
+}
+
+.select-all-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.select-all-btn, .deselect-all-btn {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.select-all-btn:hover, .deselect-all-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.select-all-btn:active, .deselect-all-btn:active {
+    background: #e5e7eb;
+}
+
+/* Fee Items List */
+.fee-items-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+}
+
+.fee-item-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 3px;
+    background: #f9fafb;
+    font-size: 0.75rem;
+}
+
+.fee-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    min-width: 60px;
+}
+
+.fee-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #6b7280;
+}
+
+.fee-checkbox .item-label {
+    font-size: 0.7rem;
+    color: #374151;
+    white-space: nowrap;
+}
+
+.fee-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+}
+
+.fee-input {
+    width: 60px;
+    padding: 0.125rem 0.25rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    text-align: right;
+}
+
+.fee-input:focus {
+    outline: none;
+    border-color: #6b7280;
+    box-shadow: 0 0 0 1px rgba(107, 114, 128, 0.1);
+}
+
+.currency-suffix {
+    font-size: 0.7rem;
+    color: #6b7280;
+    font-weight: 500;
+    min-width: 15px;
+}
+
+.fee-dropdown {
+    padding: 0.125rem 0.25rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    background: white;
+    min-width: 50px;
+}
+
+.fee-dropdown:focus {
+    outline: none;
+    border-color: #6b7280;
+    box-shadow: 0 0 0 1px rgba(107, 114, 128, 0.1);
+}
+
+/* Billing Items List */
+.billing-items-list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.25rem;
+}
+
+.billing-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 3px;
+    background: #f9fafb;
+    transition: background-color 0.2s;
+    font-size: 0.7rem;
+}
+
+.billing-checkbox:hover {
+    background: #f3f4f6;
+}
+
+.billing-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #6b7280;
+}
+
+.billing-checkbox .item-label {
+    font-size: 0.7rem;
+    color: #374151;
+    white-space: nowrap;
+}
+
+/* Items Actions */
+.items-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.save-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-button:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+.save-button:active {
+    background: #cbd5e1;
+}
+
+/* 배송수단 선택 스타일 */
+.vehicle-option {
+    cursor: pointer;
+}
+
+.vehicle-option input[type="radio"]:checked + .vehicle-card {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.vehicle-option input[type="radio"]:checked + .vehicle-card img {
+    transform: scale(1.05);
 }

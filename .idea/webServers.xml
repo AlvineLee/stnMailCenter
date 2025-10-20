@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="c92d22d0-d614-44a3-bd59-53ad0e2ce8ef" name="DaumData" url="http://homedaumdata.mycafe24.com">
+        <fileTransfer rootFolder="/www" host="homedaumdata.mycafe24.com" port="21">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

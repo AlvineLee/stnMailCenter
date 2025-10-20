@@ -1,22 +1,31 @@
 <aside class="sidebar">
     <div class="sidebar-header">
-        <div class="logo">
+        <a href="<?= base_url('/') ?>" class="logo">
             <div class="logo-icon">STN</div>
             <div class="logo-text">
                 <div class="company-name">STN Network</div>
                 <div class="service-name">ONE'CALL</div>
             </div>
-        </div>
+        </a>
+        <!-- 모바일 닫기 버튼 -->
+        <button id="sidebarClose" class="lg:hidden absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-700">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
     </div>
     
     <div class="user-info">
-        <span class="user-name"><?= session()->get('username') ?? 'Guest' ?></span>
+        <div class="user-details">
+            <span class="user-name"><?= session()->get('real_name') ?? session()->get('username') ?? 'Guest' ?></span>
+            <span class="customer-name"><?= session()->get('customer_name') ?? '' ?></span>
+        </div>
         <a href="<?= base_url('auth/logout') ?>" class="logout-link">➡ logout</a>
     </div>
     
     <nav class="sidebar-nav">
         <ul class="nav-list">
-            <li class="nav-item active has-submenu">
+            <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
                     <span class="nav-icon">✓</span>
                     <span class="nav-text">주문접수</span>
@@ -24,8 +33,8 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('service/mailroom') ?>"><img src="<?= base_url('assets/icons/18.png') ?>" class="menu-icon" alt=""> 메일룸서비스</a></li>
-                    <li class="has-submenu active">
-                        <a href="#" data-toggle="submenu"><img src="<?= base_url('assets/icons/71.png') ?>" class="menu-icon" alt=""> 퀵서비스 <span class="nav-arrow">^</span></a>
+                    <li class="has-submenu">
+                        <a href="#" data-toggle="submenu"><img src="<?= base_url('assets/icons/71.png') ?>" class="menu-icon" alt=""> 퀵서비스 <span class="nav-arrow">v</span></a>
                         <ul class="submenu">
                             <li><a href="<?= base_url('service/quick-motorcycle') ?>"><img src="<?= base_url('assets/icons/49.png') ?>" class="menu-icon" alt=""> 오토바이(소화물)</a></li>
                             <li><a href="<?= base_url('service/quick-vehicle') ?>"><img src="<?= base_url('assets/icons/25.png') ?>" class="menu-icon" alt=""> 차량(화물)</a></li>
@@ -75,13 +84,13 @@
                 </ul>
             </li>
             <li class="nav-item">
-                <a href="<?= base_url('dashboard/orders') ?>" class="nav-link">
+                <a href="<?= base_url('delivery/list') ?>" class="nav-link">
                     <span class="nav-icon">🚚</span>
                     <span class="nav-text">배송조회</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a href="<?= base_url('profile') ?>" class="nav-link">
+                <a href="<?= base_url('member/list') ?>" class="nav-link">
                     <span class="nav-icon">👤</span>
                     <span class="nav-text">회원정보</span>
                 </a>
@@ -97,6 +106,27 @@
                     <li><a href="<?= base_url('customer/branch') ?>">지사 관리</a></li>
                     <li><a href="<?= base_url('customer/agency') ?>">대리점 관리</a></li>
                     <li><a href="<?= base_url('customer/budget') ?>">예산 관리</a></li>
+                    <li class="has-submenu">
+                        <a href="#" data-toggle="submenu">🏢 부서 관리 <span class="nav-arrow">v</span></a>
+                        <ul class="submenu">
+                            <li><a href="<?= base_url('department') ?>">부서 목록</a></li>
+                            <li><a href="<?= base_url('department/create') ?>">부서 등록</a></li>
+                            <li><a href="<?= base_url('department/hierarchy') ?>">부서 계층</a></li>
+                        </ul>
+                    </li>
+                    <li class="has-submenu">
+                        <a href="#" data-toggle="submenu">💰 청구 관리 <span class="nav-arrow">v</span></a>
+                        <ul class="submenu">
+                            <li><a href="<?= base_url('billing') ?>">청구 현황</a></li>
+                            <li><a href="<?= base_url('billing/department') ?>">부서별 청구</a></li>
+                            <li><a href="<?= base_url('billing/department-group') ?>">부서묶음 청구</a></li>
+                            <li><a href="<?= base_url('billing/customer-group') ?>">고객묶음 청구</a></li>
+                            <li><a href="<?= base_url('billing/create') ?>">청구서 생성</a></li>
+                            <li><a href="<?= base_url('billing/history') ?>">청구 내역</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="<?= base_url('customer/items') ?>">📋 항목관리</a></li>
+                    <li><a href="<?= base_url('store-registration') ?>">🏪 입점관리</a></li>
                 </ul>
             </li>
             <li class="nav-item has-submenu">

@@ -15,6 +15,15 @@ $routes->group('auth', function($routes) {
     $routes->get('logout', 'Auth::logout');
 });
 
+// 입점신청 관련 라우트
+$routes->group('store-registration', function($routes) {
+    $routes->get('/', 'StoreRegistration::index');
+    $routes->get('form', 'StoreRegistration::showForm');
+    $routes->post('submit', 'StoreRegistration::submit');
+    $routes->get('view/(:num)', 'StoreRegistration::view/$1');
+    $routes->post('update-status', 'StoreRegistration::updateStatus');
+});
+
 // 대시보드 관련 라우트
 $routes->group('dashboard', function($routes) {
     $routes->get('/', 'Dashboard::index');
@@ -31,12 +40,104 @@ $routes->group('service', function($routes) {
     $routes->get('quick-moving', 'Service::quickMoving');
     $routes->get('international', 'Service::international');
     $routes->get('linked-bus', 'Service::linkedBus');
+    $routes->get('linked-ktx', 'Service::linkedKtx');
+    $routes->get('linked-airport', 'Service::linkedAirport');
+    $routes->get('linked-shipping', 'Service::linkedShipping');
     $routes->get('parcel-visit', 'Service::parcelVisit');
+    $routes->get('parcel-same-day', 'Service::parcelSameDay');
+    $routes->get('parcel-convenience', 'Service::parcelConvenience');
+    $routes->get('parcel-bag', 'Service::parcelBag');
+    $routes->get('postal', 'Service::postal');
+    $routes->get('general-document', 'Service::generalDocument');
+    $routes->get('general-errand', 'Service::generalErrand');
+    $routes->get('general-tax', 'Service::generalTax');
     $routes->get('life-buy', 'Service::lifeBuy');
+    $routes->get('life-taxi', 'Service::lifeTaxi');
+    $routes->get('life-driver', 'Service::lifeDriver');
+    $routes->get('life-wreath', 'Service::lifeWreath');
+    $routes->get('life-accommodation', 'Service::lifeAccommodation');
+    $routes->get('life-stationery', 'Service::lifeStationery');
     
     // 서비스별 주문 접수
     $routes->post('submitServiceOrder', 'Service::submitServiceOrder');
 });
+
+// 배송조회 관련 라우트
+$routes->group('delivery', function($routes) {
+    $routes->get('list', 'Delivery::list');
+    $routes->get('getOrderDetail', 'Delivery::getOrderDetail');
+});
+
+// 회원정보 관련 라우트
+$routes->group('member', function($routes) {
+    $routes->get('list', 'Member::list');
+});
+
+// 고객관리 관련 라우트
+$routes->group('customer', function($routes) {
+    $routes->get('head', 'Customer::head');
+    $routes->get('branch', 'Customer::branch');
+    $routes->get('agency', 'Customer::agency');
+    $routes->get('budget', 'Customer::budget');
+    $routes->get('items', 'Customer::items');
+});
+
+// 부서관리 관련 라우트
+$routes->group('department', function($routes) {
+    $routes->get('/', 'Department::index');
+    $routes->get('create', 'Department::create');
+    $routes->post('store', 'Department::store');
+    $routes->get('show/(:num)', 'Department::show/$1');
+    $routes->get('edit/(:num)', 'Department::edit/$1');
+    $routes->post('update/(:num)', 'Department::update/$1');
+    $routes->delete('delete/(:num)', 'Department::delete/$1');
+    $routes->post('toggle-status/(:num)', 'Department::toggleStatus/$1');
+    $routes->get('search', 'Department::search');
+    $routes->get('get-by-customer', 'Department::getByCustomer');
+    $routes->get('hierarchy', 'Department::getHierarchy');
+    $routes->get('hierarchy-ajax', 'Department::getHierarchyAjax');
+});
+
+// 청구관리 관련 라우트
+$routes->group('billing', function($routes) {
+    $routes->get('/', 'Billing::index');
+    $routes->get('department', 'Billing::department');
+    $routes->get('department-group', 'Billing::departmentGroup');
+    $routes->get('customer-group', 'Billing::customerGroup');
+    $routes->get('create', 'Billing::create');
+    $routes->post('store', 'Billing::store');
+    $routes->get('show/(:num)', 'Billing::show/$1');
+    $routes->get('edit/(:num)', 'Billing::edit/$1');
+    $routes->post('update/(:num)', 'Billing::update/$1');
+    $routes->delete('delete/(:num)', 'Billing::delete/$1');
+    $routes->post('update-status/(:num)', 'Billing::updateStatus/$1');
+    $routes->post('send/(:num)', 'Billing::send/$1');
+    $routes->get('get-unbilled-orders', 'Billing::getUnbilledOrders');
+    $routes->get('get-statistics', 'Billing::getStatistics');
+    $routes->get('search', 'Billing::search');
+    $routes->get('history', 'Billing::index'); // 청구 내역은 index와 동일
+});
+
+// 관리자설정 관련 라우트
+$routes->group('admin', function($routes) {
+    $routes->get('order-type', 'Admin::orderType');
+    $routes->get('notification', 'Admin::notification');
+    $routes->post('updateServicePermission', 'Admin::updateServicePermission');
+    $routes->post('createServicePermission', 'Admin::createServicePermission');
+});
+
+// 환경 테스트 라우트
+$routes->get('env-test', function() {
+    return 'Environment: ' . ENVIRONMENT;
+});
+
+// 디버깅 관련 라우트 (개발 환경에서만)
+if (ENVIRONMENT === 'development') {
+    $routes->group('debug', function($routes) {
+        $routes->get('login', 'Debug::login');
+        $routes->get('createUser', 'Debug::createUser');
+    });
+}
 
 // 기본 홈 라우트 (리다이렉트)
 $routes->get('home', 'Dashboard::index');

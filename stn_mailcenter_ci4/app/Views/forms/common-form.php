@@ -1,144 +1,139 @@
 <?php
-// 공통 폼 컴포넌트 (Tailwind CSS + 1줄 레이아웃 + 컴팩트 스타일)
-// 주문자 정보, 출발지 정보, 도착지 정보, 물품정보, 접수내용
+// 공통 폼 컴포넌트 - 주문자정보, 출발지, 도착지만 포함
 ?>
 
 <!-- 주문자 정보 -->
-<section class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-    <h2 class="text-base font-semibold text-gray-800 mb-3 pb-1 border-b border-blue-200">주문자 정보</h2>
-    <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div class="space-y-1">
-            <label for="companyName" class="block text-xs font-medium text-gray-700">업체명 *</label>
-            <input type="text" id="companyName" name="companyName" value="<?= old('companyName', '은하코퍼레이션') ?>" required
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
+<div class="mb-2">
+    <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
+        <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">주문자 정보</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="space-y-1">
+                <input type="text" id="company_name" name="company_name" value="<?= old('company_name', session()->get('customer_name', '')) ?>" required
+                       placeholder="업체명"
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            </div>
+            <div class="space-y-1">
+                <input type="tel" id="contact" name="contact" value="<?= old('contact', session()->get('phone', '')) ?>" required
+                       placeholder="연락처"
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            </div>
+            <div class="space-y-1">
+                <input type="text" id="address" name="address" value="<?= old('address', '') ?>"
+                       placeholder="주소"
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            </div>
         </div>
-        <div class="space-y-1">
-            <label for="contact" class="block text-xs font-medium text-gray-700">연락처 *</label>
-            <input type="tel" id="contact" name="contact" value="<?= old('contact') ?>" required
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-        </div>
-        <div class="space-y-1">
-            <label for="address" class="block text-xs font-medium text-gray-700">주소</label>
-            <input type="text" id="address" name="address" value="<?= old('address', '서울 강남구 논현동 은하빌딩 15층 C호') ?>"
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-        </div>
-    </div>
-</section>
+    </section>
+</div>
 
 <!-- 출발지 정보 -->
-<section class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-    <h2 class="text-base font-semibold text-gray-800 mb-3 pb-1 border-b border-blue-200">출발지 정보</h2>
-    <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div class="space-y-1">
-            <label for="departureAddress" class="block text-xs font-medium text-gray-700">출발지 주소 *</label>
-            <input type="text" id="departureAddress" name="departureAddress" value="<?= old('departureAddress') ?>" placeholder="출발지 주소를 입력하세요" required
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
+<div class="mb-2">
+    <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">출발지 정보</h2>
+        <div class="space-y-2">
+            <input type="text" id="departure_address" name="departure_address" value="<?= old('departure_address') ?>" placeholder="출발지 주소 *" required
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <input type="text" id="departure_detail" name="departure_detail" value="<?= old('departure_detail') ?>" placeholder="상세주소"
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <input type="tel" id="departure_contact" name="departure_contact" value="<?= old('departure_contact') ?>" placeholder="출발지 연락처"
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
         </div>
-        <div class="space-y-1">
-            <label for="departureDetail" class="block text-xs font-medium text-gray-700">상세주소</label>
-            <input type="text" id="departureDetail" name="departureDetail" value="<?= old('departureDetail') ?>" placeholder="상세주소를 입력하세요"
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
+    </section>
+</div>
+
+<!-- 경유지 정보 (배송방법이 경유일 때만 표시) -->
+<div class="mb-2" id="waypointSection" style="display: none;">
+    <section class="bg-blue-25 rounded-lg shadow-sm border border-blue-100 p-3">
+        <h2 class="text-sm font-semibold text-blue-600 mb-3 pb-1 border-b border-blue-200">경유지 정보</h2>
+        <div class="space-y-2">
+            <input type="text" id="waypoint_address" name="waypoint_address" value="<?= old('waypoint_address') ?>" placeholder="경유지 주소 *"
+                   class="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white">
+            <input type="text" id="waypoint_detail" name="waypoint_detail" value="<?= old('waypoint_detail') ?>" placeholder="상세주소"
+                   class="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white">
+            <input type="tel" id="waypoint_contact" name="waypoint_contact" value="<?= old('waypoint_contact') ?>" placeholder="경유지 연락처"
+                   class="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white">
+            <textarea id="waypoint_notes" name="waypoint_notes" rows="2" placeholder="경유지 특이사항"
+                      class="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white resize-none"><?= old('waypoint_notes') ?></textarea>
         </div>
-        <div class="space-y-1">
-            <label for="departureContact" class="block text-xs font-medium text-gray-700">연락처</label>
-            <input type="tel" id="departureContact" name="departureContact" value="<?= old('departureContact') ?>" placeholder="출발지 연락처"
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-        </div>
-    </div>
-</section>
+    </section>
+</div>
 
 <!-- 도착지 정보 -->
-<section class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-    <h2 class="text-base font-semibold text-gray-800 mb-3 pb-1 border-b border-blue-200">도착지 정보</h2>
-    
-    <!-- 라디오 버튼 그룹 -->
-    <div class="flex space-x-4 mb-3">
-        <label class="flex items-center space-x-2 cursor-pointer">
-            <input type="radio" name="destinationType" value="company" <?= old('destinationType', 'company') === 'company' ? 'checked' : '' ?> class="text-blue-600 focus:ring-blue-500">
-            <span class="text-xs font-medium text-gray-700">상호선택</span>
-        </label>
-        <label class="flex items-center space-x-2 cursor-pointer">
-            <input type="radio" name="destinationType" value="direct" <?= old('destinationType') === 'direct' ? 'checked' : '' ?> class="text-blue-600 focus:ring-blue-500">
-            <span class="text-xs font-medium text-gray-700">직접입력</span>
-        </label>
-    </div>
-    
-    <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div class="space-y-1">
-            <label for="mailroom" class="block text-xs font-medium text-gray-700">메일룸</label>
-            <select id="mailroom" name="mailroom" class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-                <option value="">메일룸 선택</option>
-                <option value="mailroom1" <?= old('mailroom') === 'mailroom1' ? 'selected' : '' ?>>메일룸 1</option>
-                <option value="mailroom2" <?= old('mailroom') === 'mailroom2' ? 'selected' : '' ?>>메일룸 2</option>
-            </select>
+<div class="mb-2">
+    <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">도착지 정보</h2>
+        
+        <!-- 라디오 버튼 그룹 -->
+        <div class="flex space-x-4 mb-3">
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="radio" name="destination_type" value="mailroom" <?= old('destination_type', 'mailroom') === 'mailroom' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                <span class="text-xs font-medium text-gray-600">메일룸배송</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="radio" name="destination_type" value="direct" <?= old('destination_type') === 'direct' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                <span class="text-xs font-medium text-gray-600">직접배송</span>
+            </label>
         </div>
-        <div class="space-y-1">
-            <label for="destinationAddress" class="block text-xs font-medium text-gray-700">주소 *</label>
-            <input type="text" id="destinationAddress" name="destinationAddress" value="<?= old('destinationAddress') ?>" placeholder="직접 주소 입력" disabled
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-gray-100">
+        
+        <div class="space-y-2">
+            <input type="text" id="destination_address" name="destination_address" value="<?= old('destination_address') ?>" placeholder="도착지 주소"
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <input type="text" id="detail_address" name="detail_address" value="<?= old('detail_address') ?>" placeholder="상세주소"
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <input type="tel" id="destination_contact" name="destination_contact" value="<?= old('destination_contact') ?>" placeholder="도착지 연락처"
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
         </div>
-        <div class="space-y-1">
-            <label for="detailAddress" class="block text-xs font-medium text-gray-700">상세주소 *</label>
-            <input type="text" id="detailAddress" name="detailAddress" value="<?= old('detailAddress') ?>" placeholder="상세주소 입력" disabled
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-gray-100">
-        </div>
-    </div>
-    
-    <div class="mt-3">
-        <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors" id="addCompanyBtn">상호 검색 추가</button>
-    </div>
-    
-    <div class="mt-3">
-        <div class="space-y-1">
-            <label for="destinationContact" class="block text-xs font-medium text-gray-700">연락처</label>
-            <input type="tel" id="destinationContact" name="destinationContact" value="<?= old('destinationContact') ?>" placeholder="도착지 연락처"
-                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-        </div>
-    </div>
-</section>
+    </section>
+</div>
 
-<!-- 물품정보 -->
-<section class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-    <h2 class="text-base font-semibold text-gray-800 mb-3 pb-1 border-b border-blue-200">물품정보</h2>
-    <div class="item-container" id="itemContainer">
-        <div class="item-row bg-gray-50 rounded p-3 mb-3">
-            <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                <div class="space-y-1">
-                    <label for="itemType" class="block text-xs font-medium text-gray-700">물품정보 *</label>
-                    <select id="itemType" name="itemType[]" required class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-                        <option value="document" <?= old('itemType.0') === 'document' ? 'selected' : '' ?>>서류봉투</option>
-                        <option value="package" <?= old('itemType.0') === 'package' ? 'selected' : '' ?>>소포</option>
-                        <option value="envelope" <?= old('itemType.0') === 'envelope' ? 'selected' : '' ?>>편지</option>
-                        <option value="other" <?= old('itemType.0') === 'other' ? 'selected' : '' ?>>기타</option>
-                    </select>
-                </div>
-                <div class="space-y-1">
-                    <label for="quantity" class="block text-xs font-medium text-gray-700">수량</label>
-                    <input type="number" id="quantity" name="quantity[]" value="<?= old('quantity.0', '1') ?>" min="1" required
-                           class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-                </div>
-                <div class="space-y-1">
-                    <label for="unit" class="block text-xs font-medium text-gray-700">단위</label>
-                    <select id="unit" name="unit[]" class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white">
-                        <option value="개" <?= old('unit.0', '개') === '개' ? 'selected' : '' ?>>개</option>
-                        <option value="박스" <?= old('unit.0') === '박스' ? 'selected' : '' ?>>박스</option>
-                        <option value="봉지" <?= old('unit.0') === '봉지' ? 'selected' : '' ?>>봉지</option>
-                        <option value="장" <?= old('unit.0') === '장' ? 'selected' : '' ?>>장</option>
-                    </select>
-                </div>
-            </div>
-            <button type="button" class="btn-remove-item mt-2 bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-medium transition-colors" onclick="removeItem(this)" style="display: none;">삭제</button>
-        </div>
-    </div>
-    <button type="button" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors" id="addItemBtn">제품추가</button>
-</section>
+<script>
+// 도착지 타입 변경 시 필드 활성화/비활성화
+document.querySelectorAll('input[name="destination_type"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const destinationAddress = document.getElementById('destination_address');
+        const detailAddress = document.getElementById('detail_address');
 
-<!-- 접수내용 -->
-<section class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-    <h2 class="text-base font-semibold text-gray-800 mb-3 pb-1 border-b border-blue-200">접수내용</h2>
-    <div class="space-y-1">
-        <p class="text-xs text-gray-600 font-medium">전달내용 * 물품종류와 수량을 입력해주세요.</p>
-        <textarea id="deliveryContent" name="deliveryContent" placeholder="전달하실 내용을 입력하세요." required
-                  class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent h-16 resize-none bg-white"><?= old('deliveryContent') ?></textarea>
-    </div>
-</section>
+        if (this.value === 'direct') {
+            destinationAddress.disabled = false;
+            destinationAddress.classList.remove('bg-gray-100');
+            destinationAddress.classList.add('bg-white');
+            detailAddress.disabled = false;
+            detailAddress.classList.remove('bg-gray-100');
+            detailAddress.classList.add('bg-white');
+        } else {
+            destinationAddress.disabled = true;
+            destinationAddress.classList.add('bg-gray-100');
+            destinationAddress.classList.remove('bg-white');
+            detailAddress.disabled = true;
+            detailAddress.classList.add('bg-gray-100');
+            detailAddress.classList.remove('bg-white');
+        }
+    });
+});
+
+// 배송방법 변경 시 경유지 정보 섹션 표시/숨김
+function toggleWaypointSection() {
+    const waypointSection = document.getElementById('waypointSection');
+    const deliveryRoute = document.querySelector('input[name="delivery_route"]:checked');
+    
+    if (deliveryRoute && deliveryRoute.value === 'via') {
+        waypointSection.style.display = 'block';
+        // 경유지 주소 필수 입력으로 변경
+        document.getElementById('waypoint_address').required = true;
+    } else {
+        waypointSection.style.display = 'none';
+        // 경유지 주소 필수 입력 해제
+        document.getElementById('waypoint_address').required = false;
+    }
+}
+
+// 페이지 로드 시 초기 실행
+document.addEventListener('DOMContentLoaded', function() {
+    toggleWaypointSection();
+    
+    // 배송방법 라디오 버튼 변경 이벤트 리스너 추가
+    document.querySelectorAll('input[name="delivery_route"]').forEach(radio => {
+        radio.addEventListener('change', toggleWaypointSection);
+    });
+});
+</script>

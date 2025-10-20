@@ -24,16 +24,17 @@ class Database extends Config
      *
      * @var array<string, mixed>
      */
+    // STN MailCenter 데이터베이스 연결 설정 (로컬 MariaDB)
     public array $default = [
         'DSN'          => '',
-        'hostname'     => '192.168.0.30',
-        'username'     => 'coder',
-        'password'     => 'dptmxldps1!',
-        'database'     => 'STN_MACRO',
+        'hostname'     => 'localhost',
+        'username'     => 'root',  // 로컬 MariaDB 사용자명
+        'password'     => 'rbghkd75!@#$',      // 로컬 MariaDB 비밀번호 (비어있으면 비밀번호 없음)
+        'database'     => 'mailcenter',  // 데이터베이스명
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
         'pConnect'     => false,
-        'DBDebug'      => true,
+        'DBDebug'      => false,    // DB 디버그 비활성화 (성능 향상)
         'charset'      => 'utf8mb4',
         'DBCollat'     => 'utf8mb4_general_ci',
         'swapPre'      => '',

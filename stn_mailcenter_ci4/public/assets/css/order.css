@@ -1,9 +1,6 @@
 /* 주문 폼 스타일 */
 .order-form {
-    background: white;
     border-radius: 16px;
-    padding: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     max-width: 800px;
 }
 
@@ -247,8 +244,8 @@
 /* 반응형 */
 @media (max-width: 768px) {
     .order-form {
-        padding: 20px;
-        margin: 0 10px;
+        padding: 0px;
+        margin: 0 0px;
     }
     
     .item-row {

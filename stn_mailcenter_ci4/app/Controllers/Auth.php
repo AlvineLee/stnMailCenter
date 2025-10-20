@@ -48,17 +48,54 @@ class Auth extends BaseController
                 ->with('error', '아이디와 비밀번호를 입력해주세요.');
         }
         
-        // 사용자 인증 (임시 - 실제로는 데이터베이스에서 확인)
-        if ($username === 'admin' && $password === 'admin') {
+        // 디버깅: 사용자 조회 테스트
+        $db = \Config\Database::connect();
+        $userFromDb = $db->table('tbl_users')
+                        ->where('username', $username)
+                        ->where('status', 'active')
+                        ->get()
+                        ->getRowArray();
+        
+        log_message('debug', 'User lookup: username=' . $username . ', found=' . ($userFromDb ? 'yes' : 'no'));
+        if ($userFromDb) {
+            log_message('debug', 'User data: ' . json_encode($userFromDb));
+            log_message('debug', 'Password verify: ' . (password_verify($password, $userFromDb['password']) ? 'success' : 'failed'));
+        }
+        
+        // 데이터베이스에서 사용자 인증
+        $user = $this->userModel->authenticate($username, $password);
+        
+        // 디버깅용 로그 (임시)
+        log_message('debug', 'Login attempt: username=' . $username . ', user_found=' . ($user ? 'yes' : 'no'));
+        
+        if ($user) {
+            // 고객사 정보 조회
+            $db = \Config\Database::connect();
+            $customerInfo = $db->table('tbl_customer_hierarchy')
+                              ->where('id', $user['customer_id'])
+                              ->get()
+                              ->getRowArray();
+            
             // 세션에 사용자 정보 저장
             $userData = [
-                'user_id' => 1,
-                'username' => '은하고객',
-                'company_name' => '은하코퍼레이션',
+                'user_id' => $user['id'],
+                'username' => $user['username'],
+                'real_name' => $user['real_name'],
+                'email' => $user['email'],
+                'phone' => $user['phone'],
+                'customer_id' => $user['customer_id'],
+                'customer_name' => $customerInfo['customer_name'] ?? '',
+                'customer_code' => $customerInfo['customer_code'] ?? '',
+                'hierarchy_level' => $customerInfo['hierarchy_level'] ?? '',
+                'user_role' => $user['user_role'],
+                'department_id' => $user['department_id'],
                 'is_logged_in' => true
             ];
             
             session()->set($userData);
+            
+            // 마지막 로그인 시간 업데이트
+            $this->userModel->update($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
             
             return redirect()->to('/')->with('success', '로그인되었습니다.');
         } else {

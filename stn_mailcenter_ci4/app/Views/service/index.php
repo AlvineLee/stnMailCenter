@@ -1,5 +1,6 @@
-<?= $this->include('layouts/header') ?>
+<?= $this->extend('layouts/header') ?>
 
+<?= $this->section('content') ?>
 <div class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     <div class="w-full flex gap-4 px-4">
         <!-- 왼쪽: 공통 폼 -->
@@ -22,5 +23,6 @@
         </div>
     </div>
 </div>
+<?= $this->endSection() ?>
 
 <?= $this->include('layouts/footer') ?>
