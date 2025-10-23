@@ -21,18 +21,26 @@ class OrderModel extends Model
         'company_name',
         'contact',
         'address',
+        'departure_company_name',
+        'departure_contact',
+        'departure_department',
+        'departure_manager',
+        'departure_dong',
         'departure_address',
         'departure_detail',
-        'departure_contact',
         'waypoint_address',
         'waypoint_detail',
         'waypoint_contact',
         'waypoint_notes',
         'destination_type',
         'mailroom',
+        'destination_company_name',
+        'destination_contact',
+        'destination_department',
+        'destination_manager',
+        'destination_dong',
         'destination_address',
         'detail_address',
-        'destination_contact',
         'item_type',
         'quantity',
         'unit',
@@ -40,7 +48,10 @@ class OrderModel extends Model
         'status',
         'total_amount',
         'payment_type',
-        'notes'
+        'notes',
+        'order_date',
+        'order_time',
+        'notification_service'
     ];
 
     // Dates
@@ -57,14 +68,43 @@ class OrderModel extends Model
         'service_type_id' => 'required|integer',
         'company_name' => 'required|max_length[100]',
         'contact' => 'required|max_length[20]',
+        'departure_company_name' => 'required|max_length[100]',
+        'departure_contact' => 'required|max_length[20]',
         'departure_address' => 'required',
+        'destination_company_name' => 'required|max_length[100]',
+        'destination_contact' => 'required|max_length[20]',
         'destination_address' => 'required',
         'item_type' => 'required|max_length[50]',
         'delivery_content' => 'required',
-        'status' => 'permit_empty|in_list[pending,processing,completed,cancelled]'
+        'status' => 'permit_empty|in_list[pending,processing,completed,cancelled]',
+        'order_date' => 'permit_empty|valid_date',
+        'order_time' => 'permit_empty|valid_time',
+        'notification_service' => 'permit_empty|in_list[0,1]'
     ];
 
     protected $validationMessages = [
+        'order_date' => [
+            'valid_date' => '예약 날짜는 올바른 날짜 형식이어야 합니다.'
+        ],
+        'order_time' => [
+            'valid_time' => '예약 시간은 올바른 시간 형식이어야 합니다.'
+        ],
+        'departure_company_name' => [
+            'required' => '출발지 상호(이름)는 필수입니다.',
+            'max_length' => '출발지 상호(이름)는 최대 100자까지 가능합니다.'
+        ],
+        'departure_contact' => [
+            'required' => '출발지 연락처는 필수입니다.',
+            'max_length' => '출발지 연락처는 최대 20자까지 가능합니다.'
+        ],
+        'destination_company_name' => [
+            'required' => '도착지 상호(이름)는 필수입니다.',
+            'max_length' => '도착지 상호(이름)는 최대 100자까지 가능합니다.'
+        ],
+        'destination_contact' => [
+            'required' => '도착지 연락처는 필수입니다.',
+            'max_length' => '도착지 연락처는 최대 20자까지 가능합니다.'
+        ],
         'user_id' => [
             'required' => '사용자 ID는 필수입니다.',
             'integer' => '사용자 ID는 정수여야 합니다.'

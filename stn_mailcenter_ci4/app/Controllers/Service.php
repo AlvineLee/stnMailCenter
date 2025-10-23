@@ -273,7 +273,11 @@ class Service extends BaseController
         $validationRules = [
             'company_name' => 'required',
             'contact' => 'required',
+            'departure_company_name' => 'required',
+            'departure_contact' => 'required',
             'departure_address' => 'required',
+            'destination_company_name' => 'required',
+            'destination_contact' => 'required',
             'destination_address' => 'required',
             'payment_type' => 'required'
         ];
@@ -333,18 +337,26 @@ class Service extends BaseController
                 'company_name' => $this->request->getPost('company_name'),
                 'contact' => $this->request->getPost('contact'),
                 'address' => $this->request->getPost('address'),
+                'departure_company_name' => $this->request->getPost('departure_company_name'),
+                'departure_contact' => $this->request->getPost('departure_contact'),
+                'departure_department' => $this->request->getPost('departure_department'),
+                'departure_manager' => $this->request->getPost('departure_manager'),
+                'departure_dong' => $this->request->getPost('departure_dong'),
                 'departure_address' => $this->request->getPost('departure_address'),
                 'departure_detail' => $this->request->getPost('departure_detail'),
-                'departure_contact' => $this->request->getPost('departure_contact'),
                 'waypoint_address' => $this->request->getPost('waypoint_address'),
                 'waypoint_detail' => $this->request->getPost('waypoint_detail'),
                 'waypoint_contact' => $this->request->getPost('waypoint_contact'),
                 'waypoint_notes' => $this->request->getPost('waypoint_notes'),
                 'destination_type' => $this->request->getPost('destination_type'),
                 'mailroom' => $this->request->getPost('mailroom'),
+                'destination_company_name' => $this->request->getPost('destination_company_name'),
+                'destination_contact' => $this->request->getPost('destination_contact'),
+                'destination_department' => $this->request->getPost('destination_department'),
+                'destination_manager' => $this->request->getPost('destination_manager'),
+                'destination_dong' => $this->request->getPost('destination_dong'),
                 'destination_address' => $this->request->getPost('destination_address'),
                 'detail_address' => $this->request->getPost('detail_address'),
-                'destination_contact' => $this->request->getPost('destination_contact'),
                 'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
                 'quantity' => $this->request->getPost('quantity') ?? 1,
                 'unit' => $this->request->getPost('unit') ?? '개',
@@ -352,7 +364,10 @@ class Service extends BaseController
                 'status' => 'pending',
                 'total_amount' => 0, // 기본값
                 'payment_type' => $this->request->getPost('payment_type'),
-                'notes' => $this->request->getPost('notes')
+                'notes' => $this->request->getPost('notes'),
+                'order_date' => $this->request->getPost('order_date') ?: date('Y-m-d'),
+                'order_time' => $this->request->getPost('order_time') ?: date('H:i:s'),
+                'notification_service' => $this->request->getPost('notification_service') ? 1 : 0
             ];
             
             $db->table('tbl_orders')->insert($orderData);
