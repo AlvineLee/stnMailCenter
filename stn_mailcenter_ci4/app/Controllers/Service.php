@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\InternationalProductDetailModel;
 
 class Service extends BaseController
 {
@@ -572,6 +573,40 @@ class Service extends BaseController
                 
                 $db->table('tbl_orders_special')->insert($specialData);
                 log_message('debug', 'Special service data inserted for order ID: ' . $orderId);
+            }
+            
+            // 9. 해외특송 물품 상세 정보 저장 (tbl_international_product_details)
+            if ($serviceType === 'international') {
+                $productDetails = [];
+                $productNames = $this->request->getPost('product_name') ?? [];
+                $productQuantities = $this->request->getPost('product_quantity') ?? [];
+                $productWeights = $this->request->getPost('product_weight') ?? [];
+                $productWidths = $this->request->getPost('product_width') ?? [];
+                $productLengths = $this->request->getPost('product_length') ?? [];
+                $productHeights = $this->request->getPost('product_height') ?? [];
+                $productHsCodes = $this->request->getPost('product_hs_code') ?? [];
+                
+                // 배열 데이터를 처리하여 물품 상세 정보 구성
+                for ($i = 0; $i < count($productNames); $i++) {
+                    if (!empty($productNames[$i])) { // 빈 값이 아닌 경우만 저장
+                        $productDetails[] = [
+                            'product_name' => $productNames[$i],
+                            'product_quantity' => (int)($productQuantities[$i] ?? 1),
+                            'product_weight' => !empty($productWeights[$i]) ? (float)$productWeights[$i] : null,
+                            'product_width' => !empty($productWidths[$i]) ? (float)$productWidths[$i] : null,
+                            'product_length' => !empty($productLengths[$i]) ? (float)$productLengths[$i] : null,
+                            'product_height' => !empty($productHeights[$i]) ? (float)$productHeights[$i] : null,
+                            'product_hs_code' => !empty($productHsCodes[$i]) ? $productHsCodes[$i] : null
+                        ];
+                    }
+                }
+                
+                // 물품 상세 정보가 있는 경우에만 저장
+                if (!empty($productDetails)) {
+                    $productDetailModel = new InternationalProductDetailModel();
+                    $productDetailModel->saveProductDetails($orderId, $productDetails);
+                    log_message('debug', 'International product details saved for order ID: ' . $orderId . ', count: ' . count($productDetails));
+                }
             }
             
             // 연결 정리 (매크로와의 경합 방지)

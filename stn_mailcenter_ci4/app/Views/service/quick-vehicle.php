@@ -27,68 +27,67 @@
                         <!-- 배송수단 이미지 선택 -->
                         <div class="space-y-2">
                             <label class="block text-xs font-medium text-gray-600">배송수단 선택 *</label>
-                            <div class="flex gap-2">
-                                <label class="vehicle-option cursor-pointer">
-                                    <input type="radio" name="delivery_method" value="truck" <?= old('delivery_method', 'truck') === 'truck' ? 'checked' : '' ?> class="hidden" onchange="toggleVehicleDetails()">
-                                    <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
-                                        <div class="w-12 h-12 mb-1 flex items-center justify-center">
-                                            <img src="<?= base_url('assets/icons/25.png') ?>" alt="트럭" class="w-12 h-12 object-contain">
-                                        </div>
-                                        <span class="text-xs font-medium text-gray-700">트럭</span>
-                                    </div>
-                                </label>
-                                <label class="vehicle-option cursor-pointer">
-                                    <input type="radio" name="delivery_method" value="van" <?= old('delivery_method') === 'van' ? 'checked' : '' ?> class="hidden" onchange="toggleVehicleDetails()">
-                                    <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
-                                        <div class="w-12 h-12 mb-1 flex items-center justify-center">
-                                            <img src="<?= base_url('assets/icons/50.png') ?>" alt="밴" class="w-12 h-12 object-contain">
-                                        </div>
-                                        <span class="text-xs font-medium text-gray-700">밴</span>
-                                    </div>
-                                </label>
-                                <label class="vehicle-option cursor-pointer">
-                                    <input type="radio" name="delivery_method" value="cargo" <?= old('delivery_method') === 'cargo' ? 'checked' : '' ?> class="hidden" onchange="toggleVehicleDetails()">
-                                    <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
-                                        <div class="w-12 h-12 mb-1 flex items-center justify-center">
-                                            <img src="<?= base_url('assets/icons/74.png') ?>" alt="화물차" class="w-12 h-12 object-contain">
-                                        </div>
-                                        <span class="text-xs font-medium text-gray-700">화물차</span>
-                                    </div>
-                                </label>
-                            </div>
+                                   <div class="flex gap-2">
+                                       <label class="vehicle-option cursor-pointer">
+                                           <input type="radio" name="delivery_method" value="damas" <?= old('delivery_method', 'damas') === 'damas' ? 'checked' : '' ?> class="hidden" onchange="toggleVehicleDetails()">
+                                           <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
+                                               <div class="w-12 h-12 mb-1 flex items-center justify-center">
+                                                   <img src="<?= base_url('assets/icons/201.png') ?>" alt="다마스" class="w-12 h-12 object-contain">
+                                               </div>
+                                               <span class="text-xs font-medium text-gray-700">다마스</span>
+                                           </div>
+                                       </label>
+                                       <label class="vehicle-option cursor-pointer">
+                                           <input type="radio" name="delivery_method" value="labo" <?= old('delivery_method') === 'labo' ? 'checked' : '' ?> class="hidden" onchange="toggleVehicleDetails()">
+                                           <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
+                                               <div class="w-12 h-12 mb-1 flex items-center justify-center">
+                                                   <img src="<?= base_url('assets/icons/202.png') ?>" alt="라보" class="w-12 h-12 object-contain">
+                                               </div>
+                                               <span class="text-xs font-medium text-gray-700">라보</span>
+                                           </div>
+                                       </label>
+                                       <label class="vehicle-option cursor-pointer">
+                                           <input type="radio" name="delivery_method" value="truck" <?= old('delivery_method') === 'truck' ? 'checked' : '' ?> class="hidden" onchange="toggleVehicleDetails()">
+                                           <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
+                                               <div class="w-12 h-12 mb-1 flex items-center justify-center">
+                                                   <img src="<?= base_url('assets/icons/25.png') ?>" alt="트럭" class="w-12 h-12 object-contain">
+                                               </div>
+                                               <span class="text-xs font-medium text-gray-700">트럭</span>
+                                           </div>
+                                       </label>
+                                   </div>
                         </div>
                         
                         <!-- 트럭 선택 시 상세 항목 -->
                         <div id="truckDetails" class="space-y-3" style="display: none;">
-                            <!-- 차량무게 -->
-                            <div class="bg-white border border-gray-200 rounded-lg p-3">
-                                <label class="block text-xs font-medium text-gray-600 mb-2">차량무게 *</label>
-                                <div class="grid grid-cols-4 gap-1">
-                                    <?php 
-                                    $truck_capacities = \App\Config\TruckOptions::getCapacities();
-                                    foreach ($truck_capacities as $key => $value): 
-                                    ?>
-                                    <label class="flex items-center space-x-1 cursor-pointer">
-                                        <input type="radio" name="truck_capacity" value="<?= $key ?>" class="text-gray-600 focus:ring-gray-500">
-                                        <span class="text-xs text-gray-700"><?= $value ?></span>
-                                    </label>
-                                    <?php endforeach; ?>
+                            <!-- 차량무게 및 차량종류를 한 줄에 배치 -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <!-- 차량무게 -->
+                                <div class="space-y-1">
+                                    <label for="truck_capacity" class="block text-xs font-medium text-gray-600">차량무게 *</label>
+                                    <select id="truck_capacity" name="truck_capacity" class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                        <option value="">선택</option>
+                                        <?php 
+                                        $truck_capacities = \App\Config\TruckOptions::getCapacities();
+                                        foreach ($truck_capacities as $key => $value): 
+                                        ?>
+                                        <option value="<?= $key ?>" <?= old('truck_capacity') === $key ? 'selected' : '' ?>><?= $value ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
-                            </div>
-                            
-                            <!-- 차량종류 -->
-                            <div class="bg-white border border-gray-200 rounded-lg p-3">
-                                <label class="block text-xs font-medium text-gray-600 mb-2">차량종류 *</label>
-                                <div class="grid grid-cols-4 gap-1">
-                                    <?php 
-                                    $truck_body_types = \App\Config\TruckOptions::getBodyTypes();
-                                    foreach ($truck_body_types as $key => $value): 
-                                    ?>
-                                    <label class="flex items-center space-x-1 cursor-pointer">
-                                        <input type="radio" name="truck_body_type" value="<?= $key ?>" class="text-gray-600 focus:ring-gray-500">
-                                        <span class="text-xs text-gray-700"><?= $value ?></span>
-                                    </label>
-                                    <?php endforeach; ?>
+                                
+                                <!-- 차량종류 -->
+                                <div class="space-y-1">
+                                    <label for="truck_body_type" class="block text-xs font-medium text-gray-600">차량종류 *</label>
+                                    <select id="truck_body_type" name="truck_body_type" class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                        <option value="">선택</option>
+                                        <?php 
+                                        $truck_body_types = \App\Config\TruckOptions::getBodyTypes();
+                                        foreach ($truck_body_types as $key => $value): 
+                                        ?>
+                                        <option value="<?= $key ?>" <?= old('truck_body_type') === $key ? 'selected' : '' ?>><?= $value ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -138,9 +137,8 @@
                     <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">물품종류</h2>
                     <div class="space-y-3">
                         <div class="space-y-1">
-                            <label for="item_type" class="block text-xs font-medium text-gray-600">물품종류 *</label>
                             <input type="text" id="item_type" name="item_type" value="<?= old('item_type', '화물') ?>" required
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+                                   class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
                         </div>
                         
                         <div class="grid grid-cols-2 gap-2">
@@ -198,7 +196,6 @@
                 <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
                     <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">전달사항</h2>
                     <div class="space-y-1">
-                        <p class="text-xs text-gray-600 font-medium">전달사항을 입력해주세요</p>
                         <textarea id="special_instructions" name="special_instructions" placeholder="전달하실 내용을 입력하세요." 
                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent h-20 resize-none bg-white"><?= old('special_instructions') ?></textarea>
                     </div>
@@ -220,7 +217,7 @@
 <?= $this->endSection() ?>
 
 <script>
-// 배송수단 변경 시 트럭 상세 항목 표시/숨김
+// 배송수단 변경 시 차량 상세 항목 표시/숨김
 function toggleVehicleDetails() {
     const truckDetails = document.getElementById('truckDetails');
     const selectedVehicle = document.querySelector('input[name="delivery_method"]:checked');

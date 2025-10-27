@@ -24,98 +24,18 @@
                 <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
                     <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">배송수단</h2>
                     <div class="space-y-3">
-                        <!-- 배송수단 이미지 선택 -->
+                        <!-- 상단 액션 버튼들 -->
                         <div class="space-y-2">
-                            <label class="block text-xs font-medium text-gray-600">배송수단 선택 *</label>
-                            <div class="flex gap-2">
-                                <label class="vehicle-option cursor-pointer">
-                                    <input type="radio" name="vehicleType" value="express" <?= old('vehicleType', 'express') === 'express' ? 'checked' : '' ?> class="hidden">
-                                    <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
-                                        <div class="w-12 h-12 mb-1 flex items-center justify-center">
-                                            <img src="<?= base_url('assets/icons/25.png') ?>" alt="당일택배" class="w-12 h-12 object-contain">
-                                        </div>
-                                        <span class="text-xs font-medium text-gray-700">당일택배</span>
-                                    </div>
-                                </label>
-                                <label class="vehicle-option cursor-pointer">
-                                    <input type="radio" name="vehicleType" value="motorcycle" <?= old('vehicleType') === 'motorcycle' ? 'checked' : '' ?> class="hidden">
-                                    <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
-                                        <div class="w-12 h-12 mb-1 flex items-center justify-center">
-                                            <img src="<?= base_url('assets/icons/49.png') ?>" alt="오토바이" class="w-12 h-12 object-contain">
-                                        </div>
-                                        <span class="text-xs font-medium text-gray-700">오토바이</span>
-                                    </div>
-                                </label>
-                                <label class="vehicle-option cursor-pointer">
-                                    <input type="radio" name="vehicleType" value="delivery" <?= old('vehicleType') === 'delivery' ? 'checked' : '' ?> class="hidden">
-                                    <div class="vehicle-card p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-all duration-200 flex flex-col items-center justify-center">
-                                        <div class="w-12 h-12 mb-1 flex items-center justify-center">
-                                            <img src="<?= base_url('assets/icons/1.png') ?>" alt="배송원" class="w-12 h-12 object-contain">
-                                        </div>
-                                        <span class="text-xs font-medium text-gray-700">배송원</span>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <label for="deliveryType" class="block text-xs font-medium text-gray-600">배송형태 *</label>
-                            <div class="flex space-x-4">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="deliveryType" value="normal" <?= old('deliveryType', 'normal') === 'normal' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">일반</span>
-                                </label>
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="deliveryType" value="express" <?= old('deliveryType') === 'express' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">급송</span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <label for="deliveryMethod" class="block text-xs font-medium text-gray-600">배송방법 *</label>
-                            <div class="flex space-x-4">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="deliveryMethod" value="one_way" <?= old('deliveryMethod', 'one_way') === 'one_way' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">편도</span>
-                                </label>
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="deliveryMethod" value="round_trip" <?= old('deliveryMethod') === 'round_trip' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">왕복</span>
-                                </label>
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="deliveryMethod" value="via" <?= old('deliveryMethod') === 'via' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">경유</span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <label for="deliveryTime" class="block text-xs font-medium text-gray-600">배송시간 *</label>
-                            <select id="deliveryTime" name="deliveryTime" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-                                <option value="">배송시간을 선택하세요</option>
-                                <option value="morning" <?= old('deliveryTime') === 'morning' ? 'selected' : '' ?>>오전 (09:00-12:00)</option>
-                                <option value="afternoon" <?= old('deliveryTime') === 'afternoon' ? 'selected' : '' ?>>오후 (13:00-18:00)</option>
-                                <option value="evening" <?= old('deliveryTime') === 'evening' ? 'selected' : '' ?>>저녁 (18:00-21:00)</option>
-                                <option value="urgent" <?= old('deliveryTime') === 'urgent' ? 'selected' : '' ?>>긴급 (2시간 이내)</option>
-                            </select>
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <label for="serviceArea" class="block text-xs font-medium text-gray-600">서비스 지역 *</label>
-                            <div class="flex space-x-4">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="serviceArea" value="seoul" <?= old('serviceArea', 'seoul') === 'seoul' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">서울</span>
-                                </label>
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="serviceArea" value="gyeonggi" <?= old('serviceArea') === 'gyeonggi' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">경기</span>
-                                </label>
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="radio" name="serviceArea" value="nationwide" <?= old('serviceArea') === 'nationwide' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                                    <span class="text-sm font-medium text-gray-700">전국</span>
-                                </label>
+                            <div class="flex flex-col space-y-2">
+                                <button type="button" class="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm font-medium text-blue-600 hover:bg-gray-50 transition-colors">
+                                    QR코드 등록
+                                </button>
+                                <button type="button" class="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm font-medium text-blue-600 hover:bg-gray-50 transition-colors">
+                                    바코드 등록
+                                </button>
+                                <button type="button" id="multiOrderBtn" class="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                                    멀티오더 생성 등록
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -129,17 +49,63 @@
                     <div class="space-y-3">
                         <div class="space-y-1">
                             <label for="itemType" class="block text-xs font-medium text-gray-600">물품종류 *</label>
-                            <input type="text" id="itemType" name="itemType" value="<?= old('itemType', '소화물') ?>" required
+                            <input type="text" id="itemType" name="itemType" value="<?= old('itemType', '서류') ?>" required
                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
                         </div>
                         
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-3 gap-2">
                             <button type="button" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-xs font-medium transition-colors">
-                                당일배송 요금 안내
+                                박스 규격 안내
                             </button>
                             <button type="button" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-xs font-medium transition-colors">
-                                배송 가능 지역 확인
+                                행낭 규격 안내
                             </button>
+                            <button type="button" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-md text-xs font-medium transition-colors">
+                                쇼핑백 규격 안내
+                            </button>
+                        </div>
+                        
+                        <!-- 박스/행낭/쇼핑백 선택 -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="space-y-1">
+                                <label class="block text-xs font-medium text-gray-600">박스선택/개수</label>
+                                <div class="flex space-x-1">
+                                    <select name="box_type" class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                        <option value="">선택</option>
+                                        <option value="small">소형</option>
+                                        <option value="medium">중형</option>
+                                        <option value="large">대형</option>
+                                    </select>
+                                    <input type="number" name="box_quantity" value="1" min="1" 
+                                           class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-medium text-gray-600">행낭선택/개수</label>
+                                <div class="flex space-x-1">
+                                    <select name="bag_type" class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                        <option value="">선택</option>
+                                        <option value="small">소형</option>
+                                        <option value="medium">중형</option>
+                                        <option value="large">대형</option>
+                                    </select>
+                                    <input type="number" name="bag_quantity" value="1" min="1" 
+                                           class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-medium text-gray-600">쇼핑백선택/개수</label>
+                                <div class="flex space-x-1">
+                                    <select name="shopping_bag_type" class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                        <option value="">선택</option>
+                                        <option value="small">소형</option>
+                                        <option value="medium">중형</option>
+                                        <option value="large">대형</option>
+                                    </select>
+                                    <input type="number" name="shopping_bag_quantity" value="1" min="1" 
+                                           class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -169,6 +135,8 @@
 </div>
 
 <?= form_close() ?>
+
+<?= $this->include('forms/multi-order-modal', ['service_name' => '당일택배']) ?>
 
 <?= $this->endSection() ?>
 
