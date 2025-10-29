@@ -60,6 +60,16 @@ $routes->group('service', function($routes) {
     
     // 서비스별 주문 접수
     $routes->post('submitServiceOrder', 'Service::submitServiceOrder');
+    $routes->post('parseMultiOrderExcel', 'Service::parseMultiOrderExcel');
+});
+
+// API 테스트 라우트
+$routes->group('api-test', function($routes) {
+    $routes->get('/', 'ApiTest::index');
+    $routes->get('ilyang', 'ApiTest::testIlyangApi');
+    $routes->get('ip', 'ApiTest::testIpInfo');
+    $routes->get('spec', 'ApiTest::getApiSpec');
+    $routes->get('sample', 'ApiTest::generateSampleData');
 });
 
 // 배송조회 관련 라우트

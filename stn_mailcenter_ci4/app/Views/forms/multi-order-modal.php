@@ -1,6 +1,6 @@
 <?php
 // 멀티오더 생성 등록 레이어 팝업 공통 컴포넌트
-// 사용법: <?= $this->include('forms/multi-order-modal', ['service_name' => '방문택배']) ?>
+// 사용법: $this->include('forms/multi-order-modal', ['service_name' => '방문택배']) 
 
 $service_name = $service_name ?? '서비스';
 ?>
@@ -170,52 +170,44 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // 파일 업로드 및 파싱 시뮬레이션
         const file = excelFile.files[0];
         console.log('업로드된 파일:', file.name);
         
-        // 샘플 데이터 (실제로는 서버에서 엑셀 파싱 결과를 받아옴)
-        const sampleData = [
-            {
-                id: 1,
-                use: true,
-                departure: {
-                    name: '아모레퍼시픽',
-                    phone: '01010001000',
-                    address: '서울 용산구 한강로2가 424'
-                },
-                destination: {
-                    name: '출발담',
-                    phone: '01040004000',
-                    address: '서울 서초구 잠원로 60, 101동 1001호'
-                },
-                departureCoords: '-',
-                destinationCoords: '-'
-            },
-            {
-                id: 2,
-                use: true,
-                departure: {
-                    name: '아모레퍼시픽2',
-                    phone: '01010002000',
-                    address: '서울 서초구 잠원로 60'
-                },
-                destination: {
-                    name: '출발담',
-                    phone: '01040004000',
-                    address: '논현동 서울 강남구 논현로 123'
-                },
-                departureCoords: '-',
-                destinationCoords: '-'
+        // FormData 생성
+        const formData = new FormData();
+        formData.append('excel_file', file);
+        
+        // 로딩 표시
+        uploadPreviewBtn.disabled = true;
+        uploadPreviewBtn.textContent = '파싱 중...';
+        
+        // 서버로 엑셀 파일 전송 및 파싱
+        fetch('/service/parseMultiOrderExcel', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 미리보기 테이블 생성
+                displayPreviewData(data.data);
+                
+                // 안내 메시지 숨기고 미리보기 섹션 표시
+                document.getElementById('infoMessage').classList.add('hidden');
+                document.getElementById('previewSection').classList.remove('hidden');
+            } else {
+                alert('파일 파싱 실패: ' + data.message);
             }
-        ];
-        
-        // 미리보기 테이블 생성
-        displayPreviewData(sampleData);
-        
-        // 안내 메시지 숨기고 미리보기 섹션 표시
-        document.getElementById('infoMessage').classList.add('hidden');
-        document.getElementById('previewSection').classList.remove('hidden');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('파일 업로드 중 오류가 발생했습니다.');
+        })
+        .finally(() => {
+            // 로딩 해제
+            uploadPreviewBtn.disabled = false;
+            uploadPreviewBtn.textContent = '업로드 및 미리보기';
+        });
     });
     
     // 미리보기 데이터 표시 함수
