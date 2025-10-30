@@ -3,12 +3,15 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\DeliveryModel;
 
 class Delivery extends BaseController
 {
+    protected $deliveryModel;
+
     public function __construct()
     {
-        $this->db = \Config\Database::connect();
+        $this->deliveryModel = new DeliveryModel();
     }
     
     public function list()
@@ -28,152 +31,28 @@ class Delivery extends BaseController
         $serviceFilter = $this->request->getGet('service') ?? 'all';
         $page = (int)($this->request->getGet('page') ?? 1);
         $perPage = 20;
-        $offset = ($page - 1) * $perPage;
         
-        // 주문 데이터 조회
-        $builder = $this->db->table('tbl_orders o');
-        
-        $builder->select('
-            o.id,
-            o.order_number,
-            o.status,
-            o.created_at,
-            o.updated_at,
-            o.total_amount,
-            st.service_name,
-            st.service_category,
-            ch.customer_name,
-            u.real_name as user_name,
-            oq.delivery_method,
-            oq.urgency_level,
-            COALESCE(oq.departure_address, o.departure_address) as departure_address,
-            COALESCE(oq.destination_address, o.destination_address) as destination_address,
-            oq.delivery_instructions,
-            oq.delivery_route,
-            oq.box_selection,
-            oq.box_quantity,
-            oq.pouch_selection,
-            oq.pouch_quantity,
-            oq.shopping_bag_selection
-        ');
-        
-        $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
-        $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
-        $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
-        $builder->join('tbl_orders_quick oq', 'o.id = oq.order_id', 'left');
-        
-        // 권한에 따른 필터링
-        if ($userRole !== 'super_admin') {
-            $builder->where('o.customer_id', $customerId);
-        }
-        
-        // 검색 조건 적용
-        if (!empty($searchKeyword)) {
-            switch ($searchType) {
-                case 'order_number':
-                    $builder->like('o.order_number', $searchKeyword);
-                    break;
-                case 'service_name':
-                    $builder->like('st.service_name', $searchKeyword);
-                    break;
-                case 'customer_name':
-                    $builder->like('ch.customer_name', $searchKeyword);
-                    break;
-                case 'departure_address':
-                    $builder->groupStart()
-                           ->like('oq.departure_address', $searchKeyword)
-                           ->orLike('o.departure_address', $searchKeyword)
-                           ->groupEnd();
-                    break;
-                case 'destination_address':
-                    $builder->groupStart()
-                           ->like('oq.destination_address', $searchKeyword)
-                           ->orLike('o.destination_address', $searchKeyword)
-                           ->groupEnd();
-                    break;
-                case 'all':
-                default:
-                    $builder->groupStart()
-                           ->like('o.order_number', $searchKeyword)
-                           ->orLike('st.service_name', $searchKeyword)
-                           ->orLike('ch.customer_name', $searchKeyword)
-                           ->orLike('oq.departure_address', $searchKeyword)
-                           ->orLike('o.departure_address', $searchKeyword)
-                           ->orLike('oq.destination_address', $searchKeyword)
-                           ->orLike('o.destination_address', $searchKeyword)
-                           ->groupEnd();
-                    break;
-            }
-        }
-        
-        // 상태 필터
-        if ($statusFilter !== 'all') {
-            $builder->where('o.status', $statusFilter);
-        }
-        
-        // 서비스 필터
-        if ($serviceFilter !== 'all') {
-            $builder->where('st.service_category', $serviceFilter);
-        }
-        
-        // 총 개수 조회 (페이징용) - 별도 쿼리로 실행
-        $countBuilder = clone $builder;
-        $totalCount = $countBuilder->countAllResults();
-        
-        // 정렬 및 페이징
-        $builder->orderBy('o.created_at', 'DESC');
-        $builder->limit($perPage, $offset);
-        
-        $query = $builder->get();
-        if ($query === false) {
-            log_message('error', 'Delivery list query failed: ' . $this->db->getLastQuery());
-            $orders = [];
-        } else {
-            $orders = $query->getResultArray();
-            log_message('debug', 'Delivery list query success. Found ' . count($orders) . ' orders');
-            if (!empty($orders)) {
-                log_message('debug', 'First order: ' . json_encode($orders[0]));
-            }
-        }
-        
-        // 서비스 타입별 통계
-        $serviceStats = $this->db->table('tbl_orders o')
-                               ->select('st.service_category, COUNT(*) as count')
-                               ->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
-        
-        if ($userRole !== 'super_admin') {
-            $serviceStats->where('o.customer_id', $customerId);
-        }
-        
-        $serviceStats->groupBy('st.service_category')
-                    ->orderBy('count', 'DESC');
-        
-        $serviceTypes = $serviceStats->get()->getResultArray();
-        
-        // 페이징 정보 계산
-        $totalPages = ceil($totalCount / $perPage);
-        $pagination = [
-            'current_page' => $page,
-            'total_pages' => $totalPages,
-            'total_count' => $totalCount,
-            'per_page' => $perPage,
-            'has_prev' => $page > 1,
-            'has_next' => $page < $totalPages,
-            'prev_page' => $page > 1 ? $page - 1 : null,
-            'next_page' => $page < $totalPages ? $page + 1 : null
+        // 필터 조건 구성
+        $filters = [
+            'search_type' => $searchType,
+            'search_keyword' => $searchKeyword,
+            'status' => $statusFilter,
+            'service' => $serviceFilter,
+            'customer_id' => $userRole !== 'super_admin' ? $customerId : null
         ];
         
-        // 주문 목록에 인코딩된 주문번호 추가 (간단한 Base64 인코딩)
-        foreach ($orders as &$order) {
-            try {
-                // 간단한 Base64 인코딩 (실제 운영환경에서는 더 강력한 암호화 필요)
-                $encodedOrderNumber = base64_encode($order['order_number']);
-                $order['encrypted_order_number'] = $encodedOrderNumber;
-            } catch (\Exception $e) {
-                log_message('error', 'Order number encoding failed: ' . $e->getMessage());
-                $order['encrypted_order_number'] = '';
-            }
-        }
+        // Model을 통한 데이터 조회
+        $result = $this->deliveryModel->getDeliveryList($filters, $page, $perPage);
+        $orders = $result['orders'];
+        $totalCount = $result['total_count'];
+        
+        // 서비스 통계 조회
+        $serviceTypes = $this->deliveryModel->getServiceStats(
+            $userRole !== 'super_admin' ? $customerId : null
+        );
+        
+        // 페이징 정보 계산
+        $pagination = $this->deliveryModel->calculatePagination($totalCount, $page, $perPage);
         
         $data = [
             'title' => '배송조회(리스트)',
@@ -252,72 +131,11 @@ class Delivery extends BaseController
         $customerId = session()->get('customer_id');
         
         try {
-            // 주문 상세 정보 조회
-            $builder = $this->db->table('tbl_orders o');
-            
-            $builder->select('
-                o.id,
-                o.order_number,
-                o.status,
-                o.created_at,
-                o.updated_at,
-                o.total_amount,
-                o.payment_type,
-                o.notes,
-                o.company_name,
-                o.contact,
-                o.address,
-                o.departure_address,
-                o.departure_detail,
-                o.departure_contact,
-                o.waypoint_address,
-                o.waypoint_detail,
-                o.waypoint_contact,
-                o.waypoint_notes,
-                o.destination_type,
-                o.mailroom,
-                o.destination_address,
-                o.detail_address,
-                o.destination_contact,
-                o.item_type,
-                o.quantity,
-                o.unit,
-                o.delivery_content,
-                st.service_name,
-                st.service_category,
-                ch.customer_name,
-                u.real_name as user_name,
-                oq.delivery_method,
-                oq.urgency_level,
-                oq.estimated_time,
-                oq.pickup_time,
-                oq.delivery_time,
-                oq.driver_contact,
-                oq.vehicle_info,
-                oq.delivery_instructions,
-                oq.delivery_route,
-                oq.box_selection,
-                oq.box_quantity,
-                oq.pouch_selection,
-                oq.pouch_quantity,
-                oq.shopping_bag_selection,
-                oq.additional_fee
-            ');
-            
-            $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
-            $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
-            $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
-            $builder->join('tbl_orders_quick oq', 'o.id = oq.order_id', 'left');
-            
-            $builder->where('o.order_number', $orderNumber);
-            
-            // 권한에 따른 필터링
-            if ($userRole !== 'super_admin') {
-                $builder->where('o.customer_id', $customerId);
-            }
-            
-            $query = $builder->get();
-            $order = $query->getRowArray();
+            // Model을 통한 주문 상세 정보 조회
+            $order = $this->deliveryModel->getOrderDetail(
+                $orderNumber, 
+                $userRole !== 'super_admin' ? $customerId : null
+            );
             
             if (!$order) {
                 return $this->response->setJSON([
@@ -326,7 +144,7 @@ class Delivery extends BaseController
                 ])->setStatusCode(404);
             }
             
-            // 상태 라벨 매핑
+            // 라벨 매핑
             $statusLabels = [
                 'pending' => '대기중',
                 'processing' => '처리중',
@@ -334,7 +152,6 @@ class Delivery extends BaseController
                 'cancelled' => '취소'
             ];
             
-            // 결제 방식 라벨 매핑
             $paymentLabels = [
                 'cash_on_delivery' => '착불',
                 'cash_in_advance' => '선불',
@@ -342,14 +159,12 @@ class Delivery extends BaseController
                 'credit_transaction' => '신용거래'
             ];
             
-            // 긴급도 라벨 매핑
             $urgencyLabels = [
                 'normal' => '일반',
                 'urgent' => '긴급',
                 'super_urgent' => '초긴급'
             ];
             
-            // 배송 방법 라벨 매핑
             $deliveryMethodLabels = [
                 'motorcycle' => '퀵오토바이',
                 'vehicle' => '퀵차량',

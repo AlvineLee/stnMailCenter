@@ -3,14 +3,15 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\AdminModel;
 
 class Admin extends BaseController
 {
-    protected $db;
+    protected $adminModel;
     
     public function __construct()
     {
-        $this->db = \Config\Database::connect();
+        $this->adminModel = new AdminModel();
     }
     
     public function orderType()
@@ -24,48 +25,22 @@ class Admin extends BaseController
         $customerId = session()->get('customer_id');
         
         // 서비스 타입 목록 조회
-        $serviceTypes = $this->db->table('tbl_service_types')
-                               ->where('is_active', TRUE)
-                               ->orderBy('service_category', 'ASC')
-                               ->orderBy('sort_order', 'ASC')
-                               ->get()
-                               ->getResultArray();
+        $serviceTypes = $this->adminModel->getServiceTypes();
         
         // 고객사별 서비스 권한 조회
         $servicePermissions = [];
         if ($userRole === 'super_admin') {
             // 슈퍼관리자는 모든 고객사의 권한 조회
-            $servicePermissions = $this->db->table('tbl_customer_service_permissions csp')
-                                         ->select('csp.*, ch.customer_name, st.service_name, st.service_category')
-                                         ->join('tbl_customer_hierarchy ch', 'csp.customer_id = ch.id')
-                                         ->join('tbl_service_types st', 'csp.service_type_id = st.id')
-                                         ->where('ch.is_active', TRUE)
-                                         ->orderBy('ch.customer_name', 'ASC')
-                                         ->orderBy('st.service_category', 'ASC')
-                                         ->get()
-                                         ->getResultArray();
+            $servicePermissions = $this->adminModel->getAllServicePermissions();
         } else {
             // 일반 관리자는 자신의 고객사 권한만 조회
-            $servicePermissions = $this->db->table('tbl_customer_service_permissions csp')
-                                         ->select('csp.*, ch.customer_name, st.service_name, st.service_category')
-                                         ->join('tbl_customer_hierarchy ch', 'csp.customer_id = ch.id')
-                                         ->join('tbl_service_types st', 'csp.service_type_id = st.id')
-                                         ->where('csp.customer_id', $customerId)
-                                         ->where('ch.is_active', TRUE)
-                                         ->orderBy('st.service_category', 'ASC')
-                                         ->get()
-                                         ->getResultArray();
+            $servicePermissions = $this->adminModel->getServicePermissionsByCustomer($customerId);
         }
         
         // 고객사 목록 조회 (슈퍼관리자용)
         $customers = [];
         if ($userRole === 'super_admin') {
-            $customers = $this->db->table('tbl_customer_hierarchy')
-                                ->where('is_active', TRUE)
-                                ->orderBy('hierarchy_level', 'ASC')
-                                ->orderBy('customer_name', 'ASC')
-                                ->get()
-                                ->getResultArray();
+            $customers = $this->adminModel->getActiveCustomers();
         }
         
         $data = [
@@ -106,11 +81,7 @@ class Admin extends BaseController
         // 권한 체크
         if ($userRole !== 'super_admin') {
             // 일반 관리자는 자신의 고객사 권한만 수정 가능
-            $permission = $this->db->table('tbl_customer_service_permissions')
-                                 ->where('id', $permissionId)
-                                 ->where('customer_id', $customerId)
-                                 ->get()
-                                 ->getRowArray();
+            $permission = $this->adminModel->getServicePermissionById($permissionId, $customerId);
             
             if (!$permission) {
                 return $this->response->setJSON(['success' => false, 'message' => '권한이 없습니다.']);
@@ -126,9 +97,7 @@ class Admin extends BaseController
             'updated_at' => date('Y-m-d H:i:s')
         ];
         
-        $result = $this->db->table('tbl_customer_service_permissions')
-                          ->where('id', $permissionId)
-                          ->update($updateData);
+        $result = $this->adminModel->updateServicePermission($permissionId, $updateData);
         
         if ($result) {
             return $this->response->setJSON(['success' => true, 'message' => '서비스 권한이 업데이트되었습니다.']);
@@ -164,11 +133,7 @@ class Admin extends BaseController
         }
         
         // 중복 체크
-        $existing = $this->db->table('tbl_customer_service_permissions')
-                           ->where('customer_id', $targetCustomerId)
-                           ->where('service_type_id', $serviceTypeId)
-                           ->get()
-                           ->getRowArray();
+        $existing = $this->adminModel->checkDuplicatePermission($targetCustomerId, $serviceTypeId);
         
         if ($existing) {
             return $this->response->setJSON(['success' => false, 'message' => '이미 존재하는 서비스 권한입니다.']);
@@ -186,7 +151,7 @@ class Admin extends BaseController
             'updated_at' => date('Y-m-d H:i:s')
         ];
         
-        $result = $this->db->table('tbl_customer_service_permissions')->insert($insertData);
+        $result = $this->adminModel->createServicePermission($insertData);
         
         if ($result) {
             return $this->response->setJSON(['success' => true, 'message' => '서비스 권한이 생성되었습니다.']);

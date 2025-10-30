@@ -4,14 +4,17 @@ namespace App\Controllers;
 
 use App\Controllers\BaseController;
 use App\Models\UserModel;
+use App\Models\AuthModel;
 
 class Auth extends BaseController
 {
     protected $userModel;
+    protected $authModel;
     
     public function __construct()
     {
         $this->userModel = new UserModel();
+        $this->authModel = new AuthModel();
         helper('form');
     }
     
@@ -48,33 +51,15 @@ class Auth extends BaseController
                 ->with('error', '아이디와 비밀번호를 입력해주세요.');
         }
         
-        // 디버깅: 사용자 조회 테스트
-        $db = \Config\Database::connect();
-        $userFromDb = $db->table('tbl_users')
-                        ->where('username', $username)
-                        ->where('status', 'active')
-                        ->get()
-                        ->getRowArray();
-        
-        log_message('debug', 'User lookup: username=' . $username . ', found=' . ($userFromDb ? 'yes' : 'no'));
-        if ($userFromDb) {
-            log_message('debug', 'User data: ' . json_encode($userFromDb));
-            log_message('debug', 'Password verify: ' . (password_verify($password, $userFromDb['password']) ? 'success' : 'failed'));
-        }
-        
         // 데이터베이스에서 사용자 인증
-        $user = $this->userModel->authenticate($username, $password);
+        $user = $this->authModel->authenticate($username, $password);
         
         // 디버깅용 로그 (임시)
         log_message('debug', 'Login attempt: username=' . $username . ', user_found=' . ($user ? 'yes' : 'no'));
         
         if ($user) {
             // 고객사 정보 조회
-            $db = \Config\Database::connect();
-            $customerInfo = $db->table('tbl_customer_hierarchy')
-                              ->where('id', $user['customer_id'])
-                              ->get()
-                              ->getRowArray();
+            $customerInfo = $this->authModel->getCustomerInfo($user['customer_id']);
             
             // 세션에 사용자 정보 저장
             $userData = [
@@ -95,7 +80,7 @@ class Auth extends BaseController
             session()->set($userData);
             
             // 마지막 로그인 시간 업데이트
-            $this->userModel->update($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
+            $this->authModel->updateUserInfo($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
             
             return redirect()->to('/')->with('success', '로그인되었습니다.');
         } else {
