@@ -323,4 +323,49 @@ class UserModel extends Model
         
         return $builder->get()->getRowArray();
     }
+
+    /**
+     * 슈퍼관리자가 아닌 모든 사용자 조회 (관리자용)
+     */
+    public function getNonSuperAdminUsers()
+    {
+        return $this->where('user_role !=', 'super_admin')
+                   ->orderBy('created_at', 'DESC')
+                   ->findAll();
+    }
+
+    /**
+     * 사용자별 서비스 권한 조회
+     */
+    public function getUserServicePermissions($userId)
+    {
+        $user = $this->find($userId);
+        if (!$user) {
+            return [];
+        }
+        
+        // 사용자의 customer_id를 통해 서비스 권한 조회
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_customer_service_permissions csp');
+        $builder->select('
+            csp.*,
+            st.service_code,
+            st.service_name,
+            st.service_category,
+            st.is_active as service_is_active
+        ');
+        $builder->join('tbl_service_types st', 'csp.service_type_id = st.id', 'left');
+        $builder->where('csp.customer_id', $user['customer_id']);
+        $builder->orderBy('st.service_category', 'ASC');
+        $builder->orderBy('st.sort_order', 'ASC');
+        $builder->orderBy('st.service_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'UserModel: Failed to get user service permissions');
+            return [];
+        }
+        
+        return $query->getResultArray();
+    }
 }

@@ -27,7 +27,7 @@ class ServiceTypeModel extends Model
     protected $updatedField = 'updated_at';
 
     protected $validationRules = [
-        'service_code' => 'required|max_length[50]|is_unique[tbl_service_types.service_code]',
+        'service_code' => 'required|max_length[50]',
         'service_name' => 'required|max_length[100]',
         'service_category' => 'required|max_length[50]',
         'description' => 'permit_empty',
@@ -116,7 +116,13 @@ class ServiceTypeModel extends Model
         $builder->orderBy('sort_order', 'ASC');
         $builder->orderBy('service_name', 'ASC');
         
-        return $builder->get()->getResultArray();
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'ServiceTypeModel: Failed to search service types');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 
     /**
@@ -129,7 +135,13 @@ class ServiceTypeModel extends Model
         $builder->where('is_active', 1);
         $builder->orderBy('service_category', 'ASC');
         
-        $result = $builder->get()->getResultArray();
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'ServiceTypeModel: Failed to get service categories');
+            return [];
+        }
+        
+        $result = $query->getResultArray();
         
         return array_column($result, 'service_category');
     }
@@ -150,6 +162,150 @@ class ServiceTypeModel extends Model
         $builder->groupBy('service_category');
         $builder->orderBy('service_category', 'ASC');
         
-        return $builder->get()->getResultArray();
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'ServiceTypeModel: Failed to get service type stats');
+            return [];
+        }
+        
+        return $query->getResultArray();
+    }
+
+    /**
+     * 카테고리별로 그룹화된 서비스 타입 조회 (관리 페이지용)
+     */
+    public function getServiceTypesGroupedByCategory()
+    {
+        $builder = $this->builder();
+        $builder->orderBy('service_category', 'ASC');
+        $builder->orderBy('sort_order', 'ASC');
+        $builder->orderBy('service_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'ServiceTypeModel: Failed to get service types grouped by category');
+            return [];
+        }
+        
+        $allServices = $query->getResultArray();
+        
+        // 카테고리별로 그룹화
+        $grouped = [];
+        foreach ($allServices as $service) {
+            $category = $service['service_category'] ?? '기타';
+            if (!isset($grouped[$category])) {
+                $grouped[$category] = [];
+            }
+            $grouped[$category][] = $service;
+        }
+        
+        return $grouped;
+    }
+
+    /**
+     * 모든 서비스 타입 조회 (관리 페이지용 - 활성/비활성 모두)
+     */
+    public function getAllServiceTypes()
+    {
+        return $this->orderBy('service_category', 'ASC')
+                   ->orderBy('sort_order', 'ASC')
+                   ->orderBy('service_name', 'ASC')
+                   ->findAll();
+    }
+
+    /**
+     * 전체 통계 조회
+     */
+    public function getOverallStats()
+    {
+        $total = $this->countAllResults(false);
+        $active = $this->where('is_active', 1)->countAllResults(false);
+        $inactive = $total - $active;
+        
+        return [
+            'total' => $total,
+            'active' => $active,
+            'inactive' => $inactive
+        ];
+    }
+
+    /**
+     * 일괄 상태 업데이트
+     */
+    public function batchUpdateStatus($serviceIds, $isActive)
+    {
+        if (empty($serviceIds)) {
+            return false;
+        }
+        
+        return $this->builder()
+                   ->whereIn('id', $serviceIds)
+                   ->update(['is_active' => $isActive ? 1 : 0]);
+    }
+
+    /**
+     * 모든 서비스 비활성화
+     */
+    public function deactivateAll()
+    {
+        return $this->builder()->update(['is_active' => 0]);
+    }
+
+    /**
+     * 일괄 순서 업데이트 (드래그 앤 드롭)
+     */
+    public function batchUpdateSortOrder($sortUpdates)
+    {
+        if (empty($sortUpdates) || !is_array($sortUpdates)) {
+            return false;
+        }
+        
+        $db = \Config\Database::connect();
+        $db->transStart();
+        
+        try {
+            foreach ($sortUpdates as $update) {
+                $serviceId = $update['service_id'] ?? null;
+                $sortOrder = $update['sort_order'] ?? 0;
+                
+                if ($serviceId) {
+                    $this->update($serviceId, ['sort_order' => (int)$sortOrder]);
+                }
+            }
+            
+            $db->transComplete();
+            
+            if ($db->transStatus() === false) {
+                log_message('error', 'ServiceTypeModel: Failed to update sort order');
+                return false;
+            }
+            
+            return true;
+        } catch (\Exception $e) {
+            log_message('error', 'ServiceTypeModel: Exception in batchUpdateSortOrder - ' . $e->getMessage());
+            $db->transRollback();
+            return false;
+        }
+    }
+
+    /**
+     * 카테고리명 목록 조회 (중복 제거)
+     */
+    public function getDistinctCategories()
+    {
+        $builder = $this->builder();
+        $builder->select('DISTINCT service_category');
+        $builder->where('service_category IS NOT NULL');
+        $builder->where('service_category !=', '');
+        $builder->orderBy('service_category', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'ServiceTypeModel: Failed to get distinct categories');
+            return [];
+        }
+        
+        $result = $query->getResultArray();
+        return array_column($result, 'service_category');
     }
 }

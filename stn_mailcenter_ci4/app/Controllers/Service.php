@@ -125,6 +125,16 @@ class Service extends BaseController
             return redirect()->to('/auth/login');
         }
         
+        // 슈퍼 관리자는 모든 서비스 접근 가능
+        // 일반 사용자는 권한 체크
+        if (session()->get('user_role') !== 'super_admin') {
+            helper('menu');
+            if (!hasServicePermission('quick-moving')) {
+                // 권한이 없으면 접근 거부
+                return redirect()->to('/dashboard')->with('error', '해당 서비스에 대한 접근 권한이 없습니다.');
+            }
+        }
+        
         $data = [
             'title' => "STN Network - 이사짐화물(소형)",
             'content_header' => [
@@ -306,6 +316,16 @@ class Service extends BaseController
             return redirect()->to('/auth/login');
         }
         
+        // 슈퍼 관리자는 모든 서비스 접근 가능
+        // 일반 사용자는 권한 체크
+        if (session()->get('user_role') !== 'super_admin') {
+            helper('menu');
+            if (!hasServicePermission($serviceType)) {
+                // 권한이 없으면 접근 거부
+                return redirect()->to('/dashboard')->with('error', '해당 서비스에 대한 접근 권한이 없습니다.');
+            }
+        }
+        
         $data = [
             'title' => "STN Network - {$serviceName}",
             'content_header' => [
@@ -330,11 +350,27 @@ class Service extends BaseController
     {
         // 로그인 체크
         if (!session()->get('is_logged_in')) {
-            return redirect()->to('/auth/login');
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
         }
         
         $serviceType = $this->request->getPost('service_type');
         $serviceName = $this->request->getPost('service_name');
+        
+        // 슈퍼 관리자는 모든 서비스 접근 가능
+        // 일반 사용자는 권한 체크
+        if (session()->get('user_role') !== 'super_admin') {
+            helper('menu');
+            if (!hasServicePermission($serviceType)) {
+                // 권한이 없으면 접근 거부
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '해당 서비스에 대한 접근 권한이 없습니다.'
+                ])->setStatusCode(403);
+            }
+        }
         
         // 디버깅 로그 추가
         log_message('debug', 'Service submitServiceOrder: service_type=' . $serviceType . ', service_name=' . $serviceName);

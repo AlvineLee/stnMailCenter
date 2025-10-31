@@ -31,6 +31,34 @@
                 }
             });
             
+            // 레이어 팝업이 열릴 때 사이드바 숨기기 (공통 함수)
+            window.hideSidebarForModal = function() {
+                if (window.innerWidth <= 1023) {
+                    $('.sidebar').removeClass('open');
+                    $('#mobileMenuToggle').removeClass('active');
+                }
+            };
+            
+            // 레이어 팝업이 열릴 때 사이드바 z-index 낮추기 (오버레이 효과를 위해)
+            window.lowerSidebarZIndex = function() {
+                if (typeof $ !== 'undefined') {
+                    $('.sidebar').css('z-index', '1');
+                } else {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar) sidebar.style.zIndex = '1';
+                }
+            };
+            
+            // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+            window.restoreSidebarZIndex = function() {
+                if (typeof $ !== 'undefined') {
+                    $('.sidebar').css('z-index', '1000');
+                } else {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar) sidebar.style.zIndex = '1000';
+                }
+            };
+            
             // 서브메뉴 토글 기능
             $('[data-toggle="submenu"]').on('click', function(e) {
                 e.preventDefault();
@@ -62,28 +90,26 @@
                 const href = $(this).attr('href');
                 console.log('Submenu link clicked:', href);
                 
-                // 다른 모든 서브메뉴 닫기
-                $('.submenu .has-submenu').removeClass('active').find('.nav-arrow').text('v');
-                $('.nav-item.has-submenu').removeClass('active').find('.nav-arrow').text('v');
+                // 다른 모든 서브메뉴 닫기 (현재 클릭한 링크의 부모 제외)
+                const $currentSubmenu = $(this).closest('.submenu');
+                $('.submenu').not($currentSubmenu).find('.has-submenu').removeClass('active').find('.nav-arrow').text('v');
+                
+                // 현재 링크의 부모 메뉴 항목 찾기
+                const $parentNavItem = $(this).closest('.nav-item.has-submenu');
+                if ($parentNavItem.length) {
+                    // 같은 레벨의 다른 활성 메뉴들만 닫기
+                    const $siblings = $parentNavItem.siblings('.nav-item.has-submenu');
+                    $siblings.removeClass('active').find('.nav-arrow').text('v');
+                    // 현재 부모 메뉴는 열어둠
+                    $parentNavItem.addClass('active');
+                    $parentNavItem.find('.nav-arrow').text('^');
+                }
                 
                 // 현재 클릭된 링크 활성화
                 $('.submenu a').removeClass('active');
                 setTimeout(() => {
                     $(this).addClass('active');
                 }, 10);
-                
-                // 부모 메뉴들만 활성화
-                const $parentSubmenu = $(this).closest('.has-submenu');
-                if ($parentSubmenu.length) {
-                    $parentSubmenu.addClass('active');
-                    $parentSubmenu.find('.nav-arrow').text('^');
-                }
-                
-                const $parentNavItem = $parentSubmenu.closest('.nav-item');
-                if ($parentNavItem.length) {
-                    $parentNavItem.addClass('active');
-                    $parentNavItem.find('.nav-arrow').text('^');
-                }
             });
             
             // 서브메뉴가 없는 대메뉴 클릭 시 다른 메뉴들 닫기
@@ -274,6 +300,34 @@
                         if ($storeRegistrationLink.length) {
                             $storeRegistrationLink.addClass('active');
                         }
+                    }
+                }
+                // 콜센터 관리 페이지인 경우
+                else if (currentPath.includes('/call-center/') || currentPath.includes('/hub-center') || currentPath.includes('/group-company') || currentPath.includes('/logistics-representative')) {
+                    const $callCenterMenu = $('.nav-item.has-submenu').filter(function() {
+                        return $(this).find('.nav-text').text() === '콜센터 관리';
+                    });
+                    
+                    if ($callCenterMenu.length) {
+                        $callCenterMenu.addClass('active');
+                        $callCenterMenu.find('.nav-arrow').text('^');
+                    }
+                    
+                    // 현재 콜센터 관리 서브메뉴 링크 활성화
+                    let $currentLink = null;
+                    if (currentPath.includes('/call-center/')) {
+                        const currentCallCenterPage = currentPath.split('/call-center/')[1];
+                        $currentLink = $(`.submenu a[href*="call-center/${currentCallCenterPage}"]`);
+                    } else if (currentPath.includes('/hub-center')) {
+                        $currentLink = $(`.submenu a[href*="hub-center"]`);
+                    } else if (currentPath.includes('/group-company')) {
+                        $currentLink = $(`.submenu a[href*="group-company"]`);
+                    } else if (currentPath.includes('/logistics-representative')) {
+                        $currentLink = $(`.submenu a[href*="logistics-representative"]`);
+                    }
+                    
+                    if ($currentLink && $currentLink.length) {
+                        $currentLink.addClass('active');
                     }
                 }
                 // 관리자설정 페이지인 경우

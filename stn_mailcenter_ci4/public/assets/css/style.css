@@ -693,6 +693,17 @@ button:hover {
     padding: 2px 8px !important;
 }
 
+/* 테이블 헤더 및 셀 가운데 정렬 */
+.list-table-container th.text-center,
+th.text-center {
+    text-align: center !important;
+}
+
+.list-table-container td.text-center,
+td.text-center {
+    text-align: center !important;
+}
+
 .list-table-container tbody tr {
     background: #fafafa !important;
 }

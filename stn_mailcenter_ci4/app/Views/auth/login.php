@@ -41,11 +41,11 @@
                 </div>
             <?= form_close() ?>
             
-            <div class="bg-blue-50 text-blue-800 p-3 rounded mt-4 text-xs">
+            <!-- <div class="bg-blue-50 text-blue-800 p-3 rounded mt-4 text-xs">
                 <strong>데모 계정:</strong><br>
                 아이디: admin<br>
                 비밀번호: admin
-            </div>
+            </div> -->
         </div>
     </div>
 

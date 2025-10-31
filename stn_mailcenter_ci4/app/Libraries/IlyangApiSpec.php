@@ -125,7 +125,7 @@ class IlyangApiSpec
                     'ilySeqNo' => '1234',
                     'ilyShpDate' => '20220814',
                     'ilyRecType' => 'CC',
-                    'ilyAwbNo' => '7777777000',
+                    'ilyAwbNo' => '2181469264',
                     'ilyCusAcno' => '104777001',
                     'ilyCusOrdno' => 'A1000-10000',
                     'ilyGodName' => '전자제품',
@@ -150,8 +150,8 @@ class IlyangApiSpec
                     'ilyBoxQty' => '1',
                     'ilyBoxWgt' => '20',
                     'ilyAmtCash' => '200000',
-                    'ilyOrgAwbno' => '77777770011',
-                    'ilyCusApild' => 'LFlogi'
+                    'ilyOrgAwbno' => '2181469264',
+                    'ilyCusApild' => 'STNnw'
                 ]
             ]
         ];

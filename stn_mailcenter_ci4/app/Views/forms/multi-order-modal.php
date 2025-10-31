@@ -6,7 +6,7 @@ $service_name = $service_name ?? '서비스';
 ?>
 
 <!-- 멀티오더 생성 등록 레이어 팝업 -->
-<div id="multiOrderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+<div id="multiOrderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999 !important;">
     <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
         <div class="p-6">
             <!-- 헤더 -->
@@ -133,19 +133,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // 멀티오더 버튼 클릭 시 모달 열기
     if (multiOrderBtn) {
         multiOrderBtn.addEventListener('click', function() {
+            // 레이어 팝업이 열릴 때 사이드바 처리
+            if (typeof window.hideSidebarForModal === 'function') {
+                window.hideSidebarForModal();
+            }
+            if (typeof window.lowerSidebarZIndex === 'function') {
+                window.lowerSidebarZIndex();
+            }
+            
             multiOrderModal.classList.remove('hidden');
         });
     }
     
+    // 모달 닫기 함수
+    function closeMultiOrderModalFunc() {
+        multiOrderModal.classList.add('hidden');
+        
+        // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+        if (typeof window.restoreSidebarZIndex === 'function') {
+            window.restoreSidebarZIndex();
+        }
+    }
+    
     // 모달 닫기
     closeMultiOrderModal.addEventListener('click', function() {
-        multiOrderModal.classList.add('hidden');
+        closeMultiOrderModalFunc();
     });
     
     // 모달 배경 클릭 시 닫기
     multiOrderModal.addEventListener('click', function(e) {
         if (e.target === multiOrderModal) {
-            multiOrderModal.classList.add('hidden');
+            closeMultiOrderModalFunc();
         }
     });
     

@@ -154,7 +154,7 @@
 </div>
 
 <!-- 주문 상세 팝업 모달 -->
-<div id="orderDetailModal" class="modal-overlay" style="display: none;">
+<div id="orderDetailModal" class="modal-overlay" style="display: none; z-index: 9999 !important;">
     <div class="modal-container">
         <div class="modal-header">
             <h3>주문 상세 정보</h3>
@@ -374,6 +374,14 @@
 
 <script>
 function viewOrderDetail(encryptedOrderNumber) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
     // 로딩 상태 표시
     showLoadingState();
     
@@ -489,6 +497,11 @@ function closeOrderDetail() {
     
     // 모달 콘텐츠를 원래 상태로 복원
     restoreModalContent();
+    
+    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
 }
 
 function restoreModalContent() {

@@ -3,7 +3,7 @@
 <?= $this->section('content') ?>
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
 
-    <!-- 통계 카드 -->
+    <!-- 통계 카드 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
             <div class="flex items-center">
@@ -14,7 +14,7 @@
                 </div>
                 <div class="ml-3">
                     <p class="text-sm font-medium text-blue-600">총 주문유형</p>
-                    <p class="text-2xl font-bold text-blue-900">24</p>
+                    <p class="text-2xl font-bold text-blue-900" id="total-count"><?= $stats['total'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
@@ -28,7 +28,7 @@
                 </div>
                 <div class="ml-3">
                     <p class="text-sm font-medium text-green-600">활성화된 유형</p>
-                    <p class="text-2xl font-bold text-green-900">24</p>
+                    <p class="text-2xl font-bold text-green-900" id="active-count"><?= $stats['active'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
@@ -42,238 +42,514 @@
                 </div>
                 <div class="ml-3">
                     <p class="text-sm font-medium text-gray-600">비활성화된 유형</p>
-                    <p class="text-2xl font-bold text-gray-900">0</p>
+                    <p class="text-2xl font-bold text-gray-900" id="inactive-count"><?= $stats['inactive'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- 주문유형 그리드 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <!-- 퀵서비스 -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">퀵서비스</h3>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">메일룸서비스</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
+    //-->
+    <!-- 주문유형 그리드 (DB 데이터로 동적 생성) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-6" id="service-types-grid">
+        <?php 
+        // 데이터가 없으면 빈 배열로 초기화
+        $service_types_grouped = $service_types_grouped ?? [];
+        
+        // 카테고리 순서 정의
+        $categoryOrder = ['퀵서비스', '연계배송서비스', '택배서비스', '우편서비스', '일반서비스', '생활서비스'];
+        $categoryLabels = [
+            '퀵서비스' => '퀵서비스',
+            'quick' => '퀵서비스',
+            '연계배송서비스' => '연계배송서비스',
+            'linked' => '연계배송서비스',
+            '택배서비스' => '택배서비스',
+            'parcel' => '택배서비스',
+            '우편서비스' => '우편서비스',
+            'postal' => '우편서비스',
+            '일반서비스' => '일반서비스',
+            'general' => '일반서비스',
+            '생활서비스' => '생활서비스',
+            'life' => '생활서비스'
+        ];
+        
+        // 카테고리별로 그룹화된 데이터 정렬
+        $sortedCategories = [];
+        if (!empty($service_types_grouped)) {
+            foreach ($categoryOrder as $cat) {
+                foreach ($service_types_grouped as $category => $services) {
+                    $label = $categoryLabels[$category] ?? $category;
+                    if ($label === $cat && !isset($sortedCategories[$category])) {
+                        $sortedCategories[$category] = $services;
+                    }
+                }
+            }
+            
+            // 나머지 카테고리 추가
+            foreach ($service_types_grouped as $category => $services) {
+                if (!isset($sortedCategories[$category])) {
+                    $sortedCategories[$category] = $services;
+                }
+            }
+        }
+        
+        if (empty($sortedCategories)): ?>
+        <div class="col-span-full text-center py-8 text-gray-500">
+            등록된 주문유형이 없습니다. "새 주문유형 추가" 버튼을 클릭하여 추가하세요.
+                </div>
+        <?php else:
+        foreach ($sortedCategories as $category => $services): 
+            $categoryLabel = $categoryLabels[$category] ?? $category;
+        ?>
+        <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2"><?= $categoryLabel ?></h3>
+            <div class="space-y-1 sortable-service-list" data-category="<?= htmlspecialchars($category) ?>">
+                <?php foreach ($services as $service): ?>
+                <div class="flex items-center justify-between sortable-service-item hover:bg-gray-100 py-1 px-2 rounded transition-colors" 
+                     data-service-id="<?= $service['id'] ?>"
+                     data-sort-order="<?= $service['sort_order'] ?? 0 ?>">
+                    <div class="flex items-center flex-1">
+                        <svg class="w-4 h-4 text-gray-400 mr-2 drag-handle cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24" onclick="event.stopPropagation();">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                        </svg>
+                        <span class="text-sm text-gray-600 service-name-clickable flex-1" 
+                              data-service-id="<?= $service['id'] ?>"
+                              data-service-name="<?= htmlspecialchars($service['service_name']) ?>"
+                              data-service-category="<?= htmlspecialchars($service['service_category']) ?>"
+                              style="cursor: pointer;"
+                              onclick="openEditModal(<?= $service['id'] ?>, '<?= htmlspecialchars($service['service_name'], ENT_QUOTES) ?>', '<?= htmlspecialchars($service['service_category'], ENT_QUOTES) ?>')">
+                            <?= htmlspecialchars($service['service_name']) ?>
+                        </span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer ml-2" onclick="event.stopPropagation();">
+                        <input type="checkbox" 
+                               class="sr-only peer service-status-toggle" 
+                               data-service-id="<?= $service['id'] ?>"
+                               <?= ($service['is_active'] == 1) ? 'checked' : '' ?>>
                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                 </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">오토바이(소화물)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">차량(화물)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">플렉스(소화물)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">이사짐화물(소형)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">해외특송서비스</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
-
-        <!-- 연계배송서비스 -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">연계배송서비스</h3>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">고속버스(제로데이)</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">KTX</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">공항</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">해운</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-            </div>
+        <?php 
+        endforeach;
+        endif; 
+        ?>
         </div>
-
-        <!-- 택배서비스 -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">택배서비스</h3>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">방문택배</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">당일택배</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">편의점택배</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">행낭</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- 우편서비스 -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">우편서비스</h3>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">우편서비스</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- 일반서비스 -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">일반서비스</h3>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">사내문서</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">개인심부름</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">세무컨설팅</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- 생활서비스 -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">생활서비스</h3>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">사다주기</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">택시</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">대리운전</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">화환</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">숙박</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">문구</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- 액션 버튼들 -->
     <div class="flex justify-between items-center">
-        <button class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+        <button onclick="openCreateModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
             새 주문유형 추가
         </button>
         <div class="flex space-x-2">
-            <button class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500">
+            <button onclick="activateAll()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+                전체 활성화
+            </button>
+            <button onclick="deactivateAll()" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500">
                 전체 비활성화
             </button>
-            <button class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 설정 저장
             </button>
+                </div>
+            </div>
+        </div>
+
+<!-- 새 주문유형 추가 레이어 팝업 -->
+<div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-800">새 주문유형 추가</h3>
+            <button onclick="closeCreateModal()" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+                </div>
+        
+        <form id="createServiceForm" onsubmit="createServiceType(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">주문 그룹 유형</label>
+                <select id="create_category" name="service_category" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <option value="">선택하세요</option>
+                    <?php if (!empty($categories)): ?>
+                    <?php foreach ($categories as $cat): ?>
+                    <option value="<?= htmlspecialchars($cat) ?>"><?= htmlspecialchars($cat) ?></option>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                    <option value="__new__">+ 새 그룹 추가</option>
+                </select>
+                </div>
+            
+            <div id="new-category-input" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">새 그룹명</label>
+                <input type="text" id="new_category" name="new_category" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="새 그룹명을 입력하세요">
+                </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">서비스명 <span class="text-red-500">*</span></label>
+                <input type="text" id="create_service_name" name="service_name" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="서비스명을 입력하세요" required>
+        </div>
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeCreateModal()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">취소</button>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">저장</button>
+                </div>
+        </form>
+            </div>
+        </div>
+
+<!-- 서비스명 수정 레이어 팝업 -->
+<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-800">서비스명 수정</h3>
+            <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+                </div>
+        
+        <form id="editServiceForm" onsubmit="updateServiceType(event)">
+            <input type="hidden" id="edit_service_id" name="service_id">
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">주문 그룹 유형</label>
+                <select id="edit_category" name="service_category" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">선택하세요</option>
+                    <?php if (!empty($categories)): ?>
+                    <?php foreach ($categories as $cat): ?>
+                    <option value="<?= htmlspecialchars($cat) ?>"><?= htmlspecialchars($cat) ?></option>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                    <option value="__new__">+ 새 그룹 추가</option>
+                </select>
+                </div>
+            
+            <div id="edit-new-category-input" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">새 그룹명</label>
+                <input type="text" id="edit_new_category" name="new_category" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="새 그룹명을 입력하세요">
+                </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">서비스명 <span class="text-red-500">*</span></label>
+                <input type="text" id="edit_service_name" name="service_name" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="서비스명을 입력하세요" required>
+        </div>
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeEditModal()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">취소</button>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">저장</button>
+                </div>
+        </form>
         </div>
     </div>
-</div>
+
+<!-- Sortable.js 라이브러리 -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script>
+// 상태 변경 추적을 위한 변수
+let statusChanges = {};
+
+// 새 주문유형 추가 모달 열기
+function openCreateModal() {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('createModal').classList.remove('hidden');
+    document.getElementById('create_category').value = '';
+    document.getElementById('new_category').value = '';
+    document.getElementById('create_service_name').value = '';
+    document.getElementById('new-category-input').classList.add('hidden');
+}
+
+// 새 주문유형 추가 모달 닫기
+function closeCreateModal() {
+    document.getElementById('createModal').classList.add('hidden');
+    
+    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 서비스명 수정 모달 열기
+function openEditModal(serviceId, serviceName, serviceCategory) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('editModal').classList.remove('hidden');
+    document.getElementById('edit_service_id').value = serviceId;
+    document.getElementById('edit_service_name').value = serviceName;
+    document.getElementById('edit_category').value = serviceCategory || '';
+    document.getElementById('edit_new_category').value = '';
+    document.getElementById('edit-new-category-input').classList.add('hidden');
+}
+
+// 서비스명 수정 모달 닫기
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+    
+    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 새 그룹 추가 옵션 선택 시 입력 필드 표시
+document.getElementById('create_category').addEventListener('change', function() {
+    if (this.value === '__new__') {
+        document.getElementById('new-category-input').classList.remove('hidden');
+        document.getElementById('new_category').required = true;
+    } else {
+        document.getElementById('new-category-input').classList.add('hidden');
+        document.getElementById('new_category').required = false;
+    }
+});
+
+document.getElementById('edit_category').addEventListener('change', function() {
+    if (this.value === '__new__') {
+        document.getElementById('edit-new-category-input').classList.remove('hidden');
+        document.getElementById('edit_new_category').required = true;
+    } else {
+        document.getElementById('edit-new-category-input').classList.add('hidden');
+        document.getElementById('edit_new_category').required = false;
+    }
+});
+
+// 새 서비스 타입 생성
+function createServiceType(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(document.getElementById('createServiceForm'));
+    
+    fetch('<?= base_url('admin/createServiceType') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(data.message || '서비스 타입 생성에 실패했습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('서비스 타입 생성 중 오류가 발생했습니다.');
+    });
+}
+
+// 서비스 타입 수정
+function updateServiceType(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(document.getElementById('editServiceForm'));
+    
+    fetch('<?= base_url('admin/updateServiceType') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(data.message || '서비스 타입 수정에 실패했습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('서비스 타입 수정 중 오류가 발생했습니다.');
+    });
+}
+
+// 전체 활성화 (UI만 변경)
+function activateAll() {
+    document.querySelectorAll('.service-status-toggle').forEach(toggle => {
+        toggle.checked = true;
+    });
+    console.log('모든 서비스가 활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
+}
+
+// 전체 비활성화 (UI만 변경)
+function deactivateAll() {
+    document.querySelectorAll('.service-status-toggle').forEach(toggle => {
+        toggle.checked = false;
+    });
+    console.log('모든 서비스가 비활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
+}
+
+// 설정 저장 (일괄 상태 업데이트)
+function saveSettings() {
+    // 모든 토글 상태 수집
+    const statusUpdates = [];
+    document.querySelectorAll('.service-status-toggle').forEach(toggle => {
+        const serviceId = toggle.dataset.serviceId;
+        const isActive = toggle.checked ? 1 : 0;
+        statusUpdates.push({
+            service_id: serviceId,
+            is_active: isActive
+        });
+    });
+    
+    if (statusUpdates.length === 0) {
+        alert('저장할 설정이 없습니다.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('status_updates', JSON.stringify(statusUpdates));
+    
+    fetch('<?= base_url('admin/batchUpdateServiceStatus') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(data.message || '설정 저장에 실패했습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('설정 저장 중 오류가 발생했습니다.');
+    });
+}
+
+// 모달 외부 클릭 시 닫기
+document.getElementById('createModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeCreateModal();
+    }
+});
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEditModal();
+    }
+});
+
+// 드래그 앤 드롭으로 순서 변경 초기화
+function initSortable() {
+    // Sortable.js가 로드되었는지 확인
+    if (typeof Sortable === 'undefined') {
+        console.error('Sortable.js가 로드되지 않았습니다.');
+        setTimeout(initSortable, 100); // 재시도
+        return;
+    }
+    
+    const sortableLists = document.querySelectorAll('.sortable-service-list');
+    
+    if (sortableLists.length === 0) {
+        console.warn('정렬 가능한 목록을 찾을 수 없습니다.');
+        return;
+    }
+    
+    sortableLists.forEach(list => {
+        new Sortable(list, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            forceFallback: false,
+            onEnd: function(evt) {
+                // 순서 변경 후 새로운 순서 저장
+                updateServiceOrder(list);
+            }
+        });
+    });
+    
+    console.log('Sortable 초기화 완료:', sortableLists.length, '개 목록');
+}
+
+// 페이지 로드 완료 후 초기화
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSortable);
+} else {
+    // 이미 로드 완료된 경우 즉시 실행
+    initSortable();
+}
+
+// 서비스 순서 업데이트
+function updateServiceOrder(listElement) {
+    const items = listElement.querySelectorAll('.sortable-service-item');
+    const sortUpdates = [];
+    
+    items.forEach((item, index) => {
+        const serviceId = item.dataset.serviceId;
+        const category = listElement.dataset.category;
+        sortUpdates.push({
+            service_id: serviceId,
+            sort_order: index + 1,
+            category: category
+        });
+    });
+    
+    if (sortUpdates.length === 0) {
+        return;
+    }
+    
+    // 서버에 순서 업데이트 요청
+    const formData = new FormData();
+    formData.append('sort_updates', JSON.stringify(sortUpdates));
+    
+    fetch('<?= base_url('admin/updateServiceSortOrder') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('HTTP error! status: ' + response.status);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            console.log('순서가 저장되었습니다.', data);
+        } else {
+            console.error('순서 저장 실패:', data.message);
+            alert('순서 저장에 실패했습니다: ' + (data.message || '알 수 없는 오류'));
+        }
+    })
+    .catch(error => {
+        console.error('순서 저장 중 오류:', error);
+        alert('순서 저장 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
+    });
+}
+</script>
+
+<style>
+.sortable-ghost {
+    opacity: 0.4;
+    background: #f3f4f6;
+}
+
+.sortable-chosen {
+    cursor: grabbing;
+}
+
+.sortable-drag {
+    opacity: 0.8;
+}
+</style>
+
 <?= $this->endSection() ?>

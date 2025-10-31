@@ -187,7 +187,7 @@
 </div>
 
 <!-- 상세보기 레이어 팝업 -->
-<div id="detailPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+<div id="detailPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center" style="z-index: 9999 !important;">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-y-auto mx-2">
         <!-- 헤더 -->
         <div class="sticky top-0 bg-white border-b border-gray-200 p-3 rounded-t-lg">
@@ -205,7 +205,7 @@
 </div>
 
 <!-- 승인/거부 처리 레이어 팝업 -->
-<div id="actionPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+<div id="actionPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center" style="z-index: 9999 !important;">
     <div class="bg-white rounded-lg shadow-lg w-full max-w-sm mx-2">
         <!-- 헤더 -->
         <div class="flex justify-between items-center p-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
@@ -244,6 +244,14 @@
 <script>
 // 상세보기 팝업 열기
 function viewRegistration(id) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
     fetch(`<?= base_url('store-registration/view') ?>/${id}`)
         .then(response => response.json())
         .then(data => {
@@ -265,6 +273,11 @@ function viewRegistration(id) {
 function closeDetailPopup() {
     document.getElementById('detailPopup').classList.add('hidden');
     document.getElementById('detailPopup').classList.remove('flex');
+    
+    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
 }
 
 // 상세보기에서 승인 처리
@@ -279,6 +292,9 @@ function approveFromDetail(id) {
     closeDetailPopup();
     
     // 액션 팝업 열기
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
     document.getElementById('actionPopup').classList.remove('hidden');
     document.getElementById('actionPopup').classList.add('flex');
 }
@@ -295,12 +311,23 @@ function rejectFromDetail(id) {
     closeDetailPopup();
     
     // 액션 팝업 열기
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
     document.getElementById('actionPopup').classList.remove('hidden');
     document.getElementById('actionPopup').classList.add('flex');
 }
 
 // 승인 처리
 function approveRegistration(id) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
     document.getElementById('actionId').value = id;
     document.getElementById('actionType').value = 'approved';
     document.getElementById('actionTitle').textContent = '입점신청 승인';
@@ -313,6 +340,14 @@ function approveRegistration(id) {
 
 // 거부 처리
 function rejectRegistration(id) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
     document.getElementById('actionId').value = id;
     document.getElementById('actionType').value = 'rejected';
     document.getElementById('actionTitle').textContent = '입점신청 거부';
@@ -328,6 +363,11 @@ function closeActionPopup() {
     document.getElementById('actionPopup').classList.add('hidden');
     document.getElementById('actionPopup').classList.remove('flex');
     document.getElementById('actionForm').reset();
+    
+    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
 }
 
 // 액션 폼 제출

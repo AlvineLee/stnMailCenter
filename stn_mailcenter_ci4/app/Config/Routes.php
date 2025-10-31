@@ -134,6 +134,31 @@ $routes->group('admin', function($routes) {
     $routes->get('notification', 'Admin::notification');
     $routes->post('updateServicePermission', 'Admin::updateServicePermission');
     $routes->post('createServicePermission', 'Admin::createServicePermission');
+    // 서비스 타입 관리
+    $routes->post('createServiceType', 'Admin::createServiceType');
+    $routes->post('updateServiceType', 'Admin::updateServiceType');
+    $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');
+    $routes->post('deactivateAllServices', 'Admin::deactivateAllServices');
+    $routes->post('updateServiceSortOrder', 'Admin::updateServiceSortOrder');
+});
+
+// 콜센터 관리 관련 라우트 (슈퍼관리자 전용)
+$routes->group('call-center', function($routes) {
+    $routes->get('building', 'CallCenter::building');
+    $routes->get('getUserServicePermissions', 'CallCenter::getUserServicePermissions');
+    $routes->post('updateUserServicePermissions', 'CallCenter::updateUserServicePermissions');
+    $routes->post('activateAllUserServices', 'CallCenter::activateAllUserServices');
+    $routes->post('deactivateAllUserServices', 'CallCenter::deactivateAllUserServices');
+    // 향후 추가될 다른 메뉴들
+    $routes->get('driver', 'CallCenter::driver');
+    $routes->get('settlement', 'CallCenter::settlement');
+    $routes->get('billing', 'CallCenter::billing');
+    $routes->get('receivables', 'CallCenter::receivables');
+    $routes->get('fee', 'CallCenter::fee');
+    $routes->get('permission', 'CallCenter::permission');
+    $routes->get('tax', 'CallCenter::tax');
+    $routes->get('management-info', 'CallCenter::managementInfo');
+    $routes->get('auto-dispatch', 'CallCenter::autoDispatch');
 });
 
 // 환경 테스트 라우트
