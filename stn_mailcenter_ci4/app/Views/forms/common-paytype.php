@@ -230,11 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.classList.add('bg-orange-600', 'hover:bg-orange-700');
     });
     
-    // 모달 외부 클릭 시 닫기
-    reservationModal.addEventListener('click', function(e) {
-        if (e.target === reservationModal) {
-            closeModalFunc();
-        }
-    });
+    // 모달 외부 클릭 시 닫기 기능 제거 (X 버튼만으로 닫기)
+    // 외부 클릭으로 인한 실수 방지를 위해 제거
 });
 </script>

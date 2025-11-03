@@ -219,13 +219,29 @@ class Admin extends BaseController
             $serviceCode = $serviceCode . '-' . $counter;
         }
         
+        // 외부 링크 정보
+        $isExternalLink = $this->request->getPost('is_external_link') === 'on' || $this->request->getPost('is_external_link') === '1';
+        $externalUrl = $this->request->getPost('external_url');
+        
+        // 외부 링크가 활성화되었는데 URL이 없으면 에러
+        if ($isExternalLink && empty($externalUrl)) {
+            return $this->response->setJSON(['success' => false, 'message' => '외부 링크 서비스인 경우 URL은 필수입니다.']);
+        }
+        
+        // 외부 링크가 아닌 경우 URL 초기화
+        if (!$isExternalLink) {
+            $externalUrl = null;
+        }
+        
         // 서비스 타입 생성
         $insertData = [
             'service_code' => $serviceCode,
             'service_name' => $serviceName,
             'service_category' => $serviceCategory,
             'is_active' => 1,
-            'sort_order' => 0
+            'sort_order' => 0,
+            'is_external_link' => $isExternalLink ? 1 : 0,
+            'external_url' => $externalUrl
         ];
         
         $result = $this->serviceTypeModel->insert($insertData);
@@ -272,9 +288,25 @@ class Admin extends BaseController
             $serviceCategory = $newCategory;
         }
         
+        // 외부 링크 정보
+        $isExternalLink = $this->request->getPost('is_external_link') === 'on' || $this->request->getPost('is_external_link') === '1';
+        $externalUrl = $this->request->getPost('external_url');
+        
+        // 외부 링크가 활성화되었는데 URL이 없으면 에러
+        if ($isExternalLink && empty($externalUrl)) {
+            return $this->response->setJSON(['success' => false, 'message' => '외부 링크 서비스인 경우 URL은 필수입니다.']);
+        }
+        
+        // 외부 링크가 아닌 경우 URL 초기화
+        if (!$isExternalLink) {
+            $externalUrl = null;
+        }
+        
         // 업데이트 데이터
         $updateData = [
-            'service_name' => $serviceName
+            'service_name' => $serviceName,
+            'is_external_link' => $isExternalLink ? 1 : 0,
+            'external_url' => $externalUrl
         ];
         
         if (!empty($serviceCategory)) {
