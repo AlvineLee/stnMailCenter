@@ -1,7 +1,28 @@
 <aside class="sidebar">
     <div class="sidebar-header">
         <a href="<?= base_url('/') ?>" class="logo">
-            <div class="logo-icon">STN</div>
+            <?php
+            // 로그인한 사용자의 고객사 로고 조회 (본점 로고)
+            $customerLogoPath = null;
+            $customerId = session()->get('customer_id');
+            if ($customerId) {
+                $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
+                
+                // 사용자가 속한 본점 ID 찾기
+                $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
+                if ($headOfficeId) {
+                    $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
+                    if ($headOffice && !empty($headOffice['logo_path'])) {
+                        $customerLogoPath = base_url($headOffice['logo_path']);
+                    }
+                }
+            }
+            ?>
+            <?php if ($customerLogoPath): ?>
+                <img src="<?= $customerLogoPath ?>" alt="회사 로고" class="logo-icon" style="width: 48px; height: 48px; object-fit: contain; border-radius: 8px;">
+            <?php else: ?>
+                <div class="logo-icon">STN</div>
+            <?php endif; ?>
             <div class="logo-text">
                 <div class="company-name">STN Network</div>
                 <div class="service-name">ONE'CALL</div>
@@ -47,13 +68,23 @@
                 <ul class="submenu">
                     <?php foreach ($menuItems as $item): ?>
                         <?php if ($item['type'] === 'single'): ?>
-                            <li><a href="<?= base_url($item['menu']['url']) ?>"><img src="<?= base_url($item['menu']['icon']) ?>" class="menu-icon" alt=""> <?= $item['menu']['name'] ?></a></li>
+                            <?php 
+                            $isExternal = !empty($item['menu']['is_external_link']);
+                            $menuUrl = $isExternal ? $item['menu']['url'] : base_url($item['menu']['url']);
+                            $target = $isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
+                            ?>
+                            <li><a href="<?= $menuUrl ?>" <?= $target ?>><img src="<?= base_url($item['menu']['icon']) ?>" class="menu-icon" alt=""> <?= $item['menu']['name'] ?></a></li>
                         <?php elseif ($item['type'] === 'submenu'): ?>
                             <li class="has-submenu">
                                 <a href="#" data-toggle="submenu"><img src="<?= base_url($item['menu']['icon']) ?>" class="menu-icon" alt=""> <?= $item['menu']['name'] ?> <span class="nav-arrow">v</span></a>
                                 <ul class="submenu">
                                     <?php foreach ($item['children'] as $childKey => $childMenu): ?>
-                                    <li><a href="<?= base_url($childMenu['url']) ?>"><img src="<?= base_url($childMenu['icon']) ?>" class="menu-icon" alt=""> <?= $childMenu['name'] ?></a></li>
+                                    <?php 
+                                    $isExternal = !empty($childMenu['is_external_link']);
+                                    $childUrl = $isExternal ? $childMenu['url'] : base_url($childMenu['url']);
+                                    $target = $isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
+                                    ?>
+                                    <li><a href="<?= $childUrl ?>" <?= $target ?>><img src="<?= base_url($childMenu['icon']) ?>" class="menu-icon" alt=""> <?= $childMenu['name'] ?></a></li>
                                     <?php endforeach; ?>
                                 </ul>
                             </li>
@@ -119,6 +150,7 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('call-center/building') ?>">🏢 빌딩 콜센터 관리</a></li>
+                    <!--
                     <li><a href="<?= base_url('call-center/driver') ?>">👥 기사관리</a></li>
                     <li><a href="<?= base_url('call-center/settlement') ?>">🧮 정산관리</a></li>
                     <li><a href="<?= base_url('call-center/billing') ?>">📋 청구관리</a></li>
@@ -129,6 +161,7 @@
                     <li><a href="<?= base_url('call-center/management-info') ?>">📈 경영정보관리</a></li>
                     <li><a href="<?= base_url('call-center/auto-dispatch') ?>">🚗 자동배차관리</a></li>
                     <li><a href="<?= base_url('hub-center') ?>">🏗️ 허브센타관리</a></li>
+                    //-->
                     <li><a href="<?= base_url('group-company') ?>">🏢 그룹사 관리</a></li>
                     <li><a href="<?= base_url('logistics-representative') ?>">👑 나도 물류 대표</a></li>
                 </ul>

@@ -1,87 +1,707 @@
 <?= $this->extend('layouts/header') ?>
 
 <?= $this->section('content') ?>
-<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
+<div class="list-page-container">
 
-    <!-- 본점 정보 카드 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <div class="flex items-center">
-                <div class="p-2 bg-blue-100 rounded-lg">
-                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <p class="text-sm font-medium text-blue-600">총 본점 수</p>
-                    <p class="text-2xl font-bold text-blue-900">1</p>
-                </div>
-            </div>
+    <div class="mb-4 flex justify-between items-center">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800 mb-1"><?= $content_header['title'] ?? '본점관리' ?></h2>
+            <p class="text-xs text-gray-600"><?= $content_header['description'] ?? '본점 담당자 계정을 생성 및 관리할 수 있습니다.' ?></p>
         </div>
-
-        <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-            <div class="flex items-center">
-                <div class="p-2 bg-green-100 rounded-lg">
-                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <p class="text-sm font-medium text-green-600">직원 수</p>
-                    <p class="text-2xl font-bold text-green-900">25</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-            <div class="flex items-center">
-                <div class="p-2 bg-purple-100 rounded-lg">
-                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <p class="text-sm font-medium text-purple-600">월 매출</p>
-                    <p class="text-2xl font-bold text-purple-900">₩2.5M</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 본점 정보 테이블 -->
-    <div>
-        <table>
-            <thead>
-                <tr>
-                    <th>본점명</th>
-                    <th>주소</th>
-                    <th>연락처</th>
-                    <th>담당자</th>
-                    <th>상태</th>
-                    <th>액션</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>STN 본점</td>
-                    <td>서울시 강남구 테헤란로 123</td>
-                    <td>02-1234-5678</td>
-                    <td>김본점</td>
-                    <td><span class="status-badge" style="background: #dcfce7; color: #166534;">운영중</span></td>
-                    <td class="action-buttons">
-                        <button>수정</button>
-                        <button>상세</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- 액션 버튼 -->
-    <div class="mt-6 flex justify-end">
-        <button class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            본점 추가
+        <button onclick="openCreateModal()" class="form-button form-button-primary">
+            + 본점 등록
         </button>
     </div>
+
+    <!-- 본점 목록 테이블 -->
+    <div class="list-table-container">
+        <?php if (empty($customers)): ?>
+            <div class="text-center py-8 text-gray-500">
+                등록된 본점이 없습니다.
+            </div>
+        <?php else: ?>
+        <?php foreach ($customers as $customer): ?>
+        <div class="mb-6 border border-gray-200 rounded-lg p-4">
+            <!-- 본점 정보 -->
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3 class="text-base font-bold text-gray-800"><?= htmlspecialchars($customer['customer_name'] ?? '-') ?></h3>
+                    <p class="text-xs text-gray-500"><?= htmlspecialchars($customer['customer_code'] ?? '-') ?></p>
+                </div>
+                <button onclick="openAddUserModal(<?= $customer['id'] ?>, '<?= htmlspecialchars($customer['customer_name']) ?>')" class="form-button form-button-primary">
+                    + 계정 추가
+                </button>
+            </div>
+            
+            <!-- 사용자 계정 목록 -->
+            <?php if (empty($customer['users'])): ?>
+                <div class="text-center py-4 text-gray-400 text-sm">
+                    등록된 계정이 없습니다.
+                </div>
+            <?php else: ?>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th>아이디</th>
+                        <th>실명</th>
+                        <th>이메일</th>
+                        <th>연락처</th>
+                        <th class="text-center">역할</th>
+                        <th class="text-center">상태</th>
+                        <th class="text-center">작업</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($customer['users'] as $user): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($user['username'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($user['real_name'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($user['email'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($user['phone'] ?? '-') ?></td>
+                        <td class="text-center">
+                            <span class="status-badge"><?= htmlspecialchars($user['user_role'] ?? '-') ?></span>
+                        </td>
+                        <td class="text-center">
+                            <span class="status-badge status-<?= ($user['status'] === 'active' && $user['is_active'] == 1) ? 'active' : 'inactive' ?>">
+                                <?= ($user['status'] === 'active' && $user['is_active'] == 1) ? '활성' : '비활성' ?>
+                            </span>
+                        </td>
+                        <td class="action-buttons text-center">
+                            <button onclick="editUserAccount(<?= $user['id'] ?>)" class="form-button form-button-secondary">수정</button>
+                            <button onclick="viewUserAccount(<?= $user['id'] ?>)" class="form-button form-button-secondary">상세</button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 </div>
+
+<!-- 본점 등록 레이어 팝업 (고객사 + 사용자 계정 함께 생성) -->
+<div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style="z-index: 10000 !important;">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-800">본점 등록</h3>
+            <button onclick="closeCreateModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="createCustomerForm" onsubmit="createCustomer(event)" class="p-4">
+            <!-- 본점 정보 -->
+            <div class="mb-4">
+                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">본점 정보</h4>
+                
+                <div class="mb-3">
+                    <label class="form-label">
+                        본점명 <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="customer_name" 
+                           name="customer_name" 
+                           class="form-input" 
+                           placeholder="예: CJ대한통운" 
+                           required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">주소</label>
+                    <input type="text" 
+                           id="address" 
+                           name="address" 
+                           class="form-input" 
+                           placeholder="주소를 입력하세요">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">연락처</label>
+                    <input type="text" 
+                           id="contact_phone" 
+                           name="contact_phone" 
+                           class="form-input" 
+                           placeholder="연락처를 입력하세요">
+                </div>
+            </div>
+            
+            <!-- 담당자 계정 정보 -->
+            <div class="mb-4">
+                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">담당자 계정 정보</h4>
+                
+                <div class="mb-3">
+                    <label class="form-label">
+                        아이디 <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="username" 
+                           name="username" 
+                           class="form-input" 
+                           placeholder="예: CJ본점" 
+                           required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">
+                        비밀번호 <span class="text-red-500">*</span>
+                    </label>
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           class="form-input" 
+                           placeholder="비밀번호를 입력하세요" 
+                           required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">
+                        담당자명 <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="real_name" 
+                           name="real_name" 
+                           class="form-input" 
+                           placeholder="담당자 실명을 입력하세요" 
+                           required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">이메일</label>
+                    <input type="email" 
+                           id="email" 
+                           name="email" 
+                           class="form-input" 
+                           placeholder="이메일을 입력하세요">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">연락처</label>
+                    <input type="text" 
+                           id="phone" 
+                           name="phone" 
+                           class="form-input" 
+                           placeholder="연락처를 입력하세요">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">부서</label>
+                    <input type="text" 
+                           id="department" 
+                           name="department" 
+                           class="form-input" 
+                           placeholder="부서명을 입력하세요">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">직위</label>
+                    <input type="text" 
+                           id="position" 
+                           name="position" 
+                           class="form-input" 
+                           placeholder="직위를 입력하세요">
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="closeCreateModal()" class="form-button form-button-secondary">취소</button>
+                <button type="submit" class="form-button form-button-primary">확인</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 사용자 계정 추가 레이어 팝업 -->
+<div id="addUserModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style="z-index: 10000 !important;">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-800">
+                계정 추가 - <span id="modal-customer-name"></span>
+            </h3>
+            <button onclick="closeAddUserModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="addUserForm" onsubmit="addUserAccount(event)" class="p-4">
+            <input type="hidden" id="add_user_customer_id">
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    아이디 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" 
+                       id="add_username" 
+                       name="username" 
+                       class="form-input" 
+                       placeholder="아이디를 입력하세요" 
+                       required>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    비밀번호 <span class="text-red-500">*</span>
+                </label>
+                <input type="password" 
+                       id="add_password" 
+                       name="password" 
+                       class="form-input" 
+                       placeholder="비밀번호를 입력하세요" 
+                       required>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    담당자명 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" 
+                       id="add_real_name" 
+                       name="real_name" 
+                       class="form-input" 
+                       placeholder="담당자 실명을 입력하세요" 
+                       required>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">이메일</label>
+                <input type="email" 
+                       id="add_email" 
+                       name="email" 
+                       class="form-input" 
+                       placeholder="이메일을 입력하세요">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">연락처</label>
+                <input type="text" 
+                       id="add_phone" 
+                       name="phone" 
+                       class="form-input" 
+                       placeholder="연락처를 입력하세요">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">부서</label>
+                <input type="text" 
+                       id="add_department" 
+                       name="department" 
+                       class="form-input" 
+                       placeholder="부서명을 입력하세요">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">직위</label>
+                <input type="text" 
+                       id="add_position" 
+                       name="position" 
+                       class="form-input" 
+                       placeholder="직위를 입력하세요">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    역할 <span class="text-red-500">*</span>
+                </label>
+                <select id="add_user_role" 
+                        name="user_role" 
+                        class="form-input" 
+                        required>
+                    <option value="admin">관리자</option>
+                    <option value="manager">매니저</option>
+                    <option value="user">일반사용자</option>
+                </select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="closeAddUserModal()" class="form-button form-button-secondary">취소</button>
+                <button type="submit" class="form-button form-button-primary">확인</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 사용자 계정 수정/상세 레이어 팝업 -->
+<div id="editUserModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style="z-index: 10000 !important;">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-800 flex-1 min-w-0">
+                <span id="modal-user-title">사용자 계정 정보</span>
+            </h3>
+            <button onclick="closeEditUserModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="editUserForm" onsubmit="updateUserAccount(event)" class="p-4">
+            <input type="hidden" id="edit_user_id">
+            <input type="hidden" id="edit_is_view" value="false">
+            
+            <div class="mb-3">
+                <label class="form-label">아이디</label>
+                <input type="text" 
+                       id="edit_username" 
+                       class="form-input" 
+                       readonly>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    담당자명 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" 
+                       id="edit_real_name" 
+                       name="real_name" 
+                       class="form-input" 
+                       required>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">이메일</label>
+                <input type="email" 
+                       id="edit_email" 
+                       name="email" 
+                       class="form-input">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">연락처</label>
+                <input type="text" 
+                       id="edit_phone" 
+                       name="phone" 
+                       class="form-input">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">부서</label>
+                <input type="text" 
+                       id="edit_department" 
+                       name="department" 
+                       class="form-input">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">직위</label>
+                <input type="text" 
+                       id="edit_position" 
+                       name="position" 
+                       class="form-input">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    역할
+                </label>
+                <select id="edit_user_role" 
+                        name="user_role" 
+                        class="form-input">
+                    <option value="admin">관리자</option>
+                    <option value="manager">매니저</option>
+                    <option value="user">일반사용자</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">비밀번호 변경</label>
+                <input type="password" 
+                       id="edit_password" 
+                       name="password" 
+                       class="form-input" 
+                       placeholder="변경하려면 새 비밀번호를 입력하세요">
+                <p class="text-xs text-gray-500 mt-1">비워두면 변경하지 않습니다.</p>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="closeEditUserModal()" class="form-button form-button-secondary">닫기</button>
+                <button type="submit" id="edit-submit-btn" class="form-button form-button-primary hidden">저장</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// 본점 등록 모달 열기
+function openCreateModal() {
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('createModal').classList.remove('hidden');
+    document.getElementById('createCustomerForm').reset();
+}
+
+// 본점 등록 모달 닫기
+function closeCreateModal() {
+    document.getElementById('createModal').classList.add('hidden');
+    document.getElementById('createCustomerForm').reset();
+    
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 본점 등록 (고객사 + 사용자 계정 함께 생성)
+function createCustomer(event) {
+    event.preventDefault();
+    
+    const formData = {
+        customer_name: document.getElementById('customer_name').value,
+        contact_phone: document.getElementById('contact_phone').value,
+        address: document.getElementById('address').value,
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+        real_name: document.getElementById('real_name').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        department: document.getElementById('department').value,
+        position: document.getElementById('position').value
+    };
+    
+    fetch('<?= base_url('customer/createHeadOffice') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeCreateModal();
+            location.reload();
+        } else {
+            alert(data.message || '본점 등록에 실패했습니다.');
+            if (data.errors) {
+                console.error('Validation errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('본점 등록 중 오류가 발생했습니다.');
+    });
+}
+
+// 사용자 계정 추가 모달 열기
+function openAddUserModal(customerId, customerName) {
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('add_user_customer_id').value = customerId;
+    document.getElementById('modal-customer-name').textContent = customerName;
+    document.getElementById('addUserModal').classList.remove('hidden');
+    document.getElementById('addUserForm').reset();
+}
+
+// 사용자 계정 추가 모달 닫기
+function closeAddUserModal() {
+    document.getElementById('addUserModal').classList.add('hidden');
+    document.getElementById('addUserForm').reset();
+    
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 사용자 계정 추가
+function addUserAccount(event) {
+    event.preventDefault();
+    
+    const formData = {
+        customer_id: document.getElementById('add_user_customer_id').value,
+        username: document.getElementById('add_username').value,
+        password: document.getElementById('add_password').value,
+        real_name: document.getElementById('add_real_name').value,
+        email: document.getElementById('add_email').value,
+        phone: document.getElementById('add_phone').value,
+        department: document.getElementById('add_department').value,
+        position: document.getElementById('add_position').value,
+        user_role: document.getElementById('add_user_role').value
+    };
+    
+    fetch('<?= base_url('customer/createUserAccount') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeAddUserModal();
+            location.reload();
+        } else {
+            alert(data.message || '사용자 계정 추가에 실패했습니다.');
+            if (data.errors) {
+                console.error('Validation errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('사용자 계정 추가 중 오류가 발생했습니다.');
+    });
+}
+
+// 사용자 계정 수정 모달 열기
+function editUserAccount(userId) {
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('edit_is_view').value = 'false';
+    document.getElementById('modal-user-title').textContent = '사용자 계정 수정';
+    document.getElementById('edit-submit-btn').classList.remove('hidden');
+    
+    // 수정 모드: 모든 필드 편집 가능
+    document.querySelectorAll('#editUserForm input, #editUserForm select').forEach(input => {
+        if (input.id !== 'edit_username') {
+            input.removeAttribute('readonly');
+        }
+    });
+    
+    loadUserAccountInfo(userId);
+}
+
+// 사용자 계정 상세 보기
+function viewUserAccount(userId) {
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('edit_is_view').value = 'true';
+    document.getElementById('modal-user-title').textContent = '사용자 계정 상세';
+    document.getElementById('edit-submit-btn').classList.add('hidden');
+    
+    // 상세 보기 모드: 모든 필드 읽기 전용
+    document.querySelectorAll('#editUserForm input, #editUserForm select').forEach(input => {
+        input.setAttribute('readonly', 'readonly');
+    });
+    
+    loadUserAccountInfo(userId);
+}
+
+// 사용자 계정 정보 로드
+function loadUserAccountInfo(userId) {
+    fetch('<?= base_url('customer/getUserAccountInfo') ?>/' + userId, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data) {
+            const info = data.data;
+            
+            document.getElementById('edit_user_id').value = info.id;
+            document.getElementById('edit_username').value = info.username || '';
+            document.getElementById('edit_real_name').value = info.real_name || '';
+            document.getElementById('edit_email').value = info.email || '';
+            document.getElementById('edit_phone').value = info.phone || '';
+            document.getElementById('edit_department').value = info.department || '';
+            document.getElementById('edit_position').value = info.position || '';
+            document.getElementById('edit_user_role').value = info.user_role || 'user';
+            
+            document.getElementById('editUserModal').classList.remove('hidden');
+        } else {
+            alert(data.message || '사용자 정보를 불러올 수 없습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('사용자 정보 조회 중 오류가 발생했습니다.');
+    });
+}
+
+// 사용자 계정 수정 모달 닫기
+function closeEditUserModal() {
+    document.getElementById('editUserModal').classList.add('hidden');
+    document.getElementById('editUserForm').reset();
+    
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 사용자 계정 수정
+function updateUserAccount(event) {
+    event.preventDefault();
+    
+    const isView = document.getElementById('edit_is_view').value === 'true';
+    if (isView) {
+        closeEditUserModal();
+        return;
+    }
+    
+    const userId = document.getElementById('edit_user_id').value;
+    const formData = {
+        real_name: document.getElementById('edit_real_name').value,
+        email: document.getElementById('edit_email').value,
+        phone: document.getElementById('edit_phone').value,
+        department: document.getElementById('edit_department').value,
+        position: document.getElementById('edit_position').value,
+        user_role: document.getElementById('edit_user_role').value
+    };
+    
+    const password = document.getElementById('edit_password').value;
+    if (password) {
+        formData.password = password;
+    }
+    
+    fetch('<?= base_url('customer/updateUserAccount') ?>/' + userId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeEditUserModal();
+            location.reload();
+        } else {
+            alert(data.message || '사용자 정보 수정에 실패했습니다.');
+            if (data.errors) {
+                console.error('Validation errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('사용자 정보 수정 중 오류가 발생했습니다.');
+    });
+}
+
+// 모달 외부 클릭 시 닫기 기능 제거 (X 버튼만으로 닫기)
+// 외부 클릭으로 인한 실수 방지를 위해 제거
+</script>
+
 <?= $this->endSection() ?>

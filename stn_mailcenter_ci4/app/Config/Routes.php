@@ -90,6 +90,16 @@ $routes->group('customer', function($routes) {
     $routes->get('agency', 'Customer::agency');
     $routes->get('budget', 'Customer::budget');
     $routes->get('items', 'Customer::items');
+    
+    // AJAX 라우트 - 고객사 및 사용자 계정 관리
+    $routes->get('getUsersByCustomer/(:num)', 'Customer::getUsersByCustomer/$1');
+    $routes->get('getUserAccountInfo/(:num)', 'Customer::getUserAccountInfo/$1');
+    $routes->get('getCustomerInfo/(:num)', 'Customer::getCustomerInfo/$1');
+    $routes->post('createHeadOffice', 'Customer::createHeadOffice');
+    $routes->post('createBranch', 'Customer::createBranch');
+    $routes->post('createAgency', 'Customer::createAgency');
+    $routes->post('createUserAccount', 'Customer::createUserAccount');
+    $routes->post('updateUserAccount/(:num)', 'Customer::updateUserAccount/$1');
 });
 
 // 부서관리 관련 라우트
@@ -173,6 +183,19 @@ if (ENVIRONMENT === 'development') {
         $routes->get('createUser', 'Debug::createUser');
     });
 }
+
+// 그룹사 관리 라우트 (슈퍼관리자 전용)
+$routes->group('group-company', function($routes) {
+    $routes->get('/', 'GroupCompany::index');
+    $routes->get('getAccountInfo/(:num)', 'GroupCompany::getAccountInfo/$1');
+    $routes->post('createHeadOfficeAccount', 'GroupCompany::createHeadOfficeAccount');
+    $routes->post('changePassword', 'GroupCompany::changePassword');
+    $routes->post('uploadLogo', 'GroupCompany::uploadLogo');
+    $routes->delete('deleteLogo/(:num)', 'GroupCompany::deleteLogo/$1');
+    // 오더유형 설정 관련 라우트
+    $routes->get('getUserServicePermissions', 'GroupCompany::getUserServicePermissions');
+    $routes->post('updateUserServicePermissions', 'GroupCompany::updateUserServicePermissions');
+});
 
 // 기본 홈 라우트 (리다이렉트)
 $routes->get('home', 'Dashboard::index');

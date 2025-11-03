@@ -164,16 +164,17 @@ class UserModel extends Model
     /**
      * 고객사별 사용자 목록 조회
      */
-    public function getUsersByCustomer($customerId, $activeOnly = true)
+    public function getUsersByCustomer($customerId, $activeOnly = false)
     {
         $builder = $this->builder();
         $builder->where('customer_id', $customerId);
         
         if ($activeOnly) {
             $builder->where('status', 'active');
+            $builder->where('is_active', 1);
         }
         
-        $builder->orderBy('company_name', 'ASC');
+        $builder->orderBy('created_at', 'DESC');
         
         return $builder->get()->getResultArray();
     }
@@ -335,6 +336,40 @@ class UserModel extends Model
     }
 
     /**
+     * 여러 고객사에 속한 사용자 목록 조회
+     */
+    public function getUsersByCustomers($customerIds)
+    {
+        if (empty($customerIds)) {
+            return [];
+        }
+        
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_users u');
+        
+        $builder->select('
+            u.*,
+            ch.customer_name,
+            ch.hierarchy_level,
+            ch.customer_code
+        ');
+        
+        $builder->join('tbl_customer_hierarchy ch', 'u.customer_id = ch.id', 'left');
+        $builder->whereIn('u.customer_id', $customerIds);
+        $builder->orderBy('ch.hierarchy_level', 'ASC');
+        $builder->orderBy('ch.customer_name', 'ASC');
+        $builder->orderBy('u.created_at', 'DESC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'UserModel: Failed to get users by customers');
+            return [];
+        }
+        
+        return $query->getResultArray();
+    }
+
+    /**
      * 사용자별 서비스 권한 조회
      */
     public function getUserServicePermissions($userId)
@@ -367,5 +402,80 @@ class UserModel extends Model
         }
         
         return $query->getResultArray();
+    }
+
+    /**
+     * 특정 사용자를 제외한 모든 사용자 조회 (고객사 정보 포함)
+     * 그룹사 관리 페이지용
+     */
+    public function getUsersWithCustomerInfo($excludeUserId = null)
+    {
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_users u');
+        
+        $builder->select('
+            u.*,
+            ch.customer_name,
+            ch.customer_code,
+            ch.hierarchy_level,
+            ch.parent_id
+        ');
+        
+        $builder->join('tbl_customer_hierarchy ch', 'u.customer_id = ch.id', 'left');
+        
+        // 특정 사용자 제외
+        if ($excludeUserId) {
+            $builder->where('u.id !=', $excludeUserId);
+        }
+        
+        $builder->orderBy('ch.hierarchy_level', 'ASC');
+        $builder->orderBy('ch.customer_name', 'ASC');
+        $builder->orderBy('u.created_at', 'DESC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'UserModel: Failed to get users with customer info');
+            return [];
+        }
+        
+        return $query->getResultArray();
+    }
+
+    /**
+     * 사용자 계정 정보 조회 (고객사 정보 포함)
+     * 계정 정보 상세 조회용
+     */
+    public function getUserAccountInfo($userId)
+    {
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_users u');
+        
+        $builder->select('
+            u.*,
+            ch.customer_name,
+            ch.customer_code,
+            ch.hierarchy_level,
+            ch.parent_id,
+            ch.business_number,
+            ch.representative_name,
+            ch.contact_phone as customer_contact_phone,
+            ch.contact_email as customer_contact_email,
+            ch.address as customer_address,
+            ch.contract_start_date,
+            ch.contract_end_date,
+            ch.created_at as customer_created_at,
+            ch.updated_at as customer_updated_at
+        ');
+        
+        $builder->join('tbl_customer_hierarchy ch', 'u.customer_id = ch.id', 'left');
+        $builder->where('u.id', $userId);
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'UserModel: Failed to get user account info');
+            return null;
+        }
+        
+        return $query->getRowArray();
     }
 }

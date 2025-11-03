@@ -66,10 +66,19 @@ class CustomerHierarchyModel extends Model
      */
     public function getActiveCustomers()
     {
-        return $this->where('is_active', 1)
-                   ->orderBy('hierarchy_level', 'ASC')
-                   ->orderBy('company_name', 'ASC')
-                   ->findAll();
+        // 실제 DB 필드명 사용 (customer_name)
+        $builder = $this->builder();
+        $builder->where('is_active', 1);
+        $builder->orderBy('hierarchy_level', 'ASC');
+        $builder->orderBy('customer_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get active customers');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 
     /**
@@ -77,10 +86,19 @@ class CustomerHierarchyModel extends Model
      */
     public function getCustomersByLevel($level)
     {
-        return $this->where('hierarchy_level', $level)
-                   ->where('is_active', 1)
-                   ->orderBy('company_name', 'ASC')
-                   ->findAll();
+        // 실제 DB 필드명 사용 (customer_name)
+        $builder = $this->builder();
+        $builder->where('hierarchy_level', $level);
+        $builder->where('is_active', 1);
+        $builder->orderBy('customer_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get customers by level');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 
     /**
@@ -92,19 +110,57 @@ class CustomerHierarchyModel extends Model
     }
 
     /**
-     * 지사 목록 조회
+     * 지사 목록 조회 (상위 고객사 정보 포함)
      */
     public function getBranches()
     {
-        return $this->getCustomersByLevel('branch');
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_customer_hierarchy c');
+        
+        $builder->select('
+            c.*,
+            p.customer_name as parent_customer_name
+        ');
+        
+        $builder->join('tbl_customer_hierarchy p', 'c.parent_id = p.id', 'left');
+        $builder->where('c.hierarchy_level', 'branch');
+        $builder->where('c.is_active', 1);
+        $builder->orderBy('c.customer_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get branches');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 
     /**
-     * 대리점 목록 조회
+     * 대리점 목록 조회 (상위 고객사 정보 포함)
      */
     public function getAgencies()
     {
-        return $this->getCustomersByLevel('agency');
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_customer_hierarchy c');
+        
+        $builder->select('
+            c.*,
+            p.customer_name as parent_customer_name
+        ');
+        
+        $builder->join('tbl_customer_hierarchy p', 'c.parent_id = p.id', 'left');
+        $builder->where('c.hierarchy_level', 'agency');
+        $builder->where('c.is_active', 1);
+        $builder->orderBy('c.customer_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get agencies');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 
     /**
@@ -115,16 +171,23 @@ class CustomerHierarchyModel extends Model
         $builder = $this->builder();
         $builder->where('is_active', 1);
         
+        // 실제 DB 필드명 사용 (parent_id)
         if ($parentId === null) {
-            $builder->where('parent_customer_id IS NULL');
+            $builder->where('parent_id IS NULL');
         } else {
-            $builder->where('parent_customer_id', $parentId);
+            $builder->where('parent_id', $parentId);
         }
         
         $builder->orderBy('hierarchy_level', 'ASC');
-        $builder->orderBy('company_name', 'ASC');
+        $builder->orderBy('customer_name', 'ASC'); // 실제 DB 필드명
         
-        $customers = $builder->get()->getResultArray();
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get customer hierarchy');
+            return [];
+        }
+        
+        $customers = $query->getResultArray();
         
         // 하위 고객사 재귀 조회
         foreach ($customers as &$customer) {
@@ -146,15 +209,22 @@ class CustomerHierarchyModel extends Model
             $builder->where('hierarchy_level', $level);
         }
         
+        // 실제 DB 필드명 사용
         $builder->groupStart();
-        $builder->like('company_name', $searchTerm);
+        $builder->like('customer_name', $searchTerm); // DB: customer_name
         $builder->orLike('business_number', $searchTerm);
-        $builder->orLike('contact_person', $searchTerm);
+        $builder->orLike('representative_name', $searchTerm); // DB: representative_name
         $builder->groupEnd();
         
-        $builder->orderBy('company_name', 'ASC');
+        $builder->orderBy('customer_name', 'ASC'); // DB: customer_name
         
-        return $builder->get()->getResultArray();
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to search customers');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 
     /**
@@ -172,9 +242,9 @@ class CustomerHierarchyModel extends Model
     {
         $db = \Config\Database::connect();
         
-        // 하위 고객사 확인
+        // 하위 고객사 확인 (실제 DB 필드명: parent_id)
         $childBuilder = $this->builder();
-        $childBuilder->where('parent_customer_id', $customerId);
+        $childBuilder->where('parent_id', $customerId);
         $childCount = $childBuilder->countAllResults();
         
         // 사용자 확인
@@ -188,5 +258,311 @@ class CustomerHierarchyModel extends Model
         $orderCount = $orderBuilder->countAllResults();
         
         return $childCount === 0 && $userCount === 0 && $orderCount === 0;
+    }
+
+    /**
+     * 본점 생성 (실제 DB 필드명 사용)
+     */
+    public function createHeadOffice($data)
+    {
+        // 실제 DB 필드명 사용 (customer_name, customer_code, parent_id 등)
+        $dbData = [
+            'customer_code' => $data['customer_code'],
+            'customer_name' => $data['customer_name'],
+            'hierarchy_level' => 'head_office',
+            'parent_id' => null,
+            'contact_phone' => $data['contact_phone'] ?? null,
+            'address' => $data['address'] ?? null,
+            'is_active' => 1
+        ];
+
+        // allowedFields에 실제 DB 필드명이 없으므로 직접 insert
+        $this->db->table($this->table)->insert($dbData);
+        return $this->db->insertID();
+    }
+
+    /**
+     * 고객사 코드 중복 체크
+     */
+    public function checkCustomerCodeExists($code)
+    {
+        $builder = $this->builder();
+        $builder->where('customer_code', $code);
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to check customer code');
+            return false;
+        }
+        
+        return $query->getNumRows() > 0;
+    }
+
+    /**
+     * 고객사 코드 생성 (중복 체크 포함)
+     */
+    public function generateCustomerCode($companyName)
+    {
+        // 회사명 기반 코드 생성
+        $baseCode = preg_replace('/[^a-zA-Z0-9가-힣]/u', '', $companyName);
+        $code = $baseCode . '_' . date('Ymd');
+        
+        // 중복 체크
+        if ($this->checkCustomerCodeExists($code)) {
+            $code = $baseCode . '_' . time();
+        }
+        
+        return $code;
+    }
+
+    /**
+     * 지사 생성 (실제 DB 필드명 사용)
+     */
+    public function createBranch($data)
+    {
+        $dbData = [
+            'customer_code' => $data['customer_code'],
+            'customer_name' => $data['customer_name'],
+            'hierarchy_level' => 'branch',
+            'parent_id' => $data['parent_id'],
+            'business_number' => $data['business_number'] ?? null,
+            'representative_name' => $data['representative_name'] ?? null,
+            'contact_phone' => $data['contact_phone'] ?? null,
+            'contact_email' => $data['contact_email'] ?? null,
+            'address' => $data['address'] ?? null,
+            'contract_start_date' => $data['contract_start_date'] ?? null,
+            'contract_end_date' => $data['contract_end_date'] ?? null,
+            'is_active' => 1
+        ];
+
+        $this->db->table($this->table)->insert($dbData);
+        return $this->db->insertID();
+    }
+
+    /**
+     * 대리점 생성 (실제 DB 필드명 사용)
+     */
+    public function createAgency($data)
+    {
+        $dbData = [
+            'customer_code' => $data['customer_code'],
+            'customer_name' => $data['customer_name'],
+            'hierarchy_level' => 'agency',
+            'parent_id' => $data['parent_id'],
+            'business_number' => $data['business_number'] ?? null,
+            'representative_name' => $data['representative_name'] ?? null,
+            'contact_phone' => $data['contact_phone'] ?? null,
+            'contact_email' => $data['contact_email'] ?? null,
+            'address' => $data['address'] ?? null,
+            'contract_start_date' => $data['contract_start_date'] ?? null,
+            'contract_end_date' => $data['contract_end_date'] ?? null,
+            'is_active' => 1
+        ];
+
+        $this->db->table($this->table)->insert($dbData);
+        return $this->db->insertID();
+    }
+
+    /**
+     * 고객사 정보 수정 (실제 DB 필드명 사용)
+     */
+    public function updateCustomer($customerId, $data)
+    {
+        $dbData = [];
+        
+        if (isset($data['customer_name'])) {
+            $dbData['customer_name'] = $data['customer_name'];
+        }
+        if (isset($data['business_number'])) {
+            $dbData['business_number'] = $data['business_number'];
+        }
+        if (isset($data['representative_name'])) {
+            $dbData['representative_name'] = $data['representative_name'];
+        }
+        if (isset($data['contact_phone'])) {
+            $dbData['contact_phone'] = $data['contact_phone'];
+        }
+        if (isset($data['contact_email'])) {
+            $dbData['contact_email'] = $data['contact_email'];
+        }
+        if (isset($data['address'])) {
+            $dbData['address'] = $data['address'];
+        }
+        if (isset($data['contract_start_date'])) {
+            $dbData['contract_start_date'] = $data['contract_start_date'];
+        }
+        if (isset($data['contract_end_date'])) {
+            $dbData['contract_end_date'] = $data['contract_end_date'];
+        }
+        if (isset($data['is_active'])) {
+            $dbData['is_active'] = $data['is_active'] ? 1 : 0;
+        }
+        if (isset($data['logo_path'])) {
+            $dbData['logo_path'] = $data['logo_path'];
+        }
+
+        if (empty($dbData)) {
+            return false;
+        }
+
+        $this->db->table($this->table)->where('id', $customerId)->update($dbData);
+        return $this->db->affectedRows() > 0;
+    }
+
+    /**
+     * 고객사 상세 정보 조회
+     */
+    public function getCustomerById($customerId)
+    {
+        $builder = $this->builder();
+        $builder->where('id', $customerId);
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get customer by ID');
+            return null;
+        }
+        
+        return $query->getRowArray();
+    }
+
+    /**
+     * 상위 고객사 목록 조회 (지사/대리점 등록 시 상위 선택용)
+     */
+    public function getParentCustomers($excludeId = null, $maxLevel = null)
+    {
+        $builder = $this->builder();
+        $builder->where('is_active', 1);
+        
+        if ($excludeId) {
+            $builder->where('id !=', $excludeId);
+        }
+        
+        // 지사 등록 시: 본점만
+        if ($maxLevel === 'branch') {
+            $builder->where('hierarchy_level', 'head_office');
+        }
+        // 대리점 등록 시: 본점, 지사만
+        elseif ($maxLevel === 'agency') {
+            $builder->whereIn('hierarchy_level', ['head_office', 'branch']);
+        }
+        
+        $builder->orderBy('hierarchy_level', 'ASC');
+        $builder->orderBy('customer_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get parent customers');
+            return [];
+        }
+        
+        return $query->getResultArray();
+    }
+
+    /**
+     * 고객사가 속한 본점 ID 찾기 (재귀적으로 상위를 찾아 본점까지)
+     */
+    public function getHeadOfficeId($customerId)
+    {
+        $customer = $this->find($customerId);
+        if (!$customer) {
+            return null;
+        }
+
+        // 이미 본점이면 자기 자신 반환
+        if ($customer['hierarchy_level'] === 'head_office') {
+            return $customer['id'];
+        }
+
+        // 상위 고객사가 없으면 null
+        if (empty($customer['parent_id'])) {
+            return null;
+        }
+
+        // 재귀적으로 상위 고객사를 찾아 본점까지
+        return $this->getHeadOfficeId($customer['parent_id']);
+    }
+
+    /**
+     * 본점 하위의 모든 고객사 ID 목록 조회 (본점 포함)
+     */
+    public function getCustomerGroupIds($headOfficeId)
+    {
+        $customerIds = [$headOfficeId]; // 본점 자신 포함
+        
+        // 본점 하위의 모든 고객사 조회
+        $builder = $this->builder();
+        $builder->where('is_active', 1);
+        
+        // 재귀적으로 모든 하위 고객사 찾기
+        $this->getAllChildrenIds($headOfficeId, $customerIds);
+        
+        return $customerIds;
+    }
+
+    /**
+     * 재귀적으로 모든 하위 고객사 ID 수집
+     */
+    private function getAllChildrenIds($parentId, &$customerIds)
+    {
+        $builder = $this->builder();
+        $builder->where('parent_id', $parentId);
+        $builder->where('is_active', 1);
+        
+        $query = $builder->get();
+        if ($query === false) {
+            return;
+        }
+        
+        $children = $query->getResultArray();
+        foreach ($children as $child) {
+            $customerIds[] = $child['id'];
+            // 재귀적으로 하위 고객사 찾기
+            $this->getAllChildrenIds($child['id'], $customerIds);
+        }
+    }
+
+    /**
+     * 로그인한 사용자가 속한 그룹의 고객사 목록 조회 (계층 레벨별)
+     */
+    public function getCustomersByUserGroup($userId, $hierarchyLevel)
+    {
+        // 사용자의 customer_id 조회
+        $db = \Config\Database::connect();
+        $userBuilder = $db->table('tbl_users');
+        $userBuilder->select('customer_id');
+        $userBuilder->where('id', $userId);
+        $userQuery = $userBuilder->get();
+        
+        if ($userQuery === false || $userQuery->getNumRows() === 0) {
+            return [];
+        }
+        
+        $user = $userQuery->getRowArray();
+        $userCustomerId = $user['customer_id'];
+        
+        // 사용자가 속한 본점 ID 찾기
+        $headOfficeId = $this->getHeadOfficeId($userCustomerId);
+        if (!$headOfficeId) {
+            return [];
+        }
+        
+        // 본점 하위의 모든 고객사 ID 목록
+        $customerGroupIds = $this->getCustomerGroupIds($headOfficeId);
+        
+        // 해당 계층 레벨의 고객사만 필터링
+        $builder = $this->builder();
+        $builder->whereIn('id', $customerGroupIds);
+        $builder->where('hierarchy_level', $hierarchyLevel);
+        $builder->where('is_active', 1);
+        $builder->orderBy('customer_name', 'ASC');
+        
+        $query = $builder->get();
+        if ($query === false) {
+            log_message('error', 'CustomerHierarchyModel: Failed to get customers by user group');
+            return [];
+        }
+        
+        return $query->getResultArray();
     }
 }

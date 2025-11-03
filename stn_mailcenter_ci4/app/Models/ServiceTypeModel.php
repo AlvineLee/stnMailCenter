@@ -18,7 +18,9 @@ class ServiceTypeModel extends Model
         'service_category',
         'description',
         'is_active',
-        'sort_order'
+        'sort_order',
+        'is_external_link',
+        'external_url'
     ];
 
     protected $useTimestamps = true;
@@ -32,7 +34,9 @@ class ServiceTypeModel extends Model
         'service_category' => 'required|max_length[50]',
         'description' => 'permit_empty',
         'is_active' => 'permit_empty|in_list[0,1]',
-        'sort_order' => 'permit_empty|integer'
+        'sort_order' => 'permit_empty|integer',
+        'is_external_link' => 'permit_empty|in_list[0,1]',
+        'external_url' => 'permit_empty|max_length[500]|valid_url'
     ];
 
     protected $validationMessages = [

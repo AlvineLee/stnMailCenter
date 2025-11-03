@@ -41,8 +41,11 @@ Events::on('pre_system', static function (): void {
      * Debug Toolbar Listeners.
      * --------------------------------------------------------------------
      * If you delete, they will no longer be collected.
+     * 
+     * 개발 서버 배포 시 툴바 비활성화: 조건을 false로 변경하거나 주석 처리
      */
-    if (CI_DEBUG && ! is_cli()) {
+    // 툴바 완전 비활성화 (개발 서버 배포용)
+    if (false && CI_DEBUG && ! is_cli()) {
         Events::on('DBQuery', 'CodeIgniter\Debug\Toolbar\Collectors\Database::collect');
         service('toolbar')->respond();
         // Hot Reload route - for framework use on the hot reloader.

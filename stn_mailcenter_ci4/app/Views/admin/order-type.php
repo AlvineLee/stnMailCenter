@@ -115,8 +115,11 @@
                               data-service-name="<?= htmlspecialchars($service['service_name']) ?>"
                               data-service-category="<?= htmlspecialchars($service['service_category']) ?>"
                               style="cursor: pointer;"
-                              onclick="openEditModal(<?= $service['id'] ?>, '<?= htmlspecialchars($service['service_name'], ENT_QUOTES) ?>', '<?= htmlspecialchars($service['service_category'], ENT_QUOTES) ?>')">
+                              onclick="openEditModal(<?= $service['id'] ?>, '<?= htmlspecialchars($service['service_name'], ENT_QUOTES) ?>', '<?= htmlspecialchars($service['service_category'], ENT_QUOTES) ?>', <?= (isset($service['is_external_link']) && $service['is_external_link'] == 1) ? 'true' : 'false' ?>, <?= !empty($service['external_url']) ? "'" . htmlspecialchars(addslashes($service['external_url']), ENT_QUOTES) . "'" : "''" ?>)">
                             <?= htmlspecialchars($service['service_name']) ?>
+                            <?php if (!empty($service['is_external_link']) && $service['is_external_link'] == 1): ?>
+                                <span class="text-xs text-blue-500 ml-1">(외부링크)</span>
+                            <?php endif; ?>
                         </span>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer ml-2" onclick="event.stopPropagation();">
@@ -189,7 +192,21 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">서비스명 <span class="text-red-500">*</span></label>
                 <input type="text" id="create_service_name" name="service_name" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="서비스명을 입력하세요" required>
-        </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="create_is_external_link" name="is_external_link" class="sr-only peer" onchange="toggleExternalUrlInput('create')">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <span class="ml-3 text-sm font-medium text-gray-700">외부 링크 서비스</span>
+                </label>
+            </div>
+            
+            <div id="create-external-url-container" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">외부 링크 URL <span class="text-red-500">*</span></label>
+                <input type="url" id="create_external_url" name="external_url" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com" pattern="https?://.+">
+                <p class="mt-1 text-xs text-gray-500">외부 사이트의 전체 URL을 입력하세요 (http:// 또는 https:// 포함)</p>
+            </div>
 
             <div class="flex justify-end space-x-2">
                 <button type="button" onclick="closeCreateModal()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">취소</button>
@@ -235,7 +252,21 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">서비스명 <span class="text-red-500">*</span></label>
                 <input type="text" id="edit_service_name" name="service_name" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="서비스명을 입력하세요" required>
-        </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="edit_is_external_link" name="is_external_link" class="sr-only peer" onchange="toggleExternalUrlInput('edit')">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <span class="ml-3 text-sm font-medium text-gray-700">외부 링크 서비스</span>
+                </label>
+            </div>
+            
+            <div id="edit-external-url-container" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">외부 링크 URL <span class="text-red-500">*</span></label>
+                <input type="url" id="edit_external_url" name="external_url" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com" pattern="https?://.+">
+                <p class="mt-1 text-xs text-gray-500">외부 사이트의 전체 URL을 입력하세요 (http:// 또는 https:// 포함)</p>
+            </div>
 
             <div class="flex justify-end space-x-2">
                 <button type="button" onclick="closeEditModal()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">취소</button>
@@ -267,6 +298,12 @@ function openCreateModal() {
     document.getElementById('new_category').value = '';
     document.getElementById('create_service_name').value = '';
     document.getElementById('new-category-input').classList.add('hidden');
+    
+    // 외부 링크 필드 초기화
+    document.getElementById('create_is_external_link').checked = false;
+    document.getElementById('create_external_url').value = '';
+    document.getElementById('create-external-url-container').classList.add('hidden');
+    document.getElementById('create_external_url').required = false;
 }
 
 // 새 주문유형 추가 모달 닫기
@@ -279,8 +316,24 @@ function closeCreateModal() {
     }
 }
 
+// 외부 링크 URL 입력 필드 표시/숨김
+function toggleExternalUrlInput(mode) {
+    const checkbox = document.getElementById(mode + '_is_external_link');
+    const container = document.getElementById(mode + '-external-url-container');
+    const urlInput = document.getElementById(mode + '_external_url');
+    
+    if (checkbox.checked) {
+        container.classList.remove('hidden');
+        urlInput.required = true;
+    } else {
+        container.classList.add('hidden');
+        urlInput.required = false;
+        urlInput.value = '';
+    }
+}
+
 // 서비스명 수정 모달 열기
-function openEditModal(serviceId, serviceName, serviceCategory) {
+function openEditModal(serviceId, serviceName, serviceCategory, isExternalLink = false, externalUrl = '') {
     // 레이어 팝업이 열릴 때 사이드바 처리
     if (typeof window.hideSidebarForModal === 'function') {
         window.hideSidebarForModal();
@@ -289,17 +342,65 @@ function openEditModal(serviceId, serviceName, serviceCategory) {
         window.lowerSidebarZIndex();
     }
     
-    document.getElementById('editModal').classList.remove('hidden');
-    document.getElementById('edit_service_id').value = serviceId;
-    document.getElementById('edit_service_name').value = serviceName;
-    document.getElementById('edit_category').value = serviceCategory || '';
+    // 먼저 모든 필드 초기화
+    document.getElementById('edit_service_id').value = '';
+    document.getElementById('edit_service_name').value = '';
+    document.getElementById('edit_category').value = '';
     document.getElementById('edit_new_category').value = '';
     document.getElementById('edit-new-category-input').classList.add('hidden');
+    document.getElementById('edit_is_external_link').checked = false;
+    document.getElementById('edit_external_url').value = '';
+    document.getElementById('edit-external-url-container').classList.add('hidden');
+    document.getElementById('edit_external_url').required = false;
+    
+    // 이제 실제 값 설정
+    document.getElementById('editModal').classList.remove('hidden');
+    document.getElementById('edit_service_id').value = serviceId || '';
+    document.getElementById('edit_service_name').value = serviceName || '';
+    document.getElementById('edit_category').value = serviceCategory || '';
+    
+    // 외부 링크 필드 설정 (명시적으로 boolean 변환)
+    // isExternalLink가 문자열 'true', boolean true, 숫자 1, 문자열 '1' 중 하나면 true
+    let isExternal = false;
+    if (typeof isExternalLink !== 'undefined' && isExternalLink !== null) {
+        isExternal = (isExternalLink === true || isExternalLink === 1 || isExternalLink === '1' || isExternalLink === 'true');
+    }
+    
+    // externalUrl이 유효한 문자열인 경우에만 사용
+    let externalUrlValue = '';
+    if (externalUrl && typeof externalUrl === 'string' && externalUrl.trim() !== '' && externalUrl !== 'null' && externalUrl !== 'undefined') {
+        externalUrlValue = externalUrl.trim();
+    }
+    
+    // 체크박스 상태 설정
+    document.getElementById('edit_is_external_link').checked = isExternal;
+    
+    // URL 필드 설정
+    if (isExternal) {
+        document.getElementById('edit_external_url').value = externalUrlValue || '';
+        document.getElementById('edit-external-url-container').classList.remove('hidden');
+        document.getElementById('edit_external_url').required = true;
+    } else {
+        document.getElementById('edit_external_url').value = ''; // 외부 링크가 아니면 URL도 초기화
+        document.getElementById('edit-external-url-container').classList.add('hidden');
+        document.getElementById('edit_external_url').required = false;
+    }
 }
 
 // 서비스명 수정 모달 닫기
 function closeEditModal() {
     document.getElementById('editModal').classList.add('hidden');
+    
+    // 모든 필드 초기화
+    document.getElementById('edit_service_id').value = '';
+    document.getElementById('edit_service_name').value = '';
+    document.getElementById('edit_category').value = '';
+    document.getElementById('edit_new_category').value = '';
+    document.getElementById('edit-new-category-input').classList.add('hidden');
+    document.getElementById('edit_is_external_link').checked = false;
+    document.getElementById('edit_external_url').value = '';
+    document.getElementById('edit-external-url-container').classList.add('hidden');
+    document.getElementById('edit_external_url').required = false;
     
     // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
     if (typeof window.restoreSidebarZIndex === 'function') {
@@ -434,18 +535,8 @@ function saveSettings() {
     });
 }
 
-// 모달 외부 클릭 시 닫기
-document.getElementById('createModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeCreateModal();
-    }
-});
-
-document.getElementById('editModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeEditModal();
-    }
-});
+// 모달 외부 클릭 시 닫기 기능 제거 (X 버튼만으로 닫기)
+// 외부 클릭으로 인한 실수 방지를 위해 제거
 
 // 드래그 앤 드롭으로 순서 변경 초기화
 function initSortable() {

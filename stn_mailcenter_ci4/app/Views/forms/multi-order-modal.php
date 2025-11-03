@@ -160,12 +160,8 @@ document.addEventListener('DOMContentLoaded', function() {
         closeMultiOrderModalFunc();
     });
     
-    // 모달 배경 클릭 시 닫기
-    multiOrderModal.addEventListener('click', function(e) {
-        if (e.target === multiOrderModal) {
-            closeMultiOrderModalFunc();
-        }
-    });
+    // 모달 외부 클릭 시 닫기 기능 제거 (X 버튼만으로 닫기)
+    // 외부 클릭으로 인한 실수 방지를 위해 제거
     
     // 파일 선택 버튼 클릭
     selectFileBtn.addEventListener('click', function() {
