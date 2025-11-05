@@ -8,20 +8,14 @@
         <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">주문자 정보</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div class="space-y-1">
-                <div class="relative">
-                    <input type="text" id="company_name" name="company_name" value="<?= old('company_name', session()->get('company_name', '')) ?>" required
-                           placeholder="회사명"
-                           class="w-full px-3 py-1 pr-6 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
-                    <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm">*</span>
-                </div>
+                <input type="text" id="company_name" name="company_name" value="<?= old('company_name', session()->get('company_name', '')) ?>" required
+                       placeholder="회사명" lang="ko"
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <div class="relative">
-                    <input type="tel" id="contact" name="contact" value="<?= old('contact', session()->get('phone', '')) ?>" required
-                           placeholder="연락처"
-                           class="w-full px-3 py-1 pr-6 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
-                    <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm">*</span>
-                </div>
+                <input type="tel" id="contact" name="contact" value="<?= old('contact', session()->get('phone', '')) ?>" required
+                       placeholder="연락처"
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1 flex items-center">
                 <label class="flex items-center space-x-2 cursor-pointer">
@@ -53,7 +47,7 @@
                 </label>
             </div>
             <div class="flex space-x-2">
-                <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                <button type="button" id="recent_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
                     최근접수내역
                 </button>
                 <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
@@ -65,46 +59,42 @@
         <!-- 입력 필드들 -->
         <div class="grid grid-cols-2 gap-3 mb-3">
             <div class="space-y-1">
-                <div class="relative">
-                    <input type="text" id="departure_company_name" name="departure_company_name" value="<?= old('departure_company_name') ?>" placeholder="상호(이름)" required
-                           class="w-full px-3 py-1 pr-6 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-                    <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm">*</span>
-                </div>
+                <input type="text" id="departure_company_name" name="departure_company_name" value="<?= old('departure_company_name') ?>" placeholder="상호(이름)" lang="ko"
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <div class="relative">
-                    <input type="tel" id="departure_contact" name="departure_contact" value="<?= old('departure_contact') ?>" placeholder="연락처" required
-                           class="w-full px-3 py-1 pr-6 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-                    <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm">*</span>
-                </div>
+                <input type="tel" id="departure_contact" name="departure_contact" value="<?= old('departure_contact') ?>" placeholder="연락처" required
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
         </div>
         
         <div class="grid grid-cols-2 gap-3 mb-3">
             <div class="space-y-1">
-                <input type="text" id="departure_department" name="departure_department" value="<?= old('departure_department') ?>" placeholder="부서"
+                <input type="text" id="departure_department" name="departure_department" value="<?= old('departure_department') ?>" placeholder="부서" lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <input type="text" id="departure_manager" name="departure_manager" value="<?= old('departure_manager') ?>" placeholder="담당"
+                <input type="text" id="departure_manager" name="departure_manager" value="<?= old('departure_manager') ?>" placeholder="담당" required lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
         </div>
         
         <div class="space-y-2">
             <div class="flex space-x-2">
-                <input type="text" id="departure_dong" name="departure_dong" value="<?= old('departure_dong') ?>" placeholder="기준동"
+                <input type="text" id="departure_dong" name="departure_dong" value="<?= old('departure_dong') ?>" placeholder="기준동" lang="ko"
                        class="flex-1 px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
                 <button type="button" id="departure_address_search" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
                     주소검색
                 </button>
             </div>
-            <input type="text" id="departure_address" name="departure_address" value="<?= old('departure_address') ?>" placeholder="주소"
+            <input type="text" id="departure_address" name="departure_address" value="<?= old('departure_address') ?>" placeholder="주소" required lang="ko"
+                   class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <input type="text" id="departure_detail" name="departure_detail" value="<?= old('departure_detail') ?>" placeholder="상세주소" required lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             
             <!-- 해외특송 서비스인 경우 국가/지역 필드 추가 -->
             <?php if (isset($service_type) && $service_type === 'international'): ?>
-            <input type="text" id="departure_country" name="departure_country" value="<?= old('departure_country') ?>" placeholder="국가/지역"
+            <input type="text" id="departure_country" name="departure_country" value="<?= old('departure_country') ?>" placeholder="국가/지역" lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             <?php endif; ?>
         </div>
@@ -116,13 +106,13 @@
     <section class="bg-blue-25 rounded-lg shadow-sm border border-blue-100 p-3">
         <h2 class="text-sm font-semibold text-blue-600 mb-3 pb-1 border-b border-blue-200">경유지 정보</h2>
         <div class="space-y-2">
-            <input type="text" id="waypoint_address" name="waypoint_address" value="<?= old('waypoint_address') ?>" placeholder="경유지 주소 *"
+            <input type="text" id="waypoint_address" name="waypoint_address" value="<?= old('waypoint_address') ?>" placeholder="경유지 주소 *" lang="ko"
                    class="w-full px-3 py-1 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white">
-            <input type="text" id="waypoint_detail" name="waypoint_detail" value="<?= old('waypoint_detail') ?>" placeholder="상세주소"
+            <input type="text" id="waypoint_detail" name="waypoint_detail" value="<?= old('waypoint_detail') ?>" placeholder="상세주소" lang="ko"
                    class="w-full px-3 py-1 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white">
-            <input type="tel" id="waypoint_contact" name="waypoint_contact" value="<?= old('waypoint_contact') ?>" placeholder="경유지 연락처"
+            <input type="tel" id="waypoint_contact" name="waypoint_contact" value="<?= old('waypoint_contact') ?>" placeholder="경유지 연락처" lang="ko"
                    class="w-full px-3 py-1 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white">
-            <textarea id="waypoint_notes" name="waypoint_notes" rows="2" placeholder="경유지 특이사항"
+            <textarea id="waypoint_notes" name="waypoint_notes" rows="2" placeholder="경유지 특이사항" lang="ko"
                       class="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white resize-none"><?= old('waypoint_notes') ?></textarea>
         </div>
     </section>
@@ -145,7 +135,7 @@
                 </label>
             </div>
             <div class="flex space-x-2">
-                <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                <button type="button" id="recent_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
                     최근접수내역
                 </button>
                 <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
@@ -157,46 +147,42 @@
         <!-- 입력 필드들 -->
         <div class="grid grid-cols-2 gap-3 mb-3">
             <div class="space-y-1">
-                <div class="relative">
-                    <input type="text" id="destination_company_name" name="destination_company_name" value="<?= old('destination_company_name') ?>" placeholder="상호(이름)" required
-                           class="w-full px-3 py-1 pr-6 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-                    <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm">*</span>
-                </div>
+                <input type="text" id="destination_company_name" name="destination_company_name" value="<?= old('destination_company_name') ?>" placeholder="상호(이름)" lang="ko"
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <div class="relative">
-                    <input type="tel" id="destination_contact" name="destination_contact" value="<?= old('destination_contact') ?>" placeholder="연락처" required
-                           class="w-full px-3 py-1 pr-6 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-                    <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm">*</span>
-                </div>
+                <input type="tel" id="destination_contact" name="destination_contact" value="<?= old('destination_contact') ?>" placeholder="연락처" required
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
         </div>
         
         <div class="grid grid-cols-2 gap-3 mb-3">
             <div class="space-y-1">
-                <input type="text" id="destination_department" name="destination_department" value="<?= old('destination_department') ?>" placeholder="부서"
+                <input type="text" id="destination_department" name="destination_department" value="<?= old('destination_department') ?>" placeholder="부서" lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <input type="text" id="destination_manager" name="destination_manager" value="<?= old('destination_manager') ?>" placeholder="담당"
+                <input type="text" id="destination_manager" name="destination_manager" value="<?= old('destination_manager') ?>" placeholder="담당" required lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
         </div>
         
         <div class="space-y-2">
             <div class="flex space-x-2">
-                <input type="text" id="destination_dong" name="destination_dong" value="<?= old('destination_dong') ?>" placeholder="기준동"
+                <input type="text" id="destination_dong" name="destination_dong" value="<?= old('destination_dong') ?>" placeholder="기준동" lang="ko"
                        class="flex-1 px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
                 <button type="button" id="destination_address_search" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
                     주소검색
                 </button>
             </div>
-            <input type="text" id="destination_address" name="destination_address" value="<?= old('destination_address') ?>" placeholder="주소"
+            <input type="text" id="destination_address" name="destination_address" value="<?= old('destination_address') ?>" placeholder="주소" required lang="ko"
+                   class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <input type="text" id="destination_detail" name="destination_detail" value="<?= old('destination_detail') ?>" placeholder="상세주소" required lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             
             <!-- 해외특송 서비스인 경우 국가/지역 필드 추가 -->
             <?php if (isset($service_type) && $service_type === 'international'): ?>
-            <input type="text" id="destination_country" name="destination_country" value="<?= old('destination_country') ?>" placeholder="국가/지역"
+            <input type="text" id="destination_country" name="destination_country" value="<?= old('destination_country') ?>" placeholder="국가/지역" lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             <?php endif; ?>
         </div>
@@ -210,6 +196,7 @@ function openDaumAddressSearch(type) {
         oncomplete: function(data) {
             let addr = '';
             let extraAddr = '';
+            let detailAddr = ''; // 상세주소용
 
             if (data.userSelectedType === 'R') {
                 addr = data.roadAddress;
@@ -229,13 +216,41 @@ function openDaumAddressSearch(type) {
                 }
             }
 
+            // 상세주소 필드에 건물명 등 추가 정보 설정
+            if (data.buildingName && data.buildingName !== '') {
+                detailAddr = data.buildingName;
+            }
+            
+            // 법정동명이 있고 건물명이 없는 경우
+            if (!detailAddr && data.bname && data.bname !== '') {
+                detailAddr = data.bname;
+            }
+
             // 주소 필드에 값 설정
             if (type === 'departure') {
                 document.getElementById('departure_dong').value = data.zonecode;
                 document.getElementById('departure_address').value = addr + extraAddr;
+                // 상세주소 필드가 있으면 건물명 등 설정 (없으면 빈 값)
+                const detailField = document.getElementById('departure_detail');
+                if (detailField) {
+                    detailField.value = detailAddr;
+                    // 상세주소 필드에 포커스 (사용자가 추가 입력 가능하도록)
+                    setTimeout(function() {
+                        detailField.focus();
+                    }, 100);
+                }
             } else if (type === 'destination') {
                 document.getElementById('destination_dong').value = data.zonecode;
                 document.getElementById('destination_address').value = addr + extraAddr;
+                // 상세주소 필드가 있으면 건물명 등 설정 (없으면 빈 값)
+                const detailField = document.getElementById('destination_detail');
+                if (detailField) {
+                    detailField.value = detailAddr;
+                    // 상세주소 필드에 포커스 (사용자가 추가 입력 가능하도록)
+                    setTimeout(function() {
+                        detailField.focus();
+                    }, 100);
+                }
             }
         }
     }).open();
@@ -295,13 +310,89 @@ function toggleWaypointSection() {
     }
 }
 
+// required 속성이 있는 필드에 빨간색 별표 자동 추가
+function addRequiredStars() {
+    // 모든 required 속성이 있는 input, textarea, select 필드 찾기
+    const requiredFields = document.querySelectorAll('input[required], textarea[required], select[required]');
+    
+    requiredFields.forEach(field => {
+        // 이미 별표가 추가된 필드는 제외
+        if (field.dataset.requiredStarAdded === 'true') {
+            return;
+        }
+        
+        // 필드가 화면에 보이는지 확인 (display: none인 필드는 제외)
+        const style = window.getComputedStyle(field);
+        if (style.display === 'none' || style.visibility === 'hidden') {
+            return;
+        }
+        
+        // 부모 요소가 relative인지 확인하고, 없으면 추가
+        let parent = field.parentElement;
+        let needsWrapper = true;
+        
+        // 부모가 relative 클래스를 가지고 있거나 position이 relative인지 확인
+        if (parent && (parent.classList.contains('relative') || getComputedStyle(parent).position === 'relative')) {
+            needsWrapper = false;
+        }
+        
+        // wrapper가 필요하면 추가
+        if (needsWrapper) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'relative';
+            parent.insertBefore(wrapper, field);
+            wrapper.appendChild(field);
+            parent = wrapper;
+        }
+        
+        // 필드에 오른쪽 패딩 추가 (별표 공간 확보) - Tailwind의 pr-6 클래스 추가
+        if (!field.classList.contains('pr-6')) {
+            field.classList.add('pr-6');
+        }
+        
+        // 별표 추가
+        const star = document.createElement('span');
+        star.className = 'required-star absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500 text-sm pointer-events-none';
+        star.textContent = '*';
+        parent.appendChild(star);
+        
+        // 처리 완료 표시
+        field.dataset.requiredStarAdded = 'true';
+    });
+}
+
 // 페이지 로드 시 초기 실행
 document.addEventListener('DOMContentLoaded', function() {
     toggleWaypointSection();
     
+    // required 필드에 별표 추가
+    addRequiredStars();
+    
+    // 폼 요소 가져오기 (한 번만 선언)
+    const orderForm = document.getElementById('orderForm');
+    
+    // 동적으로 추가되는 필드도 처리하기 위해 MutationObserver 사용
+    if (orderForm) {
+        const observer = new MutationObserver(function(mutations) {
+            addRequiredStars();
+        });
+        
+        // 폼 요소를 관찰
+        observer.observe(orderForm, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['required']
+        });
+    }
+    
     // 배송방법 라디오 버튼 변경 이벤트 리스너 추가
     document.querySelectorAll('input[name="delivery_route"]').forEach(radio => {
-        radio.addEventListener('change', toggleWaypointSection);
+        radio.addEventListener('change', function() {
+            toggleWaypointSection();
+            // 경유지 섹션이 표시되면 required 별표도 업데이트
+            setTimeout(addRequiredStars, 100);
+        });
     });
     
     // 주소 검색 버튼 이벤트
@@ -325,8 +416,198 @@ document.addEventListener('DOMContentLoaded', function() {
             copyOrdererInfo('destination');
         }
     });
+    
+    // 쿠키 저장/불러오기 유틸리티 함수
+    function setCookie(name, value, days) {
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + '=' + encodeURIComponent(JSON.stringify(value)) + ';expires=' + expires.toUTCString() + ';path=/';
+    }
+    
+    function getCookie(name) {
+        const nameEQ = name + '=';
+        const ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) {
+                try {
+                    return JSON.parse(decodeURIComponent(c.substring(nameEQ.length, c.length)));
+                } catch (e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+    
+    // 출발지 정보를 쿠키에 저장
+    function saveDepartureInfo() {
+        const departureInfo = {
+            company_name: document.getElementById('departure_company_name')?.value || '',
+            contact: document.getElementById('departure_contact')?.value || '',
+            department: document.getElementById('departure_department')?.value || '',
+            manager: document.getElementById('departure_manager')?.value || '',
+            dong: document.getElementById('departure_dong')?.value || '',
+            address: document.getElementById('departure_address')?.value || '',
+            detail: document.getElementById('departure_detail')?.value || '',
+            country: document.getElementById('departure_country')?.value || ''
+        };
+        setCookie('recent_departure_info', departureInfo, 30); // 30일 저장
+    }
+    
+    // 도착지 정보를 쿠키에 저장
+    function saveDestinationInfo() {
+        const destinationInfo = {
+            company_name: document.getElementById('destination_company_name')?.value || '',
+            contact: document.getElementById('destination_contact')?.value || '',
+            department: document.getElementById('destination_department')?.value || '',
+            manager: document.getElementById('destination_manager')?.value || '',
+            dong: document.getElementById('destination_dong')?.value || '',
+            address: document.getElementById('destination_address')?.value || '',
+            detail: document.getElementById('destination_detail')?.value || '',
+            country: document.getElementById('destination_country')?.value || ''
+        };
+        setCookie('recent_destination_info', destinationInfo, 30); // 30일 저장
+    }
+    
+    // 쿠키에서 출발지 정보 불러오기
+    function loadDepartureInfo() {
+        const departureInfo = getCookie('recent_departure_info');
+        if (departureInfo) {
+            if (document.getElementById('departure_company_name')) {
+                document.getElementById('departure_company_name').value = departureInfo.company_name || '';
+            }
+            if (document.getElementById('departure_contact')) {
+                document.getElementById('departure_contact').value = departureInfo.contact || '';
+            }
+            if (document.getElementById('departure_department')) {
+                document.getElementById('departure_department').value = departureInfo.department || '';
+            }
+            if (document.getElementById('departure_manager')) {
+                document.getElementById('departure_manager').value = departureInfo.manager || '';
+            }
+            if (document.getElementById('departure_dong')) {
+                document.getElementById('departure_dong').value = departureInfo.dong || '';
+            }
+            if (document.getElementById('departure_address')) {
+                document.getElementById('departure_address').value = departureInfo.address || '';
+            }
+            if (document.getElementById('departure_detail')) {
+                document.getElementById('departure_detail').value = departureInfo.detail || '';
+            }
+            if (document.getElementById('departure_country') && departureInfo.country) {
+                document.getElementById('departure_country').value = departureInfo.country || '';
+            }
+        }
+    }
+    
+    // 쿠키에서 도착지 정보 불러오기
+    function loadDestinationInfo() {
+        const destinationInfo = getCookie('recent_destination_info');
+        if (destinationInfo) {
+            if (document.getElementById('destination_company_name')) {
+                document.getElementById('destination_company_name').value = destinationInfo.company_name || '';
+            }
+            if (document.getElementById('destination_contact')) {
+                document.getElementById('destination_contact').value = destinationInfo.contact || '';
+            }
+            if (document.getElementById('destination_department')) {
+                document.getElementById('destination_department').value = destinationInfo.department || '';
+            }
+            if (document.getElementById('destination_manager')) {
+                document.getElementById('destination_manager').value = destinationInfo.manager || '';
+            }
+            if (document.getElementById('destination_dong')) {
+                document.getElementById('destination_dong').value = destinationInfo.dong || '';
+            }
+            if (document.getElementById('destination_address')) {
+                document.getElementById('destination_address').value = destinationInfo.address || '';
+            }
+            if (document.getElementById('destination_detail')) {
+                document.getElementById('destination_detail').value = destinationInfo.detail || '';
+            }
+            if (document.getElementById('destination_country') && destinationInfo.country) {
+                document.getElementById('destination_country').value = destinationInfo.country || '';
+            }
+        }
+    }
+    
+    // 최근접수내역 버튼 클릭 이벤트
+    const recentDepartureBtn = document.getElementById('recent_departure_btn');
+    if (recentDepartureBtn) {
+        recentDepartureBtn.addEventListener('click', function() {
+            loadDepartureInfo();
+        });
+    }
+    
+    const recentDestinationBtn = document.getElementById('recent_destination_btn');
+    if (recentDestinationBtn) {
+        recentDestinationBtn.addEventListener('click', function() {
+            loadDestinationInfo();
+        });
+    }
+    
+    // 폼 제출 시 쿠키에 저장
+    if (orderForm) {
+        orderForm.addEventListener('submit', function() {
+            saveDepartureInfo();
+            saveDestinationInfo();
+        });
+    }
+    
+    // 한글 입력 모드 활성화 함수
+    function enableKoreanInput(field) {
+        if (!field) return;
+        
+        // lang 속성 확인
+        if (!field.hasAttribute('lang')) {
+            field.setAttribute('lang', 'ko');
+        }
+        
+        // 포커스 시 한글 입력 모드 활성화 시도
+        field.addEventListener('focus', function() {
+            // IME 모드 활성화를 위한 시도 (브라우저/OS에 따라 다를 수 있음)
+            try {
+                // Chrome/Edge에서 한글 입력 모드 활성화
+                if (navigator.userAgent.indexOf('Chrome') !== -1 || navigator.userAgent.indexOf('Edg') !== -1) {
+                    // inputmode 속성으로 힌트 제공
+                    if (field.tagName === 'INPUT' && field.type === 'text') {
+                        field.setAttribute('inputmode', 'text');
+                    }
+                }
+            } catch (e) {
+                // 에러 무시
+            }
+        });
+    }
+    
+    // 모든 텍스트 입력 필드에 한글 입력 모드 활성화 적용
+    const textInputs = document.querySelectorAll('input[type="text"][lang="ko"], textarea[lang="ko"]');
+    textInputs.forEach(enableKoreanInput);
+    
+    // 동적으로 추가되는 필드도 처리
+    if (orderForm) {
+        const inputObserver = new MutationObserver(function(mutations) {
+            const newInputs = document.querySelectorAll('input[type="text"][lang="ko"], textarea[lang="ko"]');
+            newInputs.forEach(function(input) {
+                if (!input.dataset.koreanInputEnabled) {
+                    enableKoreanInput(input);
+                    input.dataset.koreanInputEnabled = 'true';
+                }
+            });
+        });
+        
+        inputObserver.observe(orderForm, {
+            childList: true,
+            subtree: true
+        });
+    }
 });
 </script>
 
 <!-- 다음 주소 검색 API 스크립트 -->
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+
+<!-- Validation 에러 메시지 레이어팝업 -->
+<?= $this->include('forms/validation-error-modal') ?>

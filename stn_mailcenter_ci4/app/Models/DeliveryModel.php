@@ -38,28 +38,25 @@ class DeliveryModel extends Model
     {
         $builder = $this->db->table('tbl_orders o');
         
+        // tbl_orders의 모든 필드 선택
         $builder->select('
-            o.id,
-            o.order_number,
-            o.status,
-            o.created_at,
-            o.updated_at,
-            o.total_amount,
+            o.*,
             st.service_name,
+            st.service_code,
             st.service_category,
             ch.customer_name,
             u.real_name as user_name,
             oq.delivery_method,
             oq.urgency_level,
-            COALESCE(oq.departure_address, o.departure_address) as departure_address,
-            COALESCE(oq.destination_address, o.destination_address) as destination_address,
             oq.delivery_instructions,
             oq.delivery_route,
             oq.box_selection,
             oq.box_quantity,
             oq.pouch_selection,
             oq.pouch_quantity,
-            oq.shopping_bag_selection
+            oq.shopping_bag_selection,
+            COALESCE(oq.departure_address, o.departure_address) as departure_address,
+            COALESCE(oq.destination_address, o.destination_address) as destination_address
         ');
         
         $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
@@ -187,34 +184,9 @@ class DeliveryModel extends Model
         $builder = $this->db->table('tbl_orders o');
         
         $builder->select('
-            o.id,
-            o.order_number,
-            o.status,
-            o.created_at,
-            o.updated_at,
-            o.total_amount,
-            o.payment_type,
-            o.notes,
-            o.company_name,
-            o.contact,
-            o.address,
-            o.departure_address,
-            o.departure_detail,
-            o.departure_contact,
-            o.waypoint_address,
-            o.waypoint_detail,
-            o.waypoint_contact,
-            o.waypoint_notes,
-            o.destination_type,
-            o.mailroom,
-            o.destination_address,
-            o.detail_address,
-            o.destination_contact,
-            o.item_type,
-            o.quantity,
-            o.unit,
-            o.delivery_content,
+            o.*,
             st.service_name,
+            st.service_code,
             st.service_category,
             ch.customer_name,
             u.real_name as user_name,

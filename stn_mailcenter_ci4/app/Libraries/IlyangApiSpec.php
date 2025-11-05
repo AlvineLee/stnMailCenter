@@ -21,7 +21,7 @@ class IlyangApiSpec
      */
     const HEADERS = [
         'accessKey' => 'STK705DBCF65E36DE41AB6E09616B96C222D7585DD1E22815C07971590C26DWN',
-        'accountNo' => '105102001',
+        'accountNo' => '105102002',
         'ediCode' => 'STNnw',
         'Content-Type' => 'application/json',
         'Charset' => 'UTF-8'

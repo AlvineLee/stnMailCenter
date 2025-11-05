@@ -178,6 +178,7 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('admin/order-type') ?>">오더유형 설정</a></li>
+                    <li><a href="<?= base_url('shipping-company') ?>">운송사 관리</a></li>
                     <li><a href="<?= base_url('admin/notification') ?>">알림설정</a></li>
                 </ul>
             </li>

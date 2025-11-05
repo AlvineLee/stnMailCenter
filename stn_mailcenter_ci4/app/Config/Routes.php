@@ -46,6 +46,7 @@ $routes->group('service', function($routes) {
     $routes->get('parcel-visit', 'Service::parcelVisit');
     $routes->get('parcel-same-day', 'Service::parcelSameDay');
     $routes->get('parcel-convenience', 'Service::parcelConvenience');
+    $routes->get('parcel-night', 'Service::parcelNight');
     $routes->get('parcel-bag', 'Service::parcelBag');
     $routes->get('postal', 'Service::postal');
     $routes->get('general-document', 'Service::generalDocument');
@@ -76,6 +77,8 @@ $routes->group('api-test', function($routes) {
 $routes->group('delivery', function($routes) {
     $routes->get('list', 'Delivery::list');
     $routes->get('getOrderDetail', 'Delivery::getOrderDetail');
+    $routes->post('updateStatus', 'Delivery::updateStatus');
+    $routes->get('printWaybill', 'Delivery::printWaybill');
 });
 
 // 회원정보 관련 라우트
@@ -150,6 +153,16 @@ $routes->group('admin', function($routes) {
     $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');
     $routes->post('deactivateAllServices', 'Admin::deactivateAllServices');
     $routes->post('updateServiceSortOrder', 'Admin::updateServiceSortOrder');
+});
+
+// 운송사 관리 관련 라우트
+$routes->group('shipping-company', function($routes) {
+    $routes->get('/', 'ShippingCompany::index');
+    $routes->get('get-active', 'ShippingCompany::getActive');
+    $routes->get('get/(:num)', 'ShippingCompany::get/$1');
+    $routes->post('create', 'ShippingCompany::create');
+    $routes->post('update/(:num)', 'ShippingCompany::update/$1');
+    $routes->post('toggle-status/(:num)', 'ShippingCompany::toggleStatus/$1');
 });
 
 // 콜센터 관리 관련 라우트 (슈퍼관리자 전용)

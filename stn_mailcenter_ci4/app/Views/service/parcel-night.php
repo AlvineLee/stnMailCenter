@@ -4,8 +4,8 @@
 <div class="w-full flex flex-col">
     <!-- 메인 콘텐츠 영역 -->
     <?= form_open('service/submitServiceOrder', ['class' => 'order-form w-full', 'id' => 'orderForm', 'style' => 'display: contents;']) ?>
-        <input type="hidden" name="service_type" value="parcel-convenience">
-        <input type="hidden" name="service_name" value="편의점택배">
+        <input type="hidden" name="service_type" value="parcel-night">
+        <input type="hidden" name="service_name" value="야간배송">
         
         <div class="w-full flex flex-col lg:flex-row gap-4 flex-1">
             <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
@@ -16,7 +16,7 @@
                 </div>
             </div>
         
-            <!-- 가운데: 편의점택배 전용 정보 (배송수단, 물품종류, 전달사항) -->
+            <!-- 가운데: 야간배송 전용 정보 (배송수단, 물품종류, 전달사항) -->
             <div class="w-full lg:w-1/3">
             <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
             <!-- 배송수단 -->
@@ -134,7 +134,7 @@
         </div>
     <?= form_close() ?>
 
-<?= $this->include('forms/multi-order-modal', ['service_name' => '편의점택배']) ?>
+<?= $this->include('forms/multi-order-modal', ['service_name' => '야간배송']) ?>
 
 <!-- 주문 폼 유효성 검사 스크립트 -->
 <script src="<?= base_url('assets/js/order-form-validation.js') ?>"></script>
@@ -142,3 +142,4 @@
 <?= $this->endSection() ?>
 
 <?= $this->include('layouts/footer') ?>
+

@@ -14,17 +14,27 @@ class IlyangApiService
     protected $accountNo;
     protected $ediCode;
     protected $isTestMode;
+    protected $apiConfig;
 
-    public function __construct($isTestMode = true)
+    public function __construct($isTestMode = true, $apiConfig = null)
     {
         $this->isTestMode = $isTestMode;
+        $this->apiConfig = $apiConfig;
+        
         $this->baseUrl = $isTestMode ? 
             IlyangApiSpec::ENDPOINTS['test'] : 
             IlyangApiSpec::ENDPOINTS['prod'];
         
-        $this->accessKey = IlyangApiSpec::HEADERS['accessKey'];
-        $this->accountNo = IlyangApiSpec::HEADERS['accountNo'];
-        $this->ediCode = IlyangApiSpec::HEADERS['ediCode'];
+        // api_config가 있으면 우선 사용, 없으면 기본값 사용
+        if (!empty($apiConfig)) {
+            $this->accessKey = $apiConfig['access_key'] ?? IlyangApiSpec::HEADERS['accessKey'];
+            $this->accountNo = $apiConfig['account_no'] ?? IlyangApiSpec::HEADERS['accountNo'];
+            $this->ediCode = $apiConfig['edi_code'] ?? IlyangApiSpec::HEADERS['ediCode'];
+        } else {
+            $this->accessKey = IlyangApiSpec::HEADERS['accessKey'];
+            $this->accountNo = IlyangApiSpec::HEADERS['accountNo'];
+            $this->ediCode = IlyangApiSpec::HEADERS['ediCode'];
+        }
 
         $this->client = \Config\Services::curlrequest([
             'base_uri' => $this->baseUrl,
@@ -50,7 +60,7 @@ class IlyangApiService
             'accessKey' => $this->accessKey,
             'accountNo' => $this->accountNo,
             'ediCode' => $this->ediCode,
-            'filename' => $this->ediCode . date('Ymd_His'),
+            'filename' => $this->ediCode . date('Ymd_Hi'), // ediCodeYYYYMMDD_hhmi 형식 (운송사별 설정 사용)
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
             'X-Forwarded-For' => $clientIp
@@ -113,8 +123,12 @@ class IlyangApiService
         // 발송일자 (오늘 날짜)
         $shippingDate = date('Ymd');
         
-        // 운송장번호 생성 (임시)
-        $waybillNo = 'ILY' . date('Ymd') . rand(100000, 999999);
+        // 운송장번호는 이미 할당된 값 사용 (tbl_orders.shipping_tracking_number)
+        $waybillNo = $orderData['shipping_tracking_number'] ?? '';
+        
+        if (empty($waybillNo)) {
+            throw new \Exception('운송장번호가 할당되지 않았습니다.');
+        }
         
         $waybillData = [
             'ilySeqNo' => $sequenceNo,
@@ -244,5 +258,56 @@ class IlyangApiService
             'success' => false,
             'message' => '취소 기능은 아직 구현되지 않았습니다.'
         ];
+    }
+
+    /**
+     * 송장 데이터 조회 (주문 데이터 기반)
+     * 
+     * @param string $trackingNumber 송장번호
+     * @param array $orderData 주문 데이터 (선택적)
+     * @return array 송장 데이터
+     */
+    public function getWaybillData($trackingNumber, $orderData = null)
+    {
+        // 주문 데이터가 제공되지 않은 경우, DB에서 조회
+        if ($orderData === null) {
+            $orderModel = new \App\Models\OrderModel();
+            $order = $orderModel->where('shipping_tracking_number', $trackingNumber)->first();
+            
+            if (!$order) {
+                return [
+                    'success' => false,
+                    'message' => '송장번호에 해당하는 주문을 찾을 수 없습니다.'
+                ];
+            }
+            
+            $orderData = $order;
+        }
+
+        // 송장 데이터 형식으로 변환 (뷰에서 기대하는 형식)
+        $waybillData = [
+            'success' => true,
+            'data' => [
+                'body' => [
+                    'trace' => [
+                        [
+                            'hawb_no' => $trackingNumber,
+                            'order_no' => $orderData['order_number'] ?? '',
+                            'sendnm' => $orderData['departure_company_name'] ?? $orderData['departure_address'] ?? '',
+                            'recevnm' => $orderData['destination_company_name'] ?? $orderData['destination_address'] ?? '',
+                            'itemlist' => [
+                                [
+                                    'item_name' => $orderData['item_type'] ?? '일반상품',
+                                    'quantity' => $orderData['quantity'] ?? '1',
+                                    'weight' => $orderData['weight'] ?? '1'
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        return $waybillData;
     }
 }

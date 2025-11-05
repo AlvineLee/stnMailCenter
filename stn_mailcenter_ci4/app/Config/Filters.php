@@ -57,7 +57,7 @@ class Filters extends BaseFilters
         'after' => [
             'pagecache',   // Web Page Caching
             'performance', // Performance Metrics
-            'toolbar',     // Debug Toolbar
+            // 'toolbar',     // Debug Toolbar - globals로 이동하여 제외 옵션 사용
         ],
     ];
 
@@ -79,6 +79,7 @@ class Filters extends BaseFilters
         'after' => [
             // 'honeypot',
             // 'secureheaders',
+            'toolbar' => ['except' => ['delivery/printWaybill']], // 송장출력 페이지에서는 Debug Toolbar 비활성화
         ],
     ];
 

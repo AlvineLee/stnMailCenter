@@ -98,6 +98,7 @@ if (!function_exists('getServiceMenuIcon')) {
             'parcel-visit' => 'assets/icons/walking.svg',
             'parcel-same-day' => 'assets/icons/clock.svg',
             'parcel-convenience' => 'assets/icons/store.svg',
+            'parcel-night' => 'assets/icons/moon.svg',
             'parcel-bag' => 'assets/icons/bag.svg',
             'postal' => 'assets/icons/envelope.svg',
             'general-document' => 'assets/icons/document.svg',

@@ -3,21 +3,21 @@
 <?= $this->section('content') ?> 
 <div class="w-full flex flex-col">
     <!-- 메인 콘텐츠 영역 -->
-    <div class="w-full flex flex-col lg:flex-row gap-4 flex-1">
-        <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
-        <div class="w-full lg:w-1/3">
-            <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
-                <?= form_open('service/submitServiceOrder', ['class' => 'order-form', 'id' => 'orderForm']) ?>
-                    <input type="hidden" name="service_type" value="parcel-same-day">
-                    <input type="hidden" name="service_name" value="당일택배">
-                    
+    <?= form_open('service/submitServiceOrder', ['class' => 'order-form w-full', 'id' => 'orderForm', 'style' => 'display: contents;']) ?>
+        <input type="hidden" name="service_type" value="parcel-same-day">
+        <input type="hidden" name="service_name" value="당일택배">
+        
+        <div class="w-full flex flex-col lg:flex-row gap-4 flex-1">
+            <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
+            <div class="w-full lg:w-1/3">
+                <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
                     <!-- 공통 폼 (주문자정보, 출발지, 도착지) -->
                     <?= $this->include('forms/common-form') ?>
+                </div>
             </div>
-        </div>
         
-        <!-- 가운데: 당일택배 전용 정보 (배송수단, 물품종류, 전달사항) -->
-        <div class="w-full lg:w-1/3">
+            <!-- 가운데: 당일택배 전용 정보 (배송수단, 물품종류, 전달사항) -->
+            <div class="w-full lg:w-1/3">
             <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
             <!-- 배송수단 -->
             <div class="mb-2">
@@ -117,7 +117,7 @@
                     <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">전달사항</h2>
                     <div class="space-y-1">
                         <p class="text-xs text-gray-600 font-medium">전달사항을 입력해주세요</p>
-                        <textarea id="deliveryInstructions" name="deliveryInstructions" placeholder="전달하실 내용을 입력하세요." 
+                        <textarea id="deliveryInstructions" name="deliveryInstructions" placeholder="전달하실 내용을 입력하세요." lang="ko"
                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent h-20 resize-none bg-white"><?= old('deliveryInstructions') ?></textarea>
                     </div>
                 </section>
@@ -131,12 +131,13 @@
                 <?= $this->include('forms/common-paytype') ?>
             </div>
         </div> 
-    </div>   
-</div>
-
-<?= form_close() ?>
+        </div>
+    <?= form_close() ?>
 
 <?= $this->include('forms/multi-order-modal', ['service_name' => '당일택배']) ?>
+
+<!-- 주문 폼 유효성 검사 스크립트 -->
+<script src="<?= base_url('assets/js/order-form-validation.js') ?>"></script>
 
 <?= $this->endSection() ?>
 

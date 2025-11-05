@@ -147,8 +147,9 @@ class Delivery extends BaseController
             // 라벨 매핑
             $statusLabels = [
                 'pending' => '대기중',
-                'processing' => '처리중',
-                'completed' => '완료',
+                'processing' => '접수완료',
+                'completed' => '배송중',
+                'delivered' => '배송완료',
                 'cancelled' => '취소'
             ];
             
@@ -178,8 +179,11 @@ class Delivery extends BaseController
                 'data' => [
                     'order_number' => $order['order_number'],
                     'service_name' => $order['service_name'],
+                    'service_code' => $order['service_code'] ?? '',
                     'service_category' => $order['service_category'],
                     'customer_name' => $order['customer_name'],
+                    'shipping_tracking_number' => $order['shipping_tracking_number'] ?? '',
+                    'shipping_platform_code' => $order['shipping_platform_code'] ?? '',
                     'user_name' => $order['user_name'],
                     'status' => $order['status'],
                     'status_label' => $statusLabels[$order['status']] ?? $order['status'],
@@ -247,6 +251,181 @@ class Delivery extends BaseController
                 'success' => false,
                 'message' => '주문 정보 조회 중 오류가 발생했습니다.'
             ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 주문 상태 변경
+     */
+    public function updateStatus()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+        
+        $inputData = $this->request->getJSON(true);
+        if (empty($inputData)) {
+            $inputData = $this->request->getPost();
+        }
+        
+        $orderNumber = $inputData['order_number'] ?? null;
+        $newStatus = $inputData['status'] ?? null;
+        
+        if (!$orderNumber || !$newStatus) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문번호와 상태가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+        
+        // 유효한 상태인지 확인
+        $validStatuses = ['pending', 'processing', 'completed', 'delivered'];
+        if (!in_array($newStatus, $validStatuses)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '유효하지 않은 상태입니다.'
+            ])->setStatusCode(400);
+        }
+        
+        try {
+            // 주문 조회
+            $order = $this->deliveryModel->getOrderDetail($orderNumber);
+            
+            if (!$order) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문을 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+            
+            // 상태 업데이트 (Model 사용) - 모든 서비스에 대해 상태 변경 허용
+            $orderModel = new \App\Models\OrderModel();
+            $result = $orderModel->updateOrderStatus($order['id'], $newStatus);
+            
+            // 상태가 '접수완료(processing)'로 변경되고, 송장번호가 없고, 택배/해외특송 서비스인 경우 송장번호 할당
+            if ($result && $newStatus === 'processing' && empty($order['shipping_tracking_number'])) {
+                $serviceCode = $order['service_code'] ?? '';
+                $serviceCategory = $order['service_category'] ?? '';
+                
+                // 택배 서비스 또는 해외특송 서비스인지 확인
+                $isShippingService = (
+                    in_array($serviceCode, ['international', 'parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag']) ||
+                    $serviceCategory === 'parcel' ||
+                    $serviceCategory === 'special'
+                );
+                
+                if ($isShippingService) {
+                    try {
+                        // 송장번호 할당 로직 (Service::create와 동일)
+                        $apiServiceFactory = \App\Libraries\ApiServiceFactory::class;
+                        $activeShippingCompany = \App\Libraries\ApiServiceFactory::getActiveShippingCompany($serviceCode);
+                        
+                        if ($activeShippingCompany) {
+                            $platformCode = $activeShippingCompany['platform_code'];
+                            $awbPoolModel = new \App\Models\AwbPoolModel();
+                            $awbPool = $awbPoolModel->getAvailableAwbNo();
+                            
+                            if ($awbPool && isset($awbPool['awb_no'])) {
+                                $awbNo = $awbPool['awb_no'];
+                                
+                                // 송장번호 업데이트
+                                $orderModel->updateShippingInfo($order['id'], $platformCode, $awbNo);
+                                
+                                // 송장번호 풀에서 사용 처리
+                                $awbPoolModel->markAsUsed($awbNo, $orderNumber);
+                                
+                                log_message('info', "AWB No assigned on status change: {$awbNo} (Platform: {$platformCode}) to order: {$orderNumber}");
+                            } else {
+                                log_message('warning', "No available AWB number in pool for order: {$orderNumber}");
+                                // 송장번호가 없어도 플랫폼코드는 저장
+                                $orderModel->updateShippingInfo($order['id'], $platformCode);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        log_message('error', 'AWB assignment on status change failed: ' . $e->getMessage());
+                        // 송장번호 할당 실패해도 상태 변경은 성공으로 처리
+                    }
+                }
+            }
+            
+            if ($result) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => '주문 상태가 변경되었습니다.'
+                ]);
+            } else {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '상태 변경에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Delivery::updateStatus - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '상태 변경 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 송장출력 페이지
+     */
+    public function printWaybill()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        $orderNumber = $this->request->getGet('order_number');
+        $trackingNumber = $this->request->getGet('tracking_number');
+        
+        if (!$orderNumber || !$trackingNumber) {
+            return redirect()->to('/delivery/list')->with('error', '주문번호와 송장번호가 필요합니다.');
+        }
+        
+        try {
+            // 주문 정보 조회
+            $order = $this->deliveryModel->getOrderDetail($orderNumber);
+            
+            if (!$order) {
+                return redirect()->to('/delivery/list')->with('error', '주문을 찾을 수 없습니다.');
+            }
+            
+            // 송장번호 조회 API 호출
+            $apiService = \App\Libraries\ApiServiceFactory::createForService(
+                $order['service_code'] ?? 'international', 
+                true // 테스트 모드
+            );
+            
+            if (!$apiService) {
+                return redirect()->to('/delivery/list')->with('error', 'API 서비스를 초기화할 수 없습니다.');
+            }
+            
+            // 송장번호 조회 (주문 데이터 전달)
+            $waybillData = $apiService->getWaybillData($trackingNumber, $order);
+            
+            if (!$waybillData || !$waybillData['success']) {
+                return redirect()->to('/delivery/list')->with('error', '송장 정보를 조회할 수 없습니다.');
+            }
+            
+            $data = [
+                'title' => '송장출력',
+                'order' => $order,
+                'waybill_data' => $waybillData['data'] ?? []
+            ];
+            
+            return view('delivery/print_waybill', $data);
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Delivery::printWaybill - ' . $e->getMessage());
+            return redirect()->to('/delivery/list')->with('error', '송장출력 중 오류가 발생했습니다.');
         }
     }
 }

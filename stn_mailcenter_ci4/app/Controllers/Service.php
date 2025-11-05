@@ -218,6 +218,11 @@ class Service extends BaseController
         return $this->showServicePage('parcel-convenience', '편의점택배');
     }
     
+    public function parcelNight()
+    {
+        return $this->showServicePage('parcel-night', '야간배송');
+    }
+    
     /**
      * 택배서비스 - 행낭
      */
@@ -382,13 +387,17 @@ class Service extends BaseController
         $validationRules = [
             'company_name' => 'required',
             'contact' => 'required',
-            'departure_company_name' => 'required',
-            'departure_contact' => 'required',
-            'departure_address' => 'required',
-            'destination_company_name' => 'required',
-            'destination_contact' => 'required',
-            'destination_address' => 'required',
-            'payment_type' => 'required'
+            'departure_company_name' => 'permit_empty',
+            'departure_contact' => 'required', // 출발지 연락처 필수
+            'departure_manager' => 'required', // 출발지 담당 필수
+            'departure_address' => 'required', // 출발지 주소 필수
+            'departure_detail' => 'required', // 출발지 상세주소 필수
+            'destination_company_name' => 'permit_empty',
+            'destination_contact' => 'required', // 도착지 연락처 필수
+            'destination_manager' => 'required', // 도착지 담당 필수
+            'destination_address' => 'required', // 도착지 주소 필수
+            'destination_detail' => 'required', // 도착지 상세주소 필수
+            'payment_type' => 'permit_empty'
         ];
         
         // 퀵 서비스들만 item_type 필수
@@ -400,7 +409,15 @@ class Service extends BaseController
         
         if (!$validation->withRequest($this->request)->run()) {
             log_message('error', 'Service validation failed: ' . json_encode($validation->getErrors()));
-            return redirect()->back()
+            
+            // 서비스 타입에 따라 해당 서비스 페이지로 리다이렉트
+            $redirectUrl = '/service/' . $serviceType;
+            if (empty($serviceType)) {
+                // service_type이 없으면 메인으로
+                $redirectUrl = '/';
+            }
+            
+            return redirect()->to($redirectUrl)
                 ->withInput()
                 ->with('errors', $validation->getErrors());
         }
@@ -437,7 +454,9 @@ class Service extends BaseController
             $timestamp = time(); // 타임스탬프 사용으로 중복 방지
             $orderNumber = sprintf('ORD-%s-%s', $today, substr($timestamp, -4));
             
-            // 3. 주문 기본 정보 저장 (tbl_orders) - 테이블 구조에 맞게 수정
+            // 3. 주문 기본 정보 저장 (tbl_orders) - Model 사용
+            $orderModel = new \App\Models\OrderModel();
+            
             $orderData = [
                 'user_id' => session()->get('user_id') ?? 1, // 임시로 1 사용
                 'customer_id' => session()->get('customer_id') ?? 1, // 임시로 1 사용
@@ -447,92 +466,152 @@ class Service extends BaseController
                 'company_name' => $this->request->getPost('company_name'),
                 'contact' => $this->request->getPost('contact'),
                 'address' => $this->request->getPost('address'),
+                'departure_company_name' => $this->request->getPost('departure_company_name'),
+                'departure_contact' => $this->request->getPost('departure_contact'),
                 'departure_address' => $this->request->getPost('departure_address'),
                 'departure_detail' => $this->request->getPost('departure_detail'),
-                'departure_contact' => $this->request->getPost('departure_contact'),
+                'departure_manager' => $this->request->getPost('departure_manager'),
+                'departure_department' => $this->request->getPost('departure_department'),
+                'departure_dong' => $this->request->getPost('departure_dong'),
                 'waypoint_address' => $this->request->getPost('waypoint_address'),
                 'waypoint_detail' => $this->request->getPost('waypoint_detail'),
                 'waypoint_contact' => $this->request->getPost('waypoint_contact'),
                 'waypoint_notes' => $this->request->getPost('waypoint_notes'),
                 'destination_type' => $this->request->getPost('destination_type') ?? 'direct',
                 'mailroom' => $this->request->getPost('mailroom'),
+                'destination_company_name' => $this->request->getPost('destination_company_name'),
+                'destination_contact' => $this->request->getPost('destination_contact'),
                 'destination_address' => $this->request->getPost('destination_address'),
                 'detail_address' => $this->request->getPost('detail_address'),
-                'destination_contact' => $this->request->getPost('destination_contact'),
+                'destination_manager' => $this->request->getPost('destination_manager'),
+                'destination_department' => $this->request->getPost('destination_department'),
+                'destination_dong' => $this->request->getPost('destination_dong'),
                 'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
                 'quantity' => $this->request->getPost('quantity') ?? 1,
                 'unit' => $this->request->getPost('unit') ?? '개',
                 'delivery_content' => $this->request->getPost('delivery_content'),
+                'box_medium_overload' => $this->request->getPost('box_medium_overload') ? 1 : 0,
+                'pouch_medium_overload' => $this->request->getPost('pouch_medium_overload') ? 1 : 0,
+                'bag_medium_overload' => ($serviceType === 'parcel-bag' && $this->request->getPost('bag_medium_overload')) ? 1 : 0,
                 'status' => 'pending'
             ];
             
-            $result = $db->table('tbl_orders')->insert($orderData);
-            $orderId = $db->insertID();
-            
-            if (!$result) {
-                log_message('error', 'Order insert failed: ' . $db->error()['message']);
-                throw new \Exception('주문 저장에 실패했습니다: ' . $db->error()['message']);
+            // life-driver 서비스의 경우 추가 필드를 tbl_orders에도 저장
+            if ($serviceType === 'life-driver') {
+                $orderData['call_type'] = $this->request->getPost('callType') ?? null;
+                $orderData['total_fare'] = $this->request->getPost('total_fare') ? (float)$this->request->getPost('total_fare') : 0.00;
+                $orderData['postpaid_fare'] = $this->request->getPost('postpaid_fare') ? (float)$this->request->getPost('postpaid_fare') : 0.00;
+                $orderData['distance'] = $this->request->getPost('distance') ? (float)$this->request->getPost('distance') : 0.00;
+                $orderData['cash_fare'] = $this->request->getPost('cash_fare') ? (float)$this->request->getPost('cash_fare') : 0.00;
             }
             
-            log_message('debug', 'Order inserted with ID: ' . $orderId . ', Result: ' . ($result ? 'true' : 'false'));
+            $orderId = $orderModel->createOrder($orderData);
             
-            // 4. API 연동 (서비스별 자동 매핑)
-            if (ApiServiceFactory::needsApiIntegration($serviceType)) {
+            if (!$orderId) {
+                log_message('error', 'Order insert failed');
+                throw new \Exception('주문 저장에 실패했습니다.');
+            }
+            
+            log_message('debug', 'Order inserted with ID: ' . $orderId);
+            
+            // 4. 해외특송 또는 택배서비스인 경우 송장번호 할당 및 플랫폼코드 저장
+            if (in_array($serviceType, ['international', 'parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag'])) {
                 try {
-                    $apiType = ApiServiceFactory::getApiTypeByService($serviceType);
-                    $apiService = ApiServiceFactory::create($apiType, true); // 테스트 모드
+                    // 4-1. 활성화된 운송사 조회 (Factory Pattern 사용 - 동적 조회)
+                    $activeShippingCompany = ApiServiceFactory::getActiveShippingCompany($serviceType);
                     
-                    $deliveryData = [
-                        'order_number' => $orderNumber,
-                        'departure_company_name' => $this->request->getPost('departure_company_name'),
-                        'departure_contact' => $this->request->getPost('departure_contact'),
-                        'departure_address' => $this->request->getPost('departure_address'),
-                        'departure_manager' => $this->request->getPost('departure_manager'),
-                        'destination_company_name' => $this->request->getPost('destination_company_name'),
-                        'destination_contact' => $this->request->getPost('destination_contact'),
-                        'destination_address' => $this->request->getPost('destination_address'),
-                        'destination_manager' => $this->request->getPost('destination_manager'),
-                        'item_type' => $this->request->getPost('item_type'),
-                        'weight' => $this->request->getPost('weight') ?? '1',
-                        'quantity' => $this->request->getPost('quantity') ?? '1',
-                        'payment_type' => $this->request->getPost('payment_type'),
-                        'delivery_instructions' => $this->request->getPost('delivery_instructions'),
-                        'delivery_notes' => $this->request->getPost('notes')
-                    ];
-                    
-                    $apiResult = $apiService->createDelivery($deliveryData);
-                    
-                    if ($apiResult['success']) {
-                        log_message('info', "{$apiType} API success: " . json_encode($apiResult['data']));
+                    if ($activeShippingCompany) {
+                        $platformCode = $activeShippingCompany['platform_code'];
                         
-                        // API 응답에서 운송장번호 추출하여 주문에 저장
-                        if (isset($apiResult['data']['body']['logisticsResultData'])) {
-                            $waybillNumbers = [];
-                            foreach ($apiResult['data']['body']['logisticsResultData'] as $result) {
-                                if (isset($result['ilyAwbNo'])) {
-                                    $waybillNumbers[] = $result['ilyAwbNo'];
-                                }
-                            }
+                        // 4-2. 미사용 송장번호 조회 (Model 사용)
+                        // TODO: 향후 운송사별 송장번호 풀 테이블 분리 시 company_code로 필터링 필요
+                        $awbPoolModel = new \App\Models\AwbPoolModel();
+                        $awbPool = $awbPoolModel->getAvailableAwbNo();
+                        
+                        if ($awbPool && isset($awbPool['awb_no'])) {
+                            $awbNo = $awbPool['awb_no'];
                             
-                            if (!empty($waybillNumbers)) {
-                                // 운송장번호를 주문 테이블에 업데이트
-                                $db->table('tbl_orders')
-                                    ->where('id', $orderId)
-                                    ->update(['tracking_number' => implode(',', $waybillNumbers)]);
-                                
-                                log_message('info', 'Tracking numbers updated: ' . implode(',', $waybillNumbers));
-                            }
+                            // 4-3. tbl_orders에 플랫폼코드와 송장번호 업데이트 (Model 사용)
+                            $orderModel->updateShippingInfo($orderId, $platformCode, $awbNo);
+                            
+                            // 4-4. tbl_ily_awb_pool 업데이트 (Model 사용)
+                            $awbPoolModel->markAsUsed($awbNo, $orderNumber);
+                            
+                            log_message('info', "AWB No assigned: {$awbNo} (Platform: {$platformCode}) to order: {$orderNumber}");
+                        } else {
+                            log_message('warning', "No available AWB number in pool for order: {$orderNumber}");
+                            // 송장번호가 없어도 플랫폼코드는 저장
+                            $orderModel->updateShippingInfo($orderId, $platformCode);
                         }
                     } else {
-                        log_message('error', "{$apiType} API failed: " . json_encode($apiResult));
+                        log_message('warning', "No active shipping company found for service: {$serviceType}, order: {$orderNumber}");
                     }
                 } catch (\Exception $e) {
-                    log_message('error', "API exception ({$apiType}): " . $e->getMessage());
+                    log_message('error', "AWB assignment exception: " . $e->getMessage());
+                    // 송장번호 할당 실패해도 주문은 정상 처리됨
+                }
+            }
+            
+            // 5. API 연동 (서비스별 자동 매핑)
+            if (ApiServiceFactory::needsApiIntegration($serviceType)) {
+                try {
+                    // 할당된 송장번호와 플랫폼코드 조회 (Model 사용)
+                    $orderInfo = $orderModel->getShippingInfo($orderId);
+                    
+                    // Factory Pattern을 통해 활성화된 운송사 설정으로 API 서비스 생성
+                    $apiService = ApiServiceFactory::createForService($serviceType, true); // 테스트 모드
+                    
+                    if (!$apiService) {
+                        log_message('warning', "Failed to create API service for service: {$serviceType}");
+                        // API 서비스 생성 실패해도 주문은 정상 처리됨
+                    } else {
+                        $apiType = ApiServiceFactory::getApiTypeByService($serviceType);
+                        
+                        $deliveryData = [
+                            'order_number' => $orderNumber,
+                            'shipping_tracking_number' => $orderInfo ? ($orderInfo['shipping_tracking_number'] ?? '') : '',
+                            'shipping_platform_code' => $orderInfo ? ($orderInfo['shipping_platform_code'] ?? '') : '',
+                            'departure_company_name' => $this->request->getPost('departure_company_name'),
+                            'departure_contact' => $this->request->getPost('departure_contact'),
+                            'departure_address' => $this->request->getPost('departure_address'),
+                            'departure_manager' => $this->request->getPost('departure_manager'),
+                            'destination_company_name' => $this->request->getPost('destination_company_name'),
+                            'destination_contact' => $this->request->getPost('destination_contact'),
+                            'destination_address' => $this->request->getPost('destination_address'),
+                            'destination_manager' => $this->request->getPost('destination_manager'),
+                            'item_type' => $this->request->getPost('item_type'),
+                            'weight' => $this->request->getPost('weight') ?? '1',
+                            'quantity' => $this->request->getPost('quantity') ?? '1',
+                            'payment_type' => $this->request->getPost('payment_type'),
+                            'delivery_instructions' => $this->request->getPost('delivery_instructions'),
+                            'delivery_notes' => $this->request->getPost('notes')
+                        ];
+                        
+                        $apiResult = $apiService->createDelivery($deliveryData);
+                        
+                        if ($apiResult['success']) {
+                            log_message('info', "{$apiType} API success: " . json_encode($apiResult['data']));
+                            
+                            // API 응답 처리 (오류가 있는 경우 로그만 기록)
+                            if (isset($apiResult['data']['body']['logisticsResultData'])) {
+                                foreach ($apiResult['data']['body']['logisticsResultData'] as $result) {
+                                    if (isset($result['ilyErrorType']) && $result['ilyErrorType'] !== 'E0') {
+                                        // 오류가 있는 경우
+                                        log_message('error', "{$apiType} API Error - Order: {$orderNumber}, Error: " . json_encode($result));
+                                    }
+                                }
+                            }
+                        } else {
+                            log_message('error', "{$apiType} API failed: " . json_encode($apiResult));
+                        }
+                    }
+                } catch (\Exception $e) {
+                    log_message('error', "API exception ({$serviceType}): " . $e->getMessage());
                     // API 실패해도 주문은 정상 처리됨
                 }
             }
             
-            // 5. 퀵 서비스 전용 데이터 저장 (tbl_orders_quick)
+            // 7. 퀵 서비스 전용 데이터 저장 (tbl_orders_quick)
             if (in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
                 // 박스/행낭/쇼핑백 정보를 JSON으로 저장
                 $packageInfo = [
@@ -579,7 +658,7 @@ class Service extends BaseController
                 log_message('debug', 'Quick service data inserted for order ID: ' . $orderId);
             }
             
-            // 5. 일반 서비스 전용 데이터 저장 (tbl_orders_general)
+            // 7. 일반 서비스 전용 데이터 저장 (tbl_orders_general)
             if (in_array($serviceType, ['general-document', 'general-errand', 'general-tax'])) {
                 $serviceSubtype = '';
                 $documentType = null;
@@ -618,8 +697,8 @@ class Service extends BaseController
                 log_message('debug', 'General service data inserted for order ID: ' . $orderId);
             }
             
-            // 6. 택배 서비스 전용 데이터 저장 (tbl_orders_parcel)
-            if (in_array($serviceType, ['parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-bag'])) {
+            // 8. 택배 서비스 전용 데이터 저장 (tbl_orders_parcel)
+            if (in_array($serviceType, ['parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag'])) {
                 $parcelType = '';
                 switch ($serviceType) {
                     case 'parcel-visit':
@@ -630,6 +709,9 @@ class Service extends BaseController
                         break;
                     case 'parcel-convenience':
                         $parcelType = 'convenience';
+                        break;
+                    case 'parcel-night':
+                        $parcelType = 'night';
                         break;
                     case 'parcel-bag':
                         $parcelType = 'bag';
@@ -648,11 +730,25 @@ class Service extends BaseController
                     'carrier' => null // 추후 배정
                 ];
                 
+                // parcel-bag 서비스의 경우 bagType과 bagMaterial도 저장
+                if ($serviceType === 'parcel-bag') {
+                    $parcelData['bag_type'] = $this->request->getPost('bagType') ?? null;
+                    $parcelData['bag_material'] = $this->request->getPost('bagMaterial') ?? null;
+                }
+                
+                // parcel-visit 서비스의 경우 박스/행낭 정보 저장
+                if ($serviceType === 'parcel-visit') {
+                    $parcelData['box_selection'] = $this->request->getPost('box_selection') ?? null;
+                    $parcelData['box_quantity'] = (int)($this->request->getPost('box_quantity') ?? 0);
+                    $parcelData['pouch_selection'] = $this->request->getPost('pouch_selection') ?? null;
+                    $parcelData['pouch_quantity'] = (int)($this->request->getPost('pouch_quantity') ?? 0);
+                }
+                
                 $db->table('tbl_orders_parcel')->insert($parcelData);
                 log_message('debug', 'Parcel service data inserted for order ID: ' . $orderId);
             }
             
-            // 7. 생활 서비스 전용 데이터 저장 (tbl_orders_life)
+            // 9. 생활 서비스 전용 데이터 저장 (tbl_orders_life)
             if (in_array($serviceType, ['life-buy', 'life-taxi', 'life-driver', 'life-wreath', 'life-accommodation', 'life-stationery'])) {
                 $lifeType = '';
                 switch ($serviceType) {
@@ -687,11 +783,20 @@ class Service extends BaseController
                     'status' => 'pending'
                 ];
                 
+                // life-driver 서비스의 경우 추가 필드 저장
+                if ($serviceType === 'life-driver') {
+                    $lifeData['call_type'] = $this->request->getPost('callType') ?? null;
+                    $lifeData['total_fare'] = $this->request->getPost('total_fare') ? (float)$this->request->getPost('total_fare') : 0.00;
+                    $lifeData['postpaid_fare'] = $this->request->getPost('postpaid_fare') ? (float)$this->request->getPost('postpaid_fare') : 0.00;
+                    $lifeData['distance'] = $this->request->getPost('distance') ? (float)$this->request->getPost('distance') : 0.00;
+                    $lifeData['cash_fare'] = $this->request->getPost('cash_fare') ? (float)$this->request->getPost('cash_fare') : 0.00;
+                }
+                
                 $db->table('tbl_orders_life')->insert($lifeData);
                 log_message('debug', 'Life service data inserted for order ID: ' . $orderId);
             }
             
-            // 8. 특수 서비스 전용 데이터 저장 (tbl_orders_special)
+            // 10. 특수 서비스 전용 데이터 저장 (tbl_orders_special)
             if (in_array($serviceType, ['international', 'linked-bus', 'linked-ktx', 'linked-airport', 'linked-shipping', 'postal', 'mailroom'])) {
                 $specialType = '';
                 switch ($serviceType) {
@@ -738,7 +843,7 @@ class Service extends BaseController
                 log_message('debug', 'Special service data inserted for order ID: ' . $orderId);
             }
             
-            // 9. 해외특송 물품 상세 정보 저장 (tbl_orders_international_products)
+            // 11. 해외특송 물품 상세 정보 저장 (tbl_orders_international_products)
             if ($serviceType === 'international') {
                 $productDetails = [];
                 $productNames = $this->request->getPost('product_name') ?? [];
@@ -785,33 +890,60 @@ class Service extends BaseController
                 ->with('success', "{$serviceName} 주문이 성공적으로 접수되었습니다. 주문번호: {$orderNumber}");
             
         } catch (\Exception $e) {
-            log_message('error', 'Service order submission failed: ' . $e->getMessage());
+            $errorMessage = $e->getMessage();
+            $errorCode = $e->getCode();
+            
+            log_message('error', 'Service order submission failed: ' . $errorMessage);
+            log_message('error', 'Exception code: ' . $errorCode);
             log_message('error', 'Exception trace: ' . $e->getTraceAsString());
             
-            // DB 연결 실패 시 임시로 세션에 저장
-            $tempOrderData = [
-                'id' => time(), // 임시 ID
-                'order_number' => 'TEMP-' . date('YmdHis'),
-                'service_type' => $serviceType,
-                'service_name' => $serviceName,
-                'company_name' => $this->request->getPost('company_name'),
-                'contact' => $this->request->getPost('contact'),
-                'departure_address' => $this->request->getPost('departure_address'),
-                'destination_address' => $this->request->getPost('destination_address'),
-                'item_type' => $this->request->getPost('item_type'),
-                'payment_type' => $this->request->getPost('payment_type'),
-                'status' => 'pending',
-                'created_at' => date('Y-m-d H:i:s')
-            ];
+            // DB 연결 관련 에러인지 확인
+            $isDbError = (
+                strpos($errorMessage, 'Unable to connect') !== false ||
+                strpos($errorMessage, 'Connection refused') !== false ||
+                strpos($errorMessage, 'Access denied') !== false ||
+                strpos($errorMessage, 'database') !== false ||
+                strpos($errorMessage, 'SQLSTATE') !== false
+            );
             
-            // 세션에 임시 저장
-            $tempOrders = session()->get('temp_orders') ?? [];
-            $tempOrders[] = $tempOrderData;
-            session()->set('temp_orders', $tempOrders);
-            
-            return redirect()->to('/delivery/list')
-                ->with('success', "{$serviceName} 주문이 임시로 저장되었습니다. (DB 연결 실패)")
-                ->with('warning', '데이터베이스 연결에 실패했습니다. 임시 저장된 데이터입니다.');
+            // DB 연결 실패 시에만 임시로 세션에 저장
+            if ($isDbError) {
+                $tempOrderData = [
+                    'id' => time(), // 임시 ID
+                    'order_number' => 'TEMP-' . date('YmdHis'),
+                    'service_type' => $serviceType,
+                    'service_name' => $serviceName,
+                    'company_name' => $this->request->getPost('company_name'),
+                    'contact' => $this->request->getPost('contact'),
+                    'departure_address' => $this->request->getPost('departure_address'),
+                    'destination_address' => $this->request->getPost('destination_address'),
+                    'item_type' => $this->request->getPost('item_type'),
+                    'payment_type' => $this->request->getPost('payment_type'),
+                    'status' => 'pending',
+                    'created_at' => date('Y-m-d H:i:s')
+                ];
+                
+                // 세션에 임시 저장
+                $tempOrders = session()->get('temp_orders') ?? [];
+                $tempOrders[] = $tempOrderData;
+                session()->set('temp_orders', $tempOrders);
+                
+                return redirect()->to('/delivery/list')
+                    ->with('success', "{$serviceName} 주문이 임시로 저장되었습니다. (DB 연결 실패)")
+                    ->with('warning', '데이터베이스 연결에 실패했습니다. 임시 저장된 데이터입니다.');
+            } else {
+                // 다른 에러인 경우 - 서비스 타입에 따라 해당 서비스 페이지로 리다이렉트
+                $redirectUrl = '/service/' . $serviceType;
+                if (empty($serviceType)) {
+                    // service_type이 없으면 메인으로
+                    $redirectUrl = '/';
+                }
+                
+                return redirect()->to($redirectUrl)
+                    ->withInput()
+                    ->with('error', "주문 접수 중 오류가 발생했습니다: " . $errorMessage)
+                    ->with('warning', '잠시 후 다시 시도해주세요.');
+            }
         }
     }
     
@@ -879,6 +1011,7 @@ class Service extends BaseController
             'parcel-visit' => '택배',
             'parcel-same-day' => '당일택배',
             'parcel-convenience' => '편의점택배',
+            'parcel-night' => '야간배송',
             'parcel-bag' => '행낭',
             'linked-bus' => '고속버스',
             'linked-ktx' => 'KTX',

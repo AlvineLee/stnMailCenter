@@ -944,10 +944,10 @@ function renderServiceTypesGrid(serviceTypesGrouped) {
         const services = serviceTypesGrouped[category];
         
         const categoryCard = document.createElement('div');
-        categoryCard.className = 'bg-gray-50 rounded-lg p-4 border border-gray-200';
+        categoryCard.className = 'bg-gray-50 rounded-lg p-3 border border-gray-200';
         categoryCard.innerHTML = `
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">${categoryLabel}</h3>
-            <div class="space-y-3">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">${categoryLabel}</h3>
+            <div class="space-y-1.5">
                 ${services.map(service => {
                     // 마스터 활성화 여부 확인
                     const isMasterActive = service.is_active === 1 || service.is_active === true || service.is_active === '1';
@@ -960,12 +960,12 @@ function renderServiceTypesGrid(serviceTypesGrouped) {
                     const disabledLabelClass = isDisabled ? 'cursor-not-allowed' : 'cursor-pointer';
                     const disabledToggleClass = isDisabled ? 'opacity-50 cursor-not-allowed' : '';
                     const masterDisabledText = isDisabled ? ' <span class="text-xs text-red-500">(마스터 비활성화)</span>' : '';
-                    return '<div class="flex items-center justify-between ' + disabledClass + '">' +
-                        '<span class="text-sm text-gray-600 ' + disabledTextClass + '">' + escapeHtml(service.service_name) + masterDisabledText + '</span>' +
+                    return '<div class="flex items-center justify-between py-1 ' + disabledClass + '">' +
+                        '<span class="text-xs text-gray-600 ' + disabledTextClass + '">' + escapeHtml(service.service_name) + masterDisabledText + '</span>' +
                         '<label class="relative inline-flex items-center ' + disabledLabelClass + '">' +
                         '<input type="checkbox" class="sr-only peer service-status-toggle-modal" data-service-type-id="' + service.id + '"' +
                         (isEnabled ? ' checked' : '') + (isDisabled ? ' disabled' : '') + '>' +
-                        '<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ' + disabledToggleClass + '"></div>' +
+                        '<div class="w-10 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 ' + disabledToggleClass + '"></div>' +
                         '</label>' +
                         '</div>';
                 }).join('')}
@@ -1064,8 +1064,8 @@ function escapeHtml(text) {
 
 <!-- 계정별 오더유형 설정 레이어 팝업 -->
 <div id="orderTypeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-7xl h-[95vh] overflow-y-auto" style="z-index: 10000 !important;">
-        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[85vh] overflow-y-auto" style="z-index: 10000 !important;">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center">
             <h3 class="text-lg font-bold text-gray-800 flex-1 min-w-0">
                 오더유형 설정 - <span id="modal-user-name" class="whitespace-nowrap"></span>
             </h3>
@@ -1076,7 +1076,7 @@ function escapeHtml(text) {
             </button>
         </div>
         
-        <div class="p-6">
+        <div class="p-4">
             <!-- 로딩 표시 -->
             <div id="modal-loading" class="text-center py-8">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -1086,7 +1086,7 @@ function escapeHtml(text) {
             <!-- 서비스 타입 그리드 (동적으로 로드) -->
             <div id="modal-content" class="hidden">
                 <!-- 주문유형 그리드 -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" id="service-types-grid-modal">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4" id="service-types-grid-modal">
                     <!-- 동적으로 생성됨 -->
                 </div>
                 

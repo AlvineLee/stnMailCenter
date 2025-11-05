@@ -45,13 +45,23 @@ class OrderModel extends Model
         'quantity',
         'unit',
         'delivery_content',
+        'box_medium_overload',
+        'pouch_medium_overload',
+        'bag_medium_overload',
+        'call_type',
+        'total_fare',
+        'postpaid_fare',
+        'distance',
+        'cash_fare',
         'status',
         'total_amount',
         'payment_type',
         'notes',
         'order_date',
         'order_time',
-        'notification_service'
+        'notification_service',
+        'shipping_platform_code',
+        'shipping_tracking_number'
     ];
 
     // Dates
@@ -68,15 +78,15 @@ class OrderModel extends Model
         'service_type_id' => 'required|integer',
         'company_name' => 'required|max_length[100]',
         'contact' => 'required|max_length[20]',
-        'departure_company_name' => 'required|max_length[100]',
-        'departure_contact' => 'required|max_length[20]',
-        'departure_address' => 'required',
-        'destination_company_name' => 'required|max_length[100]',
-        'destination_contact' => 'required|max_length[20]',
-        'destination_address' => 'required',
-        'item_type' => 'required|max_length[50]',
-        'delivery_content' => 'required',
-        'status' => 'permit_empty|in_list[pending,processing,completed,cancelled]',
+        'departure_company_name' => 'permit_empty|max_length[100]',
+        'departure_contact' => 'permit_empty|max_length[20]',
+        'departure_address' => 'permit_empty',
+        'destination_company_name' => 'permit_empty|max_length[100]',
+        'destination_contact' => 'permit_empty|max_length[20]',
+        'destination_address' => 'permit_empty',
+        'item_type' => 'permit_empty|max_length[50]',
+        'delivery_content' => 'permit_empty',
+        'status' => 'permit_empty|in_list[pending,processing,completed,delivered,cancelled]',
         'order_date' => 'permit_empty|valid_date',
         'order_time' => 'permit_empty|valid_time',
         'notification_service' => 'permit_empty|in_list[0,1]'
@@ -278,5 +288,73 @@ class OrderModel extends Model
     public function updateOrderStatus($orderId, $status)
     {
         return $this->update($orderId, ['status' => $status]);
+    }
+
+    /**
+     * 주문 저장
+     */
+    public function createOrder($orderData)
+    {
+        try {
+            // DB 연결 테스트
+            $db = \Config\Database::connect();
+            $db->query('SELECT 1');
+            
+            $orderId = $this->insert($orderData);
+            
+            if (!$orderId) {
+                $errors = $this->errors();
+                log_message('error', 'Order insert failed: ' . json_encode($errors));
+                log_message('error', 'Order data: ' . json_encode($orderData));
+                
+                // DB 연결 에러인지 확인
+                if (!empty($errors)) {
+                    foreach ($errors as $error) {
+                        if (strpos($error, 'Unable to connect') !== false || 
+                            strpos($error, 'Connection refused') !== false ||
+                            strpos($error, 'Access denied') !== false) {
+                            throw new \Exception('DB 연결 실패: ' . $error);
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
+            return $orderId;
+        } catch (\Exception $e) {
+            log_message('error', 'OrderModel::createOrder exception: ' . $e->getMessage());
+            throw $e; // 상위로 예외 전파
+        }
+    }
+
+    /**
+     * 운송 정보 업데이트 (플랫폼코드, 송장번호)
+     */
+    public function updateShippingInfo($orderId, $platformCode, $trackingNumber = null)
+    {
+        $updateData = [
+            'shipping_platform_code' => $platformCode
+        ];
+        
+        if ($trackingNumber !== null) {
+            $updateData['shipping_tracking_number'] = $trackingNumber;
+        }
+        
+        return $this->update($orderId, $updateData);
+    }
+
+    /**
+     * 운송 정보 조회
+     */
+    public function getShippingInfo($orderId)
+    {
+        $order = $this->select('shipping_tracking_number, shipping_platform_code')
+                     ->find($orderId);
+        
+        return $order ? [
+            'shipping_tracking_number' => $order['shipping_tracking_number'] ?? '',
+            'shipping_platform_code' => $order['shipping_platform_code'] ?? ''
+        ] : null;
     }
 }

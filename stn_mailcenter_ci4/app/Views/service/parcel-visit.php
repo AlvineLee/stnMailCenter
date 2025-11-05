@@ -3,21 +3,21 @@
 <?= $this->section('content') ?> 
 <div class="w-full flex flex-col">
     <!-- 메인 콘텐츠 영역 -->
-    <div class="w-full flex flex-col lg:flex-row gap-4 flex-1">
-        <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
-        <div class="w-full lg:w-1/3">
-            <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
-                <?= form_open('service/submitServiceOrder', ['class' => 'order-form', 'id' => 'orderForm']) ?>
-                    <input type="hidden" name="service_type" value="parcel-visit">
-                    <input type="hidden" name="service_name" value="방문택배">
-                    
+    <?= form_open('service/submitServiceOrder', ['class' => 'order-form w-full', 'id' => 'orderForm', 'style' => 'display: contents;']) ?>
+        <input type="hidden" name="service_type" value="parcel-visit">
+        <input type="hidden" name="service_name" value="방문택배">
+        
+        <div class="w-full flex flex-col lg:flex-row gap-4 flex-1">
+            <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
+            <div class="w-full lg:w-1/3">
+                <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
                     <!-- 공통 폼 (주문자정보, 출발지, 도착지) -->
                     <?= $this->include('forms/common-form') ?>
+                </div>
             </div>
-        </div>
         
-        <!-- 가운데: 방문택배 전용 정보 (배송수단, 물품종류, 전달사항) -->
-        <div class="w-full lg:w-1/3">
+            <!-- 가운데: 방문택배 전용 정보 (배송수단, 물품종류, 전달사항) -->
+            <div class="w-full lg:w-1/3">
             <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
             <!-- 배송수단 -->
             <div class="mb-2">
@@ -43,85 +43,24 @@
             </div>
             
             <!-- 물품종류 -->
-            <div class="mb-2">
-                <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
-                    <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">물품종류</h2>
-                    <div class="space-y-3">
-                        <!-- 상단 버튼들 -->
-                        <div class="flex space-x-2">
-                            <button type="button" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
-                                박스 규격 안내
-                            </button>
-                            <button type="button" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-medium transition-colors">
-                                행낭 규격 안내
-                            </button>
-                        </div>
-                        
-                        <!-- 물품종류 입력 필드 -->
-                        <div class="space-y-1">
-                            <label for="itemType" class="block text-xs font-medium text-gray-600">물품종류 *</label>
-                            <input type="text" id="itemType" name="itemType" value="<?= old('itemType', '서류') ?>" required
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-                        </div>
-                        
-                        <!-- 박스/행낭/쇼핑백 선택 -->
-                        <div class="grid grid-cols-6 gap-2">
-                            <div class="space-y-1">
-                                <label for="box_selection" class="block text-xs font-medium text-gray-600">박스선택</label>
-                                <select id="box_selection" name="box_selection" class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
-                                    <option value="">선택</option>
-                                    <option value="small" <?= old('box_selection') === 'small' ? 'selected' : '' ?>>소형</option>
-                                    <option value="medium" <?= old('box_selection') === 'medium' ? 'selected' : '' ?>>중형</option>
-                                    <option value="large" <?= old('box_selection') === 'large' ? 'selected' : '' ?>>대형</option>
-                                </select>
-                            </div>
-                            <div class="space-y-1">
-                                <label for="box_quantity" class="block text-xs font-medium text-gray-600">개수</label>
-                                <input type="number" id="box_quantity" name="box_quantity" value="<?= old('box_quantity', '0') ?>" min="0"
-                                       class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
-                            </div>
-                            <div class="space-y-1">
-                                <label for="pouch_selection" class="block text-xs font-medium text-gray-600">행낭선택</label>
-                                <select id="pouch_selection" name="pouch_selection" class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
-                                    <option value="">선택</option>
-                                    <option value="small" <?= old('pouch_selection') === 'small' ? 'selected' : '' ?>>소형</option>
-                                    <option value="medium" <?= old('pouch_selection') === 'medium' ? 'selected' : '' ?>>중형</option>
-                                </select>
-                            </div>
-                            <div class="space-y-1">
-                                <label for="pouch_quantity" class="block text-xs font-medium text-gray-600">개수</label>
-                                <input type="number" id="pouch_quantity" name="pouch_quantity" value="<?= old('pouch_quantity', '0') ?>" min="0"
-                                       class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
-                            </div>
-                            <div class="space-y-1">
-                                <label for="shopping_bag_selection" class="block text-xs font-medium text-gray-600">쇼핑백선택</label>
-                                <select id="shopping_bag_selection" name="shopping_bag_selection" class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
-                                    <option value="">선택</option>
-                                    <option value="small" <?= old('shopping_bag_selection') === 'small' ? 'selected' : '' ?>>소형</option>
-                                    <option value="large" <?= old('shopping_bag_selection') === 'large' ? 'selected' : '' ?>>대형</option>
-                                </select>
-                            </div>
-                            <div class="space-y-1">
-                                <label for="shopping_bag_quantity" class="block text-xs font-medium text-gray-600">개수</label>
-                                <input type="number" id="shopping_bag_quantity" name="shopping_bag_quantity" value="<?= old('shopping_bag_quantity', '0') ?>" min="0"
-                                       class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
+            <?= $this->include('forms/item-type-section', [
+                'itemTypeName' => 'itemType',
+                'itemTypeId' => 'itemType',
+                'defaultValue' => '서류',
+                'showBoxSelection' => true,
+                'showPouchSelection' => true,
+                'showShoppingBagSelection' => true,
+                'showOverloadCheckbox' => true,
+                'boxGuideButtonText' => '박스 규격 안내',
+                'pouchGuideButtonText' => '행낭 규격 안내'
+            ]) ?>
             
             <!-- 전달사항 -->
-            <div class="mb-2">
-                <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
-                    <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">전달사항</h2>
-                    <div class="space-y-1">
-                        <p class="text-xs text-gray-600 font-medium">전달사항을 입력해주세요</p>
-                        <textarea id="deliveryInstructions" name="deliveryInstructions" placeholder="전달하실 내용을 입력하세요." 
-                                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent h-20 resize-none bg-white"><?= old('deliveryInstructions') ?></textarea>
-                    </div>
-                </section>
-            </div>
+            <?= $this->include('forms/delivery-instructions-section', [
+                'fieldName' => 'deliveryInstructions',
+                'fieldId' => 'deliveryInstructions',
+                'placeholder' => '전달하실 내용을 입력하세요.'
+            ]) ?>
             </div>
         </div>
         
@@ -131,12 +70,14 @@
                 <?= $this->include('forms/common-paytype') ?>
             </div>
         </div> 
-    </div>   
-</div>
-
-<?= form_close() ?>
+        </div>
+    <?= form_close() ?>
 
 <?= $this->include('forms/multi-order-modal', ['service_name' => '방문택배']) ?>
+
+<!-- 주문 폼 유효성 검사 스크립트 -->
+<script src="<?= base_url('assets/js/order-form-validation.js') ?>"></script>
+
 
 <?= $this->endSection() ?>
 
