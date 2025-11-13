@@ -1,45 +1,38 @@
 <aside class="sidebar">
     <div class="sidebar-header">
-        <a href="<?= base_url('/') ?>" class="logo">
-            <?php
-            // 로그인한 사용자의 고객사 로고 조회 (본점 로고)
-            $customerLogoPath = null;
-            $customerId = session()->get('customer_id');
-            if ($customerId) {
-                $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
-                
-                // 사용자가 속한 본점 ID 찾기
-                $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
-                if ($headOfficeId) {
-                    $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
-                    if ($headOffice && !empty($headOffice['logo_path'])) {
-                        $customerLogoPath = base_url($headOffice['logo_path']);
-                    }
+        <?php
+        // 로그인한 사용자의 고객사 로고 조회 (본점 로고)
+        $customerLogoPath = null;
+        $customerId = session()->get('customer_id');
+        if ($customerId) {
+            $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
+            
+            // 사용자가 속한 본점 ID 찾기
+            $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
+            if ($headOfficeId) {
+                $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
+                if ($headOffice && !empty($headOffice['logo_path'])) {
+                    $customerLogoPath = base_url($headOffice['logo_path']);
                 }
             }
-            ?>
-            <?php if ($customerLogoPath): ?>
-                <img src="<?= $customerLogoPath ?>" alt="회사 로고" class="logo-icon" style="width: 48px; height: 48px; object-fit: contain; border-radius: 8px;">
-            <?php else: ?>
-                <div class="logo-icon">STN</div>
-            <?php endif; ?>
-            <div class="logo-text">
-                <div class="company-name">STN Network</div>
-                <div class="service-name">ONE'CALL</div>
-            </div>
-        </a>
-        <!-- 모바일 닫기 버튼 -->
-        <button id="sidebarClose" class="lg:hidden absolute top-4 right-4 p-2 text-gray-500 hover:text-gray-700">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        </button>
+        }
+        ?>
+        <?php if ($customerLogoPath): ?>
+            <!-- 로고가 있을 경우: 로고만 풀로 차지 -->
+            <a href="<?= base_url('/') ?>" class="logo-full">
+                <img src="<?= $customerLogoPath ?>" alt="회사 로고" class="logo-full-image">
+            </a>
+        <?php else: ?>
+            <!-- 로고가 없을 경우: 기본 STN 로고 이미지가 풀로 차지 -->
+            <a href="<?= base_url('/') ?>" class="logo-full">
+                <img src="<?= base_url('assets/images/logo/logo_STN.png') ?>" alt="STN Network" class="logo-full-image">
+            </a>
+        <?php endif; ?>
     </div>
     
     <div class="user-info">
         <div class="user-details">
             <span class="user-name"><?= session()->get('real_name') ?? session()->get('username') ?? 'Guest' ?></span>
-            <span class="customer-name"><?= session()->get('customer_name') ?? '' ?></span>
         </div>
         <a href="<?= base_url('auth/logout') ?>" class="logout-link">➡ logout</a>
     </div>

@@ -273,6 +273,7 @@ class CustomerHierarchyModel extends Model
             'parent_id' => null,
             'contact_phone' => $data['contact_phone'] ?? null,
             'address' => $data['address'] ?? null,
+            'memo' => $data['memo'] ?? null,
             'is_active' => 1
         ];
 
@@ -354,6 +355,7 @@ class CustomerHierarchyModel extends Model
             'contact_phone' => $data['contact_phone'] ?? null,
             'contact_email' => $data['contact_email'] ?? null,
             'address' => $data['address'] ?? null,
+            'memo' => $data['memo'] ?? null,
             'contract_start_date' => $data['contract_start_date'] ?? null,
             'contract_end_date' => $data['contract_end_date'] ?? null,
             'is_active' => 1
@@ -387,6 +389,9 @@ class CustomerHierarchyModel extends Model
         }
         if (isset($data['address'])) {
             $dbData['address'] = $data['address'];
+        }
+        if (isset($data['memo'])) {
+            $dbData['memo'] = $data['memo'];
         }
         if (isset($data['contract_start_date'])) {
             $dbData['contract_start_date'] = $data['contract_start_date'];

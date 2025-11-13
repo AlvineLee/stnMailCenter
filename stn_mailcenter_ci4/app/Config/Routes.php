@@ -84,6 +84,9 @@ $routes->group('delivery', function($routes) {
 // 회원정보 관련 라우트
 $routes->group('member', function($routes) {
     $routes->get('list', 'Member::list');
+    $routes->post('changePassword', 'Member::changePassword');
+    $routes->post('updateAddress', 'Member::updateAddress');
+    $routes->post('updateUserInfo', 'Member::updateUserInfo');
 });
 
 // 고객관리 관련 라우트
@@ -99,7 +102,9 @@ $routes->group('customer', function($routes) {
     $routes->get('getUserAccountInfo/(:num)', 'Customer::getUserAccountInfo/$1');
     $routes->get('getCustomerInfo/(:num)', 'Customer::getCustomerInfo/$1');
     $routes->post('createHeadOffice', 'Customer::createHeadOffice');
+    $routes->post('updateHeadOffice/(:num)', 'Customer::updateHeadOffice/$1');
     $routes->post('createBranch', 'Customer::createBranch');
+    $routes->post('updateBranch/(:num)', 'Customer::updateBranch/$1');
     $routes->post('createAgency', 'Customer::createAgency');
     $routes->post('createUserAccount', 'Customer::createUserAccount');
     $routes->post('updateUserAccount/(:num)', 'Customer::updateUserAccount/$1');

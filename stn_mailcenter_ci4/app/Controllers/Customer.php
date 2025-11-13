@@ -43,7 +43,7 @@ class Customer extends BaseController
             'title' => '본점관리',
             'content_header' => [
                 'title' => '본점관리',
-                'description' => '본점 담당자 계정을 생성 및 관리할 수 있습니다.'
+                'description' => '본점 정보를 등록 및 관리할 수 있습니다.'
             ],
             'customers' => $customersWithUsers,
             'level' => 'head_office'
@@ -427,16 +427,15 @@ class Customer extends BaseController
 
         $validation = \Config\Services::validation();
         $validation->setRules([
-            'customer_name' => 'required|max_length[100]',
             'username' => 'required|min_length[3]|max_length[50]|is_unique[tbl_users.username]',
             'password' => 'required|min_length[4]',
-            'real_name' => 'required|min_length[2]|max_length[50]',
-            'contact_phone' => 'permit_empty|max_length[20]',
+            'customer_name' => 'permit_empty|max_length[100]',
             'address' => 'permit_empty',
-            'email' => 'permit_empty|valid_email|max_length[100]',
-            'phone' => 'permit_empty|max_length[20]',
-            'department' => 'permit_empty|max_length[50]',
-            'position' => 'permit_empty|max_length[50]'
+            'memo' => 'permit_empty',
+            'main_contact_name' => 'required|min_length[2]|max_length[50]',
+            'main_contact_phone' => 'required|max_length[20]',
+            'sub_contact_name' => 'permit_empty|max_length[50]',
+            'sub_contact_phone' => 'permit_empty|max_length[20]'
         ]);
 
         if (!$validation->run($inputData)) {
@@ -460,15 +459,16 @@ class Customer extends BaseController
             // 새 본점을 같은 그룹에 추가하려면 parent_id는 null이지만, 
             // 본점은 독립적이므로 그냥 생성 (실제로는 그룹 구분이 필요하면 추가 로직 필요)
             
-            // 1. 고객사 코드 생성
-            $customerCode = $this->customerHierarchyModel->generateCustomerCode($inputData['customer_name']);
+            // 1. 고객사 코드 생성 (본점명이 없으면 아이디 사용)
+            $customerName = !empty($inputData['customer_name']) ? $inputData['customer_name'] : $inputData['username'];
+            $customerCode = $this->customerHierarchyModel->generateCustomerCode($customerName);
             
             // 2. 본점 고객사 생성
             $customerData = [
                 'customer_code' => $customerCode,
-                'customer_name' => $inputData['customer_name'],
-                'contact_phone' => !empty($inputData['contact_phone']) ? $inputData['contact_phone'] : null,
-                'address' => !empty($inputData['address']) ? $inputData['address'] : null
+                'customer_name' => $customerName,
+                'address' => !empty($inputData['address']) ? $inputData['address'] : null,
+                'memo' => !empty($inputData['memo']) ? $inputData['memo'] : null
             ];
 
             $customerId = $this->customerHierarchyModel->createHeadOffice($customerData);
@@ -482,11 +482,8 @@ class Customer extends BaseController
                 'customer_id' => $customerId,
                 'username' => $inputData['username'],
                 'password' => $inputData['password'], // 평문 비밀번호 (UserModel이 자동 해시)
-                'real_name' => $inputData['real_name'],
-                'email' => !empty($inputData['email']) ? $inputData['email'] : null,
-                'phone' => !empty($inputData['phone']) ? $inputData['phone'] : null,
-                'department' => !empty($inputData['department']) ? $inputData['department'] : null,
-                'position' => !empty($inputData['position']) ? $inputData['position'] : null,
+                'real_name' => $inputData['main_contact_name'],
+                'phone' => $inputData['main_contact_phone'],
                 'user_role' => 'admin',
                 'status' => 'active',
                 'is_active' => 1
@@ -525,6 +522,124 @@ class Customer extends BaseController
     }
 
     /**
+     * 본점 고객사 수정
+     */
+    public function updateHeadOffice($customerId)
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // JSON 요청 처리
+        $inputData = $this->request->getJSON(true);
+        if (empty($inputData)) {
+            $inputData = $this->request->getPost();
+        }
+
+        $validation = \Config\Services::validation();
+        $validation->setRules([
+            'customer_name' => 'max_length[100]',
+            'main_contact_name' => 'required|max_length[50]',
+            'main_contact_phone' => 'required|max_length[20]'
+        ]);
+
+        if (!$validation->run($inputData)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '입력값 검증에 실패했습니다.',
+                'errors' => $validation->getErrors()
+            ])->setStatusCode(400);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            // 1. 고객사 정보 수정
+            $customerData = [
+                'customer_name' => $inputData['customer_name'] ?? null,
+                'address' => $inputData['address'] ?? null,
+                'memo' => $inputData['memo'] ?? null
+            ];
+            
+            // null 값 제거
+            $customerData = array_filter($customerData, function($value) {
+                return $value !== null;
+            });
+
+            if (!empty($customerData)) {
+                $updateResult = $this->customerHierarchyModel->updateCustomer($customerId, $customerData);
+                if (!$updateResult) {
+                    throw new \Exception('본점 정보 수정에 실패했습니다.');
+                }
+            }
+
+            // 2. 사용자 계정 정보 수정 (담당자 정보)
+            $users = $this->userModel->getUsersByCustomer($customerId);
+            
+            if (!empty($users) && count($users) > 0) {
+                // 첫 번째 사용자 (담당자) 정보 수정
+                $mainUser = $users[0];
+                $mainUserData = [
+                    'real_name' => $inputData['main_contact_name'],
+                    'phone' => $inputData['main_contact_phone']
+                ];
+                $this->userModel->update($mainUser['id'], $mainUserData);
+
+                // 두 번째 사용자 (추가 담당자) 정보 수정 또는 생성
+                if (!empty($inputData['sub_contact_name']) && !empty($inputData['sub_contact_phone'])) {
+                    if (count($users) > 1) {
+                        // 기존 추가 담당자 수정
+                        $subUser = $users[1];
+                        $subUserData = [
+                            'real_name' => $inputData['sub_contact_name'],
+                            'phone' => $inputData['sub_contact_phone']
+                        ];
+                        $this->userModel->update($subUser['id'], $subUserData);
+                    } else {
+                        // 새 추가 담당자 생성
+                        $subUserData = [
+                            'customer_id' => $customerId,
+                            'username' => $mainUser['username'] . '_sub',
+                            'password' => 'temp1234', // 임시 비밀번호
+                            'real_name' => $inputData['sub_contact_name'],
+                            'phone' => $inputData['sub_contact_phone'],
+                            'user_role' => 'user',
+                            'status' => 'active',
+                            'is_active' => 1
+                        ];
+                        $this->userModel->insert($subUserData);
+                    }
+                }
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \Exception('데이터베이스 트랜잭션 오류가 발생했습니다.');
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '본점 정보가 성공적으로 수정되었습니다.'
+            ]);
+
+        } catch (\Exception $e) {
+            $db->transRollback();
+            log_message('error', 'Customer::updateHeadOffice - ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
      * 지사 고객사 생성 (고객사 + 사용자 계정 함께 생성)
      */
     public function createBranch()
@@ -545,22 +660,11 @@ class Customer extends BaseController
 
         $validation = \Config\Services::validation();
         $validation->setRules([
-            'customer_name' => 'required|max_length[100]',
-            'parent_id' => 'required|integer',
             'username' => 'required|min_length[3]|max_length[50]|is_unique[tbl_users.username]',
             'password' => 'required|min_length[4]',
-            'real_name' => 'required|min_length[2]|max_length[50]',
-            'business_number' => 'permit_empty|max_length[20]',
-            'representative_name' => 'permit_empty|max_length[50]',
-            'contact_phone' => 'permit_empty|max_length[20]',
-            'contact_email' => 'permit_empty|valid_email|max_length[100]',
-            'address' => 'permit_empty',
-            'email' => 'permit_empty|valid_email|max_length[100]',
-            'phone' => 'permit_empty|max_length[20]',
-            'department' => 'permit_empty|max_length[50]',
-            'position' => 'permit_empty|max_length[50]',
-            'contract_start_date' => 'permit_empty|valid_date',
-            'contract_end_date' => 'permit_empty|valid_date'
+            'customer_name' => 'required|max_length[100]',
+            'parent_id' => 'required|integer',
+            'user_role' => 'required|in_list[admin,manager,user]'
         ]);
 
         if (!$validation->run($inputData)) {
@@ -582,14 +686,7 @@ class Customer extends BaseController
             $customerData = [
                 'customer_code' => $customerCode,
                 'customer_name' => $inputData['customer_name'],
-                'parent_id' => $inputData['parent_id'],
-                'business_number' => !empty($inputData['business_number']) ? $inputData['business_number'] : null,
-                'representative_name' => !empty($inputData['representative_name']) ? $inputData['representative_name'] : null,
-                'contact_phone' => !empty($inputData['contact_phone']) ? $inputData['contact_phone'] : null,
-                'contact_email' => !empty($inputData['contact_email']) ? $inputData['contact_email'] : null,
-                'address' => !empty($inputData['address']) ? $inputData['address'] : null,
-                'contract_start_date' => !empty($inputData['contract_start_date']) ? $inputData['contract_start_date'] : null,
-                'contract_end_date' => !empty($inputData['contract_end_date']) ? $inputData['contract_end_date'] : null
+                'parent_id' => $inputData['parent_id']
             ];
 
             $customerId = $this->customerHierarchyModel->createBranch($customerData);
@@ -603,12 +700,8 @@ class Customer extends BaseController
                 'customer_id' => $customerId,
                 'username' => $inputData['username'],
                 'password' => $inputData['password'], // 평문 비밀번호 (UserModel이 자동 해시)
-                'real_name' => $inputData['real_name'],
-                'email' => !empty($inputData['email']) ? $inputData['email'] : null,
-                'phone' => !empty($inputData['phone']) ? $inputData['phone'] : null,
-                'department' => !empty($inputData['department']) ? $inputData['department'] : null,
-                'position' => !empty($inputData['position']) ? $inputData['position'] : null,
-                'user_role' => 'admin',
+                'real_name' => $inputData['customer_name'], // 지사명을 실명으로 사용
+                'user_role' => $inputData['user_role'],
                 'status' => 'active',
                 'is_active' => 1
             ];
@@ -646,6 +739,92 @@ class Customer extends BaseController
     }
 
     /**
+     * 지사 고객사 수정
+     */
+    public function updateBranch($customerId)
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // JSON 요청 처리
+        $inputData = $this->request->getJSON(true);
+        if (empty($inputData)) {
+            $inputData = $this->request->getPost();
+        }
+
+        $validation = \Config\Services::validation();
+        $validation->setRules([
+            'customer_name' => 'required|max_length[100]',
+            'user_role' => 'required|in_list[admin,manager,user]'
+        ]);
+
+        if (!$validation->run($inputData)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '입력값 검증에 실패했습니다.',
+                'errors' => $validation->getErrors()
+            ])->setStatusCode(400);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            // 1. 고객사 정보 수정
+            $customerData = [
+                'customer_name' => $inputData['customer_name']
+            ];
+            
+            $updateResult = $this->customerHierarchyModel->updateCustomer($customerId, $customerData);
+            if (!$updateResult) {
+                throw new \Exception('지사 정보 수정에 실패했습니다.');
+            }
+
+            // 2. 사용자 계정 정보 수정 (권한 정보)
+            $users = $this->userModel->getUsersByCustomer($customerId);
+            
+            if (!empty($users) && count($users) > 0) {
+                $mainUser = $users[0];
+                $userData = [
+                    'user_role' => $inputData['user_role']
+                ];
+                
+                // 비밀번호가 입력된 경우에만 포함
+                if (isset($inputData['password']) && !empty($inputData['password'])) {
+                    $userData['password'] = $inputData['password']; // 평문 비밀번호 (UserModel이 자동 해시)
+                }
+                
+                $this->userModel->update($mainUser['id'], $userData);
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \Exception('데이터베이스 트랜잭션 오류가 발생했습니다.');
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '지사 정보가 성공적으로 수정되었습니다.'
+            ]);
+
+        } catch (\Exception $e) {
+            $db->transRollback();
+            log_message('error', 'Customer::updateBranch - ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
      * 대리점 고객사 생성 (고객사 + 사용자 계정 함께 생성)
      */
     public function createAgency()
@@ -666,22 +845,17 @@ class Customer extends BaseController
 
         $validation = \Config\Services::validation();
         $validation->setRules([
-            'customer_name' => 'required|max_length[100]',
-            'parent_id' => 'required|integer',
             'username' => 'required|min_length[3]|max_length[50]|is_unique[tbl_users.username]',
             'password' => 'required|min_length[4]',
-            'real_name' => 'required|min_length[2]|max_length[50]',
-            'business_number' => 'permit_empty|max_length[20]',
-            'representative_name' => 'permit_empty|max_length[50]',
-            'contact_phone' => 'permit_empty|max_length[20]',
-            'contact_email' => 'permit_empty|valid_email|max_length[100]',
-            'address' => 'permit_empty',
-            'email' => 'permit_empty|valid_email|max_length[100]',
-            'phone' => 'permit_empty|max_length[20]',
+            'customer_name' => 'required|max_length[100]',
+            'representative_name' => 'required|min_length[2]|max_length[50]',
+            'contact_phone' => 'required|max_length[20]',
+            'address' => 'required|max_length[200]',
+            'address_detail' => 'required|max_length[200]',
+            'parent_id' => 'required|integer',
             'department' => 'permit_empty|max_length[50]',
             'position' => 'permit_empty|max_length[50]',
-            'contract_start_date' => 'permit_empty|valid_date',
-            'contract_end_date' => 'permit_empty|valid_date'
+            'memo' => 'permit_empty'
         ]);
 
         if (!$validation->run($inputData)) {
@@ -699,18 +873,16 @@ class Customer extends BaseController
             // 1. 고객사 코드 생성
             $customerCode = $this->customerHierarchyModel->generateCustomerCode($inputData['customer_name']);
             
-            // 2. 대리점 고객사 생성
+            // 2. 대리점 고객사 생성 (주소 합치기)
+            $fullAddress = trim($inputData['address'] . ' ' . $inputData['address_detail']);
             $customerData = [
                 'customer_code' => $customerCode,
                 'customer_name' => $inputData['customer_name'],
                 'parent_id' => $inputData['parent_id'],
-                'business_number' => !empty($inputData['business_number']) ? $inputData['business_number'] : null,
-                'representative_name' => !empty($inputData['representative_name']) ? $inputData['representative_name'] : null,
-                'contact_phone' => !empty($inputData['contact_phone']) ? $inputData['contact_phone'] : null,
-                'contact_email' => !empty($inputData['contact_email']) ? $inputData['contact_email'] : null,
-                'address' => !empty($inputData['address']) ? $inputData['address'] : null,
-                'contract_start_date' => !empty($inputData['contract_start_date']) ? $inputData['contract_start_date'] : null,
-                'contract_end_date' => !empty($inputData['contract_end_date']) ? $inputData['contract_end_date'] : null
+                'representative_name' => $inputData['representative_name'],
+                'contact_phone' => $inputData['contact_phone'],
+                'address' => $fullAddress,
+                'memo' => !empty($inputData['memo']) ? $inputData['memo'] : null
             ];
 
             $customerId = $this->customerHierarchyModel->createAgency($customerData);
@@ -724,9 +896,8 @@ class Customer extends BaseController
                 'customer_id' => $customerId,
                 'username' => $inputData['username'],
                 'password' => $inputData['password'], // 평문 비밀번호 (UserModel이 자동 해시)
-                'real_name' => $inputData['real_name'],
-                'email' => !empty($inputData['email']) ? $inputData['email'] : null,
-                'phone' => !empty($inputData['phone']) ? $inputData['phone'] : null,
+                'real_name' => $inputData['representative_name'],
+                'phone' => $inputData['contact_phone'],
                 'department' => !empty($inputData['department']) ? $inputData['department'] : null,
                 'position' => !empty($inputData['position']) ? $inputData['position'] : null,
                 'user_role' => 'admin',
@@ -787,6 +958,14 @@ class Customer extends BaseController
                 'success' => false,
                 'message' => '고객사 정보를 찾을 수 없습니다.'
             ])->setStatusCode(404);
+        }
+
+        // 상위 고객사명 추가
+        if (!empty($customer['parent_id'])) {
+            $parentCustomer = $this->customerHierarchyModel->getCustomerById($customer['parent_id']);
+            if ($parentCustomer) {
+                $customer['parent_customer_name'] = $parentCustomer['customer_name'];
+            }
         }
 
         return $this->response->setJSON([

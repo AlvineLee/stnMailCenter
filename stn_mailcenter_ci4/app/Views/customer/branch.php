@@ -75,100 +75,65 @@
         
         <form id="createCustomerForm" onsubmit="createCustomer(event)" class="p-4">
             <!-- 기본 정보 -->
-            <div class="mb-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">기본 정보</h4>
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">기본 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">
-                        상위 본점 <span class="text-red-500">*</span>
-                    </label>
-                    <select id="parent_id" 
-                            name="parent_id" 
-                            class="form-input" 
-                            required>
-                        <option value="">선택하세요</option>
-                        <?php foreach ($parent_customers ?? [] as $parent): ?>
-                        <option value="<?= $parent['id'] ?>"><?= htmlspecialchars($parent['customer_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">
-                        지사명 <span class="text-red-500">*</span>
-                    </label>
-                    <input type="text" 
-                           id="customer_name" 
-                           name="customer_name" 
-                           class="form-input" 
-                           placeholder="예: 부산지사" 
-                           required>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">사업자번호</label>
-                    <input type="text" 
-                           id="business_number" 
-                           name="business_number" 
-                           class="form-input" 
-                           placeholder="사업자번호를 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">대표자명</label>
-                    <input type="text" 
-                           id="representative_name" 
-                           name="representative_name" 
-                           class="form-input" 
-                           placeholder="대표자명을 입력하세요">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="username" 
+                               name="username" 
+                               class="form-input" 
+                               placeholder="아이디 *" 
+                               required>
+                        <input type="password" 
+                               id="password" 
+                               name="password" 
+                               class="form-input" 
+                               placeholder="비밀번호 *" 
+                               required>
+                    </div>
                 </div>
             </div>
             
             <!-- 지사 정보 -->
-            <div class="mb-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">지사 정보</h4>
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">지사 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">주소</label>
                     <input type="text" 
-                           id="address" 
-                           name="address" 
+                           id="customer_name" 
+                           name="customer_name" 
                            class="form-input" 
-                           placeholder="주소를 입력하세요">
+                           placeholder="지사명 *" 
+                           required>
                 </div>
+            </div>
+            
+            <!-- 권한 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">권한 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">연락처</label>
-                    <input type="text" 
-                           id="contact_phone" 
-                           name="contact_phone" 
-                           class="form-input" 
-                           placeholder="연락처를 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">이메일</label>
-                    <input type="email" 
-                           id="contact_email" 
-                           name="contact_email" 
-                           class="form-input" 
-                           placeholder="이메일을 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">계약 시작일</label>
-                    <input type="date" 
-                           id="contract_start_date" 
-                           name="contract_start_date" 
-                           class="form-input">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">계약 종료일</label>
-                    <input type="date" 
-                           id="contract_end_date" 
-                           name="contract_end_date" 
-                           class="form-input">
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="user_role" 
+                                name="user_role" 
+                                class="form-input" 
+                                required>
+                            <option value="">권한 선택 *</option>
+                            <option value="admin">관리자</option>
+                            <option value="manager">매니저</option>
+                            <option value="user">일반사용자</option>
+                        </select>
+                        <input type="text" 
+                               id="parent_customer_name" 
+                               name="parent_customer_name" 
+                               class="form-input" 
+                               placeholder="소속본점"
+                               readonly>
+                        <input type="hidden" id="parent_id" name="parent_id">
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">소속본점은 상위본점명이 자동으로 설정됩니다.</p>
                 </div>
             </div>
             
@@ -199,107 +164,64 @@
             <input type="hidden" id="edit_is_view" value="false">
             
             <!-- 기본 정보 -->
-            <div class="mb-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">기본 정보</h4>
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">기본 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">
-                        상위 본점
-                    </label>
-                    <select id="edit_parent_id" 
-                            name="parent_id" 
-                            class="form-input">
-                        <option value="">선택하세요</option>
-                        <?php foreach ($parent_customers ?? [] as $parent): ?>
-                        <option value="<?= $parent['id'] ?>"><?= htmlspecialchars($parent['customer_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">
-                        지사명 <span class="text-red-500">*</span>
-                    </label>
-                    <input type="text" 
-                           id="edit_customer_name" 
-                           name="customer_name" 
-                           class="form-input" 
-                           placeholder="예: 부산지사" 
-                           required>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">고객사 코드</label>
-                    <input type="text" 
-                           id="edit_customer_code" 
-                           class="form-input" 
-                           readonly>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">사업자번호</label>
-                    <input type="text" 
-                           id="edit_business_number" 
-                           name="business_number" 
-                           class="form-input" 
-                           placeholder="사업자번호를 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">대표자명</label>
-                    <input type="text" 
-                           id="edit_representative_name" 
-                           name="representative_name" 
-                           class="form-input" 
-                           placeholder="대표자명을 입력하세요">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="edit_username" 
+                               name="username" 
+                               class="form-input" 
+                               placeholder="아이디 *" 
+                               readonly>
+                        <input type="password" 
+                               id="edit_password" 
+                               name="password" 
+                               class="form-input" 
+                               placeholder="비밀번호">
+                    </div>
                 </div>
             </div>
             
             <!-- 지사 정보 -->
-            <div class="mb-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">지사 정보</h4>
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">지사 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">주소</label>
                     <input type="text" 
-                           id="edit_address" 
-                           name="address" 
+                           id="edit_customer_name" 
+                           name="customer_name" 
                            class="form-input" 
-                           placeholder="주소를 입력하세요">
+                           placeholder="지사명 *" 
+                           required>
                 </div>
+            </div>
+            
+            <!-- 권한 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">권한 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">연락처</label>
-                    <input type="text" 
-                           id="edit_contact_phone" 
-                           name="contact_phone" 
-                           class="form-input" 
-                           placeholder="연락처를 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">이메일</label>
-                    <input type="email" 
-                           id="edit_contact_email" 
-                           name="contact_email" 
-                           class="form-input" 
-                           placeholder="이메일을 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">계약 시작일</label>
-                    <input type="date" 
-                           id="edit_contract_start_date" 
-                           name="contract_start_date" 
-                           class="form-input">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">계약 종료일</label>
-                    <input type="date" 
-                           id="edit_contract_end_date" 
-                           name="contract_end_date" 
-                           class="form-input">
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="edit_user_role" 
+                                name="user_role" 
+                                class="form-input" 
+                                required>
+                            <option value="">권한 선택 *</option>
+                            <option value="admin">관리자</option>
+                            <option value="manager">매니저</option>
+                            <option value="user">일반사용자</option>
+                        </select>
+                        <input type="text" 
+                               id="edit_parent_customer_name" 
+                               name="parent_customer_name" 
+                               class="form-input" 
+                               placeholder="소속본점"
+                               readonly>
+                        <input type="hidden" id="edit_parent_id" name="parent_id">
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">소속본점은 상위본점명이 자동으로 설정됩니다.</p>
                 </div>
             </div>
             
@@ -321,8 +243,21 @@ function openCreateModal() {
         window.lowerSidebarZIndex();
     }
     
+    // 상위 본점 목록이 있으면 첫 번째를 기본값으로 설정
+    const parentCustomers = <?= json_encode($parent_customers ?? []) ?>;
+    if (parentCustomers.length > 0) {
+        document.getElementById('parent_id').value = parentCustomers[0].id;
+        document.getElementById('parent_customer_name').value = parentCustomers[0].customer_name;
+    }
+    
     document.getElementById('createModal').classList.remove('hidden');
     document.getElementById('createCustomerForm').reset();
+    
+    // 리셋 후 다시 기본값 설정
+    if (parentCustomers.length > 0) {
+        document.getElementById('parent_id').value = parentCustomers[0].id;
+        document.getElementById('parent_customer_name').value = parentCustomers[0].customer_name;
+    }
 }
 
 // 지사 등록 모달 닫기
@@ -348,9 +283,10 @@ function editCustomer(customerId) {
     document.getElementById('modal-title').textContent = '지사 수정';
     document.getElementById('edit-submit-btn').classList.remove('hidden');
     
-    // 수정 모드: 모든 필드 편집 가능
+    // 수정 모드: 일부 필드만 편집 가능
     document.querySelectorAll('#editCustomerForm input, #editCustomerForm select').forEach(input => {
-        if (input.id !== 'edit_customer_code') {
+        // 아이디와 소속본점은 readonly 유지
+        if (input.id !== 'edit_username' && input.id !== 'edit_parent_customer_name') {
             input.removeAttribute('readonly');
         }
     });
@@ -395,16 +331,29 @@ function loadCustomerInfo(customerId) {
             document.getElementById('edit_customer_id').value = info.id;
             document.getElementById('edit_parent_id').value = info.parent_id || '';
             document.getElementById('edit_customer_name').value = info.customer_name || '';
-            document.getElementById('edit_customer_code').value = info.customer_code || '';
-            document.getElementById('edit_business_number').value = info.business_number || '';
-            document.getElementById('edit_representative_name').value = info.representative_name || '';
-            document.getElementById('edit_address').value = info.address || '';
-            document.getElementById('edit_contact_phone').value = info.contact_phone || '';
-            document.getElementById('edit_contact_email').value = info.contact_email || '';
-            document.getElementById('edit_contract_start_date').value = info.contract_start_date || '';
-            document.getElementById('edit_contract_end_date').value = info.contract_end_date || '';
+            document.getElementById('edit_parent_customer_name').value = info.parent_customer_name || '';
             
-            document.getElementById('editModal').classList.remove('hidden');
+            // 사용자 정보도 로드
+            fetch('<?= base_url('customer/getUsersByCustomer') ?>/' + customerId, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(userData => {
+                if (userData.success && userData.data && userData.data.length > 0) {
+                    const user = userData.data[0];
+                    document.getElementById('edit_username').value = user.username || '';
+                    document.getElementById('edit_user_role').value = user.user_role || '';
+                }
+                
+                document.getElementById('editModal').classList.remove('hidden');
+            })
+            .catch(error => {
+                console.error('Error loading users:', error);
+                document.getElementById('editModal').classList.remove('hidden');
+            });
         } else {
             alert(data.message || '고객사 정보를 불러올 수 없습니다.');
         }
@@ -430,15 +379,11 @@ function createCustomer(event) {
     event.preventDefault();
     
     const formData = {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
         customer_name: document.getElementById('customer_name').value,
         parent_id: document.getElementById('parent_id').value,
-        business_number: document.getElementById('business_number').value,
-        representative_name: document.getElementById('representative_name').value,
-        contact_phone: document.getElementById('contact_phone').value,
-        contact_email: document.getElementById('contact_email').value,
-        address: document.getElementById('address').value,
-        contract_start_date: document.getElementById('contract_start_date').value,
-        contract_end_date: document.getElementById('contract_end_date').value
+        user_role: document.getElementById('user_role').value
     };
     
     fetch('<?= base_url('customer/createBranch') ?>', {
@@ -481,16 +426,16 @@ function updateCustomer(event) {
     const customerId = document.getElementById('edit_customer_id').value;
     const formData = {
         customer_name: document.getElementById('edit_customer_name').value,
-        business_number: document.getElementById('edit_business_number').value,
-        representative_name: document.getElementById('edit_representative_name').value,
-        contact_phone: document.getElementById('edit_contact_phone').value,
-        contact_email: document.getElementById('edit_contact_email').value,
-        address: document.getElementById('edit_address').value,
-        contract_start_date: document.getElementById('edit_contract_start_date').value,
-        contract_end_date: document.getElementById('edit_contract_end_date').value
+        user_role: document.getElementById('edit_user_role').value
     };
     
-    fetch('<?= base_url('customer/updateCustomer') ?>/' + customerId, {
+    // 비밀번호가 입력된 경우에만 포함
+    const password = document.getElementById('edit_password').value;
+    if (password) {
+        formData.password = password;
+    }
+    
+    fetch('<?= base_url('customer/updateBranch') ?>/' + customerId, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

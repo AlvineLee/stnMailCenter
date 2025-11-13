@@ -1,5 +1,15 @@
 <?php
 // 공통 폼 컴포넌트 - 주문자정보, 출발지, 도착지만 포함
+
+// 로그인한 사용자 정보 조회 (주소, 부서 정보 포함)
+$userInfo = null;
+if (session()->get('is_logged_in')) {
+    $userId = session()->get('user_id');
+    if ($userId) {
+        $userModel = new \App\Models\UserModel();
+        $userInfo = $userModel->getUserAccountInfo($userId);
+    }
+}
 ?>
 
 <!-- 주문자 정보 -->
@@ -8,7 +18,7 @@
         <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">주문자 정보</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div class="space-y-1">
-                <input type="text" id="company_name" name="company_name" value="<?= old('company_name', session()->get('company_name', '')) ?>" required
+                <input type="text" id="company_name" name="company_name" value="<?= old('company_name', session()->get('customer_name', '')) ?>" required
                        placeholder="회사명" lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
             </div>
@@ -256,17 +266,64 @@ function openDaumAddressSearch(type) {
     }).open();
 }
 
-// 주문자 정보 자동 입력 기능
+// 세션 정보와 사용자 정보를 JavaScript 변수로 전달
+const sessionData = {
+    customer_name: '<?= esc(session()->get('customer_name', ''), 'js') ?>',
+    phone: '<?= esc(session()->get('phone', ''), 'js') ?>',
+    real_name: '<?= esc(session()->get('real_name', ''), 'js') ?>',
+    department: '<?= esc($userInfo['department'] ?? '', 'js') ?>',
+    address_zonecode: '<?= esc($userInfo['address_zonecode'] ?? '', 'js') ?>',
+    address: '<?= esc($userInfo['address'] ?? '', 'js') ?>',
+    address_detail: '<?= esc($userInfo['address_detail'] ?? '', 'js') ?>'
+};
+
+// 주문자 정보 자동 입력 기능 (세션 정보 사용)
 function copyOrdererInfo(type) {
-    const companyName = document.getElementById('company_name').value;
-    const contact = document.getElementById('contact').value;
+    // 세션 정보 우선 사용, 없으면 주문자 정보 필드에서 가져오기
+    const companyName = sessionData.customer_name || document.getElementById('company_name').value;
+    const contact = sessionData.phone || document.getElementById('contact').value;
+    const department = sessionData.department || '';
+    const manager = sessionData.real_name || '';
+    const zonecode = sessionData.address_zonecode || '';
+    const address = sessionData.address || '';
+    const addressDetail = sessionData.address_detail || '';
     
     if (type === 'departure') {
         document.getElementById('departure_company_name').value = companyName;
         document.getElementById('departure_contact').value = contact;
+        if (document.getElementById('departure_department')) {
+            document.getElementById('departure_department').value = department;
+        }
+        if (document.getElementById('departure_manager')) {
+            document.getElementById('departure_manager').value = manager;
+        }
+        if (document.getElementById('departure_dong')) {
+            document.getElementById('departure_dong').value = zonecode;
+        }
+        if (document.getElementById('departure_address')) {
+            document.getElementById('departure_address').value = address;
+        }
+        if (document.getElementById('departure_detail')) {
+            document.getElementById('departure_detail').value = addressDetail;
+        }
     } else if (type === 'destination') {
         document.getElementById('destination_company_name').value = companyName;
         document.getElementById('destination_contact').value = contact;
+        if (document.getElementById('destination_department')) {
+            document.getElementById('destination_department').value = department;
+        }
+        if (document.getElementById('destination_manager')) {
+            document.getElementById('destination_manager').value = manager;
+        }
+        if (document.getElementById('destination_dong')) {
+            document.getElementById('destination_dong').value = zonecode;
+        }
+        if (document.getElementById('destination_address')) {
+            document.getElementById('destination_address').value = address;
+        }
+        if (document.getElementById('destination_detail')) {
+            document.getElementById('destination_detail').value = addressDetail;
+        }
     }
 }
 

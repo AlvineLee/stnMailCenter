@@ -6,7 +6,7 @@
     <div class="mb-4 flex justify-between items-center">
         <div>
             <h2 class="text-lg font-bold text-gray-800 mb-1"><?= $content_header['title'] ?? '본점관리' ?></h2>
-            <p class="text-xs text-gray-600"><?= $content_header['description'] ?? '본점 담당자 계정을 생성 및 관리할 수 있습니다.' ?></p>
+            <p class="text-xs text-gray-600"><?= $content_header['description'] ?? '본점 정보를 등록 및 관리할 수 있습니다.' ?></p>
         </div>
         <button onclick="openCreateModal()" class="form-button form-button-primary">
             + 본점 등록
@@ -20,63 +20,38 @@
                 등록된 본점이 없습니다.
             </div>
         <?php else: ?>
-        <?php foreach ($customers as $customer): ?>
-        <div class="mb-6 border border-gray-200 rounded-lg p-4">
-            <!-- 본점 정보 -->
-            <div class="flex justify-between items-center mb-3">
-                <div>
-                    <h3 class="text-base font-bold text-gray-800"><?= htmlspecialchars($customer['customer_name'] ?? '-') ?></h3>
-                    <p class="text-xs text-gray-500"><?= htmlspecialchars($customer['customer_code'] ?? '-') ?></p>
-                </div>
-                <button onclick="openAddUserModal(<?= $customer['id'] ?>, '<?= htmlspecialchars($customer['customer_name']) ?>')" class="form-button form-button-primary">
-                    + 계정 추가
-                </button>
-            </div>
-            
-            <!-- 사용자 계정 목록 -->
-            <?php if (empty($customer['users'])): ?>
-                <div class="text-center py-4 text-gray-400 text-sm">
-                    등록된 계정이 없습니다.
-                </div>
-            <?php else: ?>
-            <table class="w-full">
-                <thead>
-                    <tr>
-                        <th>아이디</th>
-                        <th>실명</th>
-                        <th>이메일</th>
-                        <th>연락처</th>
-                        <th class="text-center">역할</th>
-                        <th class="text-center">상태</th>
-                        <th class="text-center">작업</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($customer['users'] as $user): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($user['username'] ?? '-') ?></td>
-                        <td><?= htmlspecialchars($user['real_name'] ?? '-') ?></td>
-                        <td><?= htmlspecialchars($user['email'] ?? '-') ?></td>
-                        <td><?= htmlspecialchars($user['phone'] ?? '-') ?></td>
-                        <td class="text-center">
-                            <span class="status-badge"><?= htmlspecialchars($user['user_role'] ?? '-') ?></span>
-                        </td>
-                        <td class="text-center">
-                            <span class="status-badge status-<?= ($user['status'] === 'active' && $user['is_active'] == 1) ? 'active' : 'inactive' ?>">
-                                <?= ($user['status'] === 'active' && $user['is_active'] == 1) ? '활성' : '비활성' ?>
-                            </span>
-                        </td>
-                        <td class="action-buttons text-center">
-                            <button onclick="editUserAccount(<?= $user['id'] ?>)" class="form-button form-button-secondary">수정</button>
-                            <button onclick="viewUserAccount(<?= $user['id'] ?>)" class="form-button form-button-secondary">상세</button>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-        <?php endforeach; ?>
+        <table class="w-full">
+            <thead>
+                <tr>
+                    <th>본점코드(아이디)</th>
+                    <th>본점명</th>
+                    <th>주소</th>
+                    <th>담당자</th>
+                    <th>연락처</th>
+                    <th>메모</th>
+                    <th class="text-center">작업</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($customers as $customer): ?>
+                <?php 
+                // 첫 번째 사용자 정보 (담당자 정보)
+                $mainUser = !empty($customer['users']) ? $customer['users'][0] : null;
+                ?>
+                <tr>
+                    <td><?= htmlspecialchars($mainUser['username'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($customer['customer_name'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($customer['address'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($mainUser['real_name'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($mainUser['phone'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($customer['memo'] ?? '-') ?></td>
+                    <td class="action-buttons text-center">
+                        <button onclick="editCustomer(<?= $customer['id'] ?>)" class="form-button form-button-secondary">수정</button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
         <?php endif; ?>
     </div>
 </div>
@@ -94,120 +69,185 @@
         </div>
         
         <form id="createCustomerForm" onsubmit="createCustomer(event)" class="p-4">
-            <!-- 본점 정보 -->
-            <div class="mb-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">본점 정보</h4>
+            <!-- 기본 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">기본 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">
-                        본점명 <span class="text-red-500">*</span>
-                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="username" 
+                               name="username" 
+                               class="form-input" 
+                               placeholder="본점코드(아이디) *" 
+                               required>
+                        <input type="password" 
+                               id="password" 
+                               name="password" 
+                               class="form-input" 
+                               placeholder="비밀번호 *" 
+                               required>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 본점 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">본점 정보</h4>
+                
+                <div class="mb-3">
                     <input type="text" 
                            id="customer_name" 
                            name="customer_name" 
                            class="form-input" 
-                           placeholder="예: CJ대한통운" 
-                           required>
+                           placeholder="본점명">
                 </div>
                 
                 <div class="mb-3">
-                    <label class="form-label">주소</label>
                     <input type="text" 
                            id="address" 
                            name="address" 
                            class="form-input" 
-                           placeholder="주소를 입력하세요">
+                           placeholder="주소">
                 </div>
                 
                 <div class="mb-3">
-                    <label class="form-label">연락처</label>
-                    <input type="text" 
-                           id="contact_phone" 
-                           name="contact_phone" 
-                           class="form-input" 
-                           placeholder="연락처를 입력하세요">
+                    <textarea id="memo" 
+                              name="memo" 
+                              class="form-input" 
+                              rows="3"
+                              placeholder="메모"></textarea>
                 </div>
             </div>
             
-            <!-- 담당자 계정 정보 -->
-            <div class="mb-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">담당자 계정 정보</h4>
+            <!-- 담당자 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">담당자 정보</h4>
                 
                 <div class="mb-3">
-                    <label class="form-label">
-                        아이디 <span class="text-red-500">*</span>
-                    </label>
-                    <input type="text" 
-                           id="username" 
-                           name="username" 
-                           class="form-input" 
-                           placeholder="예: CJ본점" 
-                           required>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="main_contact_name" 
+                               name="main_contact_name" 
+                               class="form-input" 
+                               placeholder="담당자 이름 *" 
+                               required>
+                        <input type="text" 
+                               id="main_contact_phone" 
+                               name="main_contact_phone" 
+                               class="form-input" 
+                               placeholder="담당자 연락처 *" 
+                               required>
+                    </div>
                 </div>
                 
                 <div class="mb-3">
-                    <label class="form-label">
-                        비밀번호 <span class="text-red-500">*</span>
-                    </label>
-                    <input type="password" 
-                           id="password" 
-                           name="password" 
-                           class="form-input" 
-                           placeholder="비밀번호를 입력하세요" 
-                           required>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">
-                        담당자명 <span class="text-red-500">*</span>
-                    </label>
-                    <input type="text" 
-                           id="real_name" 
-                           name="real_name" 
-                           class="form-input" 
-                           placeholder="담당자 실명을 입력하세요" 
-                           required>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">이메일</label>
-                    <input type="email" 
-                           id="email" 
-                           name="email" 
-                           class="form-input" 
-                           placeholder="이메일을 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">연락처</label>
-                    <input type="text" 
-                           id="phone" 
-                           name="phone" 
-                           class="form-input" 
-                           placeholder="연락처를 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">부서</label>
-                    <input type="text" 
-                           id="department" 
-                           name="department" 
-                           class="form-input" 
-                           placeholder="부서명을 입력하세요">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">직위</label>
-                    <input type="text" 
-                           id="position" 
-                           name="position" 
-                           class="form-input" 
-                           placeholder="직위를 입력하세요">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="sub_contact_name" 
+                               name="sub_contact_name" 
+                               class="form-input" 
+                               placeholder="추가 담당자 이름">
+                        <input type="text" 
+                               id="sub_contact_phone" 
+                               name="sub_contact_phone" 
+                               class="form-input" 
+                               placeholder="추가 담당자 연락처">
+                    </div>
                 </div>
             </div>
             
             <div class="form-actions">
                 <button type="button" onclick="closeCreateModal()" class="form-button form-button-secondary">취소</button>
+                <button type="submit" class="form-button form-button-primary">확인</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 본점 수정 레이어 팝업 -->
+<div id="editHeadOfficeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style="z-index: 10000 !important;">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-800">본점 수정</h3>
+            <button onclick="closeEditHeadOfficeModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="editHeadOfficeForm" onsubmit="updateHeadOffice(event)" class="p-4">
+            <input type="hidden" id="edit_customer_id">
+            
+            <!-- 본점 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">본점 정보</h4>
+                
+                <div class="mb-3">
+                    <input type="text" 
+                           id="edit_customer_name" 
+                           name="customer_name" 
+                           class="form-input" 
+                           placeholder="본점명">
+                </div>
+                
+                <div class="mb-3">
+                    <input type="text" 
+                           id="edit_address" 
+                           name="address" 
+                           class="form-input" 
+                           placeholder="주소">
+                </div>
+                
+                <div class="mb-3">
+                    <textarea id="edit_memo" 
+                              name="memo" 
+                              class="form-input" 
+                              rows="3"
+                              placeholder="메모"></textarea>
+                </div>
+            </div>
+            
+            <!-- 담당자 정보 -->
+            <div class="mb-2 bg-gray-50 border border-gray-200 rounded-lg px-4 pt-4 pb-1">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">담당자 정보</h4>
+                
+                <div class="mb-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="edit_main_contact_name" 
+                               name="main_contact_name" 
+                               class="form-input" 
+                               placeholder="담당자 이름 *" 
+                               required>
+                        <input type="text" 
+                               id="edit_main_contact_phone" 
+                               name="main_contact_phone" 
+                               class="form-input" 
+                               placeholder="담당자 연락처 *" 
+                               required>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" 
+                               id="edit_sub_contact_name" 
+                               name="sub_contact_name" 
+                               class="form-input" 
+                               placeholder="추가 담당자 이름">
+                        <input type="text" 
+                               id="edit_sub_contact_phone" 
+                               name="sub_contact_phone" 
+                               class="form-input" 
+                               placeholder="추가 담당자 연락처">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="closeEditHeadOfficeModal()" class="form-button form-button-secondary">취소</button>
                 <button type="submit" class="form-button form-button-primary">확인</button>
             </div>
         </form>
@@ -454,16 +494,15 @@ function createCustomer(event) {
     event.preventDefault();
     
     const formData = {
-        customer_name: document.getElementById('customer_name').value,
-        contact_phone: document.getElementById('contact_phone').value,
-        address: document.getElementById('address').value,
         username: document.getElementById('username').value,
         password: document.getElementById('password').value,
-        real_name: document.getElementById('real_name').value,
-        email: document.getElementById('email').value,
-        phone: document.getElementById('phone').value,
-        department: document.getElementById('department').value,
-        position: document.getElementById('position').value
+        customer_name: document.getElementById('customer_name').value,
+        address: document.getElementById('address').value,
+        memo: document.getElementById('memo').value,
+        main_contact_name: document.getElementById('main_contact_name').value,
+        main_contact_phone: document.getElementById('main_contact_phone').value,
+        sub_contact_name: document.getElementById('sub_contact_name').value,
+        sub_contact_phone: document.getElementById('sub_contact_phone').value
     };
     
     fetch('<?= base_url('customer/createHeadOffice') ?>', {
@@ -646,6 +685,125 @@ function closeEditUserModal() {
     if (typeof window.restoreSidebarZIndex === 'function') {
         window.restoreSidebarZIndex();
     }
+}
+
+// 본점 수정 모달 열기
+function editCustomer(customerId) {
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    loadHeadOfficeInfo(customerId);
+}
+
+// 본점 정보 로드
+function loadHeadOfficeInfo(customerId) {
+    fetch('<?= base_url('customer/getCustomerInfo') ?>/' + customerId, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data) {
+            const info = data.data;
+            
+            document.getElementById('edit_customer_id').value = info.id;
+            document.getElementById('edit_customer_name').value = info.customer_name || '';
+            document.getElementById('edit_address').value = info.address || '';
+            document.getElementById('edit_memo').value = info.memo || '';
+            
+            // 사용자 정보도 로드
+            fetch('<?= base_url('customer/getUsersByCustomer') ?>/' + customerId, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(userData => {
+                if (userData.success && userData.data && userData.data.length > 0) {
+                    const mainUser = userData.data[0];
+                    document.getElementById('edit_main_contact_name').value = mainUser.real_name || '';
+                    document.getElementById('edit_main_contact_phone').value = mainUser.phone || '';
+                    
+                    if (userData.data.length > 1) {
+                        const subUser = userData.data[1];
+                        document.getElementById('edit_sub_contact_name').value = subUser.real_name || '';
+                        document.getElementById('edit_sub_contact_phone').value = subUser.phone || '';
+                    }
+                }
+                
+                document.getElementById('editHeadOfficeModal').classList.remove('hidden');
+            })
+            .catch(error => {
+                console.error('Error loading users:', error);
+                document.getElementById('editHeadOfficeModal').classList.remove('hidden');
+            });
+        } else {
+            alert(data.message || '본점 정보를 불러올 수 없습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('본점 정보 조회 중 오류가 발생했습니다.');
+    });
+}
+
+// 본점 수정 모달 닫기
+function closeEditHeadOfficeModal() {
+    document.getElementById('editHeadOfficeModal').classList.add('hidden');
+    document.getElementById('editHeadOfficeForm').reset();
+    
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 본점 수정
+function updateHeadOffice(event) {
+    event.preventDefault();
+    
+    const customerId = document.getElementById('edit_customer_id').value;
+    const formData = {
+        customer_name: document.getElementById('edit_customer_name').value,
+        address: document.getElementById('edit_address').value,
+        memo: document.getElementById('edit_memo').value,
+        main_contact_name: document.getElementById('edit_main_contact_name').value,
+        main_contact_phone: document.getElementById('edit_main_contact_phone').value,
+        sub_contact_name: document.getElementById('edit_sub_contact_name').value,
+        sub_contact_phone: document.getElementById('edit_sub_contact_phone').value
+    };
+    
+    fetch('<?= base_url('customer/updateHeadOffice') ?>/' + customerId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            closeEditHeadOfficeModal();
+            location.reload();
+        } else {
+            alert(data.message || '본점 정보 수정에 실패했습니다.');
+            if (data.errors) {
+                console.error('Validation errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('본점 정보 수정 중 오류가 발생했습니다.');
+    });
 }
 
 // 사용자 계정 수정

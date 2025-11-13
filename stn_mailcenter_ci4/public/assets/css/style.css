@@ -116,8 +116,63 @@ body {
     padding: 16px;
     border-bottom: 1px solid #e2e8f0;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
+/* 로고가 있을 경우: 로고만 풀로 차지 */
+.logo-full {
+    display: block;
+    width: 100%;
+    text-decoration: none;
+    transition: opacity 0.2s ease;
+}
+
+.logo-full:hover {
+    opacity: 0.8;
+}
+
+.logo-full-image {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    max-height: 80px;
+}
+
+/* 로고가 없을 경우: STN Network One'Call이 풀로 차지 */
+.logo-full-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
+    transition: opacity 0.2s ease;
+}
+
+.logo-full-text:hover {
+    opacity: 0.8;
+}
+
+.company-name-full {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2d3748;
+    text-align: center;
+}
+
+.service-name-full {
+    font-size: 20px;
+    font-weight: bold;
+    color: #667eea;
+    text-align: center;
+    margin-top: 2px;
+}
+
+/* 기존 스타일 (호환성을 위해 유지) */
 .logo {
     display: flex;
     align-items: center;

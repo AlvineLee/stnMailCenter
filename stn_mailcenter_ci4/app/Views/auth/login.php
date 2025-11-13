@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
 </head>
 <body>
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200">
+    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-300 to-gray-400">
         <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
             <div class="text-center mb-6">
                 <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-lg flex items-center justify-center font-bold text-lg mx-auto mb-3">

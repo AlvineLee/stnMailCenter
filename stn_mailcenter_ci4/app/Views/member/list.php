@@ -1,121 +1,257 @@
 <?= $this->extend('layouts/header') ?>
 
 <?= $this->section('content') ?>
-<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
+<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <!-- 사용자 정보 섹션 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- 왼쪽 컬럼 -->
+        <div class="space-y-4">
+            <div class="form-field">
+                <label class="form-label">아이디</label>
+                <input type="text" 
+                       value="<?= esc($user['username'] ?? '') ?>" 
+                       readonly 
+                       class="form-input bg-gray-50 text-gray-600">
+            </div>
+            <div class="form-field">
+                <label class="form-label">소속 빌딩</label>
+                <input type="text" 
+                       value="<?= esc($user['customer_name'] ?? '') ?>" 
+                       readonly 
+                       class="form-input bg-gray-50 text-gray-600">
+            </div>
+            <div class="form-field">
+                <label class="form-label">주소</label>
+                <div class="flex space-x-2 mb-2">
+                    <input type="text" 
+                           id="address_zonecode" 
+                           value="<?= esc($user['address_zonecode'] ?? '') ?>" 
+                           placeholder="우편번호"
+                           class="form-input w-24">
+                    <button type="button" 
+                            onclick="openAddressSearch()" 
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap">
+                        주소검색
+                    </button>
+                </div>
+                <input type="text" 
+                       id="address" 
+                       value="<?= esc($user['address'] ?? '') ?>" 
+                       placeholder="주소"
+                       class="form-input mb-2">
+                <input type="text" 
+                       id="address_detail" 
+                       value="<?= esc($user['address_detail'] ?? '') ?>" 
+                       placeholder="상세주소"
+                       class="form-input">
+            </div>
+        </div>
 
-    <!-- 검색 및 필터 영역 -->
-    <div class="bg-gray-50 rounded-lg search-compact">
-        <div class="flex items-center gap-4">
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 mb-1">회원명</label>
-                <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="회원명 입력">
-            </div>
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 mb-1">회원등급</label>
-                <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">전체</option>
-                    <option value="vip">VIP</option>
-                    <option value="gold">골드</option>
-                    <option value="silver">실버</option>
-                    <option value="bronze">브론즈</option>
-                </select>
-            </div>
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 mb-1">가입일</label>
-                <input type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 mb-1">상태</label>
-                <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">전체</option>
-                    <option value="active">활성</option>
-                    <option value="inactive">비활성</option>
-                    <option value="suspended">정지</option>
-                </select>
-            </div>
-            <div>
-                <button class="search-button">
-                    검색
-                </button>
+        <!-- 오른쪽 컬럼 -->
+        <div class="space-y-4">
+            <div class="form-field">
+                <label class="form-label">상호명</label>
+                <input type="text" 
+                       value="<?= esc($user['customer_name'] ?? '') ?>" 
+                       readonly 
+                       class="form-input bg-gray-50 text-gray-600">
             </div>
         </div>
     </div>
 
-    <!-- 검색 결과 정보 -->
-    <div class="mb-3 px-4 py-2 bg-gray-50 rounded-md">
-        <div class="text-sm text-gray-700">
-            총 <span class="font-medium text-gray-900">3</span>건의 검색결과가 있습니다.
+    <!-- 담당자 정보 (한 줄 배치) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="form-field">
+            <label class="form-label">담당자</label>
+            <input type="text" 
+                   id="real_name"
+                   value="<?= esc($user['real_name'] ?? '') ?>" 
+                   class="form-input">
+        </div>
+        <div class="form-field">
+            <label class="form-label">담당자 연락처</label>
+            <input type="text" 
+                   id="phone"
+                   value="<?= esc($user['phone'] ?? '') ?>" 
+                   class="form-input">
         </div>
     </div>
 
-    <!-- 회원 목록 테이블 -->
-    <div class="list-table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>회원번호</th>
-                    <th>회원명</th>
-                    <th>연락처</th>
-                    <th>이메일</th>
-                    <th>등급</th>
-                    <th>가입일</th>
-                    <th>상태</th>
-                    <th>액션</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>M001</td>
-                    <td>김철수</td>
-                    <td>010-1234-5678</td>
-                    <td>kim@example.com</td>
-                    <td><span class="status-badge" style="background: #e9d5ff; color: #7c3aed;">VIP</span></td>
-                    <td>2024-01-01</td>
-                    <td><span class="status-badge" style="background: #dcfce7; color: #166534;">활성</span></td>
-                    <td class="action-buttons">
-                        <button>수정</button>
-                        <button>정지</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>M002</td>
-                    <td>이영희</td>
-                    <td>010-2345-6789</td>
-                    <td>lee@example.com</td>
-                    <td><span class="status-badge" style="background: #fef3c7; color: #92400e;">골드</span></td>
-                    <td>2024-01-05</td>
-                    <td><span class="status-badge" style="background: #dcfce7; color: #166534;">활성</span></td>
-                    <td class="action-buttons">
-                        <button>수정</button>
-                        <button>정지</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>M003</td>
-                    <td>박민수</td>
-                    <td>010-3456-7890</td>
-                    <td>park@example.com</td>
-                    <td><span class="status-badge" style="background: #f3f4f6; color: #374151;">실버</span></td>
-                    <td>2024-01-10</td>
-                    <td><span class="status-badge" style="background: #fee2e2; color: #dc2626;">정지</span></td>
-                    <td class="action-buttons">
-                        <button>수정</button>
-                        <button>활성화</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <!-- 비밀번호 변경 섹션 -->
+    <div class="border-t border-gray-200 pt-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">비밀번호 변경</h3>
+        <div class="space-y-4 max-w-md">
+            <div class="form-field">
+                <label class="form-label required">현재 비밀번호</label>
+                <input type="password" 
+                       id="current-password" 
+                       class="form-input">
+            </div>
+            <div class="form-field">
+                <label class="form-label required">새 비밀번호</label>
+                <input type="password" 
+                       id="new-password" 
+                       class="form-input">
+            </div>
+            <div class="form-field">
+                <label class="form-label required">새 비밀번호 확인</label>
+                <input type="password" 
+                       id="new-password-confirm" 
+                       class="form-input">
+            </div>
+        </div>
     </div>
 
-    <!-- 페이지네이션 -->
-    <div class="list-pagination flex justify-center">
-        <div class="pagination flex space-x-2">
-            <button class="nav-button">이전</button>
-            <button class="page-number active">1</button>
-            <button class="page-number">2</button>
-            <button class="page-number">3</button>
-            <button class="nav-button">다음</button>
-        </div>
+    <!-- 저장 버튼 -->
+    <div class="mt-6 flex justify-center">
+        <button onclick="saveAll()" 
+                class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-3 rounded-md transition-colors">
+            저장
+        </button>
     </div>
 </div>
+
+<!-- 다음 주소 검색 API 스크립트 -->
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+
+<script>
+// 다음 주소 검색 API
+function openAddressSearch() {
+    new daum.Postcode({
+        oncomplete: function(data) {
+            let addr = '';
+            let extraAddr = '';
+            let detailAddr = '';
+
+            if (data.userSelectedType === 'R') {
+                addr = data.roadAddress;
+            } else {
+                addr = data.jibunAddress;
+            }
+
+            if (data.userSelectedType === 'R') {
+                if (data.bname !== '' && /[동|로|가]$/g.test(data.bname)) {
+                    extraAddr += data.bname;
+                }
+                if (data.buildingName !== '' && data.apartment === 'Y') {
+                    extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
+                }
+                if (extraAddr !== '') {
+                    extraAddr = ' (' + extraAddr + ')';
+                }
+            }
+
+            // 상세주소 필드에 건물명 등 추가 정보 설정
+            if (data.buildingName && data.buildingName !== '') {
+                detailAddr = data.buildingName;
+            }
+            
+            // 법정동명이 있고 건물명이 없는 경우
+            if (!detailAddr && data.bname && data.bname !== '') {
+                detailAddr = data.bname;
+            }
+
+            // 주소 필드에 값 설정
+            document.getElementById('address_zonecode').value = data.zonecode;
+            document.getElementById('address').value = addr + extraAddr;
+            
+            const detailField = document.getElementById('address_detail');
+            if (detailField) {
+                detailField.value = detailAddr;
+                // 상세주소 필드에 포커스 (사용자가 추가 입력 가능하도록)
+                setTimeout(function() {
+                    detailField.focus();
+                }, 100);
+            }
+        }
+    }).open();
+}
+
+// 모든 정보 저장 (담당자명, 연락처, 주소, 비밀번호)
+function saveAll() {
+    const realName = document.getElementById('real_name').value;
+    const phone = document.getElementById('phone').value;
+    const zonecode = document.getElementById('address_zonecode').value;
+    const address = document.getElementById('address').value;
+    const addressDetail = document.getElementById('address_detail').value;
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const newPasswordConfirm = document.getElementById('new-password-confirm').value;
+
+    // 기본 정보 유효성 검사
+    if (!realName) {
+        alert('담당자명을 입력해주세요.');
+        return;
+    }
+
+    // 비밀번호 변경이 입력된 경우 검증
+    let passwordChange = false;
+    if (currentPassword || newPassword || newPasswordConfirm) {
+        passwordChange = true;
+        
+        if (!currentPassword) {
+            alert('현재 비밀번호를 입력해주세요.');
+            return;
+        }
+
+        if (!newPassword || newPassword.length < 4) {
+            alert('새 비밀번호는 최소 4자 이상이어야 합니다.');
+            return;
+        }
+
+        if (newPassword !== newPasswordConfirm) {
+            alert('새 비밀번호가 일치하지 않습니다.');
+            return;
+        }
+    }
+
+    // 사용자 정보 저장 요청
+    const requestData = {
+        real_name: realName,
+        phone: phone,
+        address_zonecode: zonecode,
+        address: address,
+        address_detail: addressDetail
+    };
+
+    // 비밀번호 변경이 있는 경우에만 추가
+    if (passwordChange) {
+        requestData.current_password = currentPassword;
+        requestData.new_password = newPassword;
+        requestData.new_password_confirm = newPasswordConfirm;
+    }
+
+    fetch('<?= base_url('member/updateUserInfo') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || '정보가 성공적으로 저장되었습니다.');
+            // 비밀번호 필드 초기화
+            if (passwordChange) {
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('new-password-confirm').value = '';
+            }
+            // 페이지 새로고침하여 최신 정보 표시
+            location.reload();
+        } else {
+            alert(data.message || '정보 저장에 실패했습니다.');
+            if (data.errors) {
+                console.error('Validation errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('정보 저장 중 오류가 발생했습니다.');
+    });
+}
+</script>
 <?= $this->endSection() ?>
