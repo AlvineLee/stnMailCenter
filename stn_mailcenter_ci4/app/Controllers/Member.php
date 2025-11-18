@@ -6,18 +6,21 @@ use App\Controllers\BaseController;
 use App\Models\UserModel;
 use App\Models\CustomerHierarchyModel;
 use App\Models\AuthModel;
+use App\Models\InsungUsersListModel;
 
 class Member extends BaseController
 {
     protected $userModel;
     protected $customerHierarchyModel;
     protected $authModel;
+    protected $insungUsersListModel;
 
     public function __construct()
     {
         $this->userModel = new UserModel();
         $this->customerHierarchyModel = new CustomerHierarchyModel();
         $this->authModel = new AuthModel();
+        $this->insungUsersListModel = new InsungUsersListModel();
         helper('form');
     }
 
@@ -28,14 +31,42 @@ class Member extends BaseController
             return redirect()->to('/auth/login');
         }
 
+        $loginType = session()->get('login_type');
         $userId = session()->get('user_id');
         
-        // 로그인한 사용자 정보 조회 (고객사 정보 포함)
-        $userInfo = $this->userModel->getUserAccountInfo($userId);
-        
-        if (!$userInfo) {
-            return redirect()->to('/')
-                ->with('error', '사용자 정보를 찾을 수 없습니다.');
+        // 로그인 타입에 따라 다른 모델 사용
+        if ($loginType === 'daumdata') {
+            // daumdata 로그인: InsungUsersListModel 사용
+            $userInfo = $this->insungUsersListModel->getUserWithCompanyInfo($userId);
+            
+            if (!$userInfo) {
+                return redirect()->to('/')
+                    ->with('error', '사용자 정보를 찾을 수 없습니다.');
+            }
+            
+            // daumdata 사용자 정보를 STN 형식으로 변환
+            $userInfo = [
+                'username' => $userInfo['user_id'] ?? '',
+                'real_name' => $userInfo['user_name'] ?? '',
+                'phone' => $userInfo['user_tel1'] ?? '',
+                'customer_name' => $userInfo['comp_name'] ?? '',
+                'address_zonecode' => '', // daumdata에는 zonecode가 없을 수 있음
+                'address' => $userInfo['user_addr'] ?? '',
+                'address_detail' => $userInfo['user_addr_detail'] ?? '',
+                'login_type' => 'daumdata',
+                'user_idx' => $userInfo['idx'] ?? null,
+                'comp_code' => $userInfo['comp_code'] ?? null
+            ];
+        } else {
+            // STN 로그인: UserModel 사용
+            $userInfo = $this->userModel->getUserAccountInfo($userId);
+            
+            if (!$userInfo) {
+                return redirect()->to('/')
+                    ->with('error', '사용자 정보를 찾을 수 없습니다.');
+            }
+            
+            $userInfo['login_type'] = 'stn';
         }
 
         $data = [
@@ -99,31 +130,63 @@ class Member extends BaseController
         }
 
         try {
-            // 현재 사용자 정보 조회
-            $user = $this->userModel->find($userId);
+            $loginType = session()->get('login_type');
             
-            if (!$user) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => '사용자를 찾을 수 없습니다.'
-                ])->setStatusCode(404);
-            }
+            // 로그인 타입에 따라 다른 모델 사용
+            if ($loginType === 'daumdata') {
+                // daumdata 로그인: InsungUsersListModel 사용
+                $user = $this->insungUsersListModel->getUserWithCompanyInfo($userId);
+                
+                if (!$user) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '사용자를 찾을 수 없습니다.'
+                    ])->setStatusCode(404);
+                }
 
-            // 현재 비밀번호 확인
-            if (!password_verify($inputData['current_password'], $user['password'])) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => '현재 비밀번호가 올바르지 않습니다.'
-                ])->setStatusCode(400);
-            }
+                // 현재 비밀번호 확인 (daumdata는 평문 비밀번호)
+                if ($user['user_pass'] !== $inputData['current_password']) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '현재 비밀번호가 올바르지 않습니다.'
+                    ])->setStatusCode(400);
+                }
 
-            // 비밀번호 변경 (UserModel의 beforeUpdate에서 자동 해시 처리됨)
-            $updateResult = $this->userModel->update($userId, [
-                'password' => $inputData['new_password'] // 평문 비밀번호 (UserModel이 자동 해시)
-            ]);
+                // 비밀번호 변경 (daumdata는 평문으로 저장)
+                $updateResult = $this->insungUsersListModel->update($user['idx'], [
+                    'user_pass' => $inputData['new_password']
+                ]);
 
-            if (!$updateResult) {
-                throw new \Exception('비밀번호 변경에 실패했습니다.');
+                if (!$updateResult) {
+                    throw new \Exception('비밀번호 변경에 실패했습니다.');
+                }
+            } else {
+                // STN 로그인: UserModel 사용
+                $user = $this->userModel->find($userId);
+                
+                if (!$user) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '사용자를 찾을 수 없습니다.'
+                    ])->setStatusCode(404);
+                }
+
+                // 현재 비밀번호 확인
+                if (!password_verify($inputData['current_password'], $user['password'])) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '현재 비밀번호가 올바르지 않습니다.'
+                    ])->setStatusCode(400);
+                }
+
+                // 비밀번호 변경 (UserModel의 beforeUpdate에서 자동 해시 처리됨)
+                $updateResult = $this->userModel->update($userId, [
+                    'password' => $inputData['new_password'] // 평문 비밀번호 (UserModel이 자동 해시)
+                ]);
+
+                if (!$updateResult) {
+                    throw new \Exception('비밀번호 변경에 실패했습니다.');
+                }
             }
 
             return $this->response->setJSON([
@@ -180,39 +243,78 @@ class Member extends BaseController
         }
 
         try {
-            // 현재 사용자 정보 조회
-            $user = $this->userModel->find($userId);
+            $loginType = session()->get('login_type');
             
-            if (!$user) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => '사용자를 찾을 수 없습니다.'
-                ])->setStatusCode(404);
-            }
+            // 로그인 타입에 따라 다른 모델 사용
+            if ($loginType === 'daumdata') {
+                // daumdata 로그인: InsungUsersListModel 사용
+                $user = $this->insungUsersListModel->getUserWithCompanyInfo($userId);
+                
+                if (!$user) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '사용자를 찾을 수 없습니다.'
+                    ])->setStatusCode(404);
+                }
 
-            // 사용자 주소 업데이트
-            $updateData = [
-                'address_zonecode' => $inputData['address_zonecode'] ?? null,
-                'address' => $inputData['address'] ?? null,
-                'address_detail' => $inputData['address_detail'] ?? null
-            ];
+                // 사용자 주소 업데이트 (daumdata 필드명 사용)
+                $updateData = [
+                    'user_addr' => $inputData['address'] ?? null,
+                    'user_addr_detail' => $inputData['address_detail'] ?? null
+                ];
 
-            // null 값 제거
-            $updateData = array_filter($updateData, function($value) {
-                return $value !== null;
-            });
+                // null 값 제거
+                $updateData = array_filter($updateData, function($value) {
+                    return $value !== null;
+                });
 
-            if (empty($updateData)) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => '저장할 주소 정보가 없습니다.'
-                ])->setStatusCode(400);
-            }
+                if (empty($updateData)) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '저장할 주소 정보가 없습니다.'
+                    ])->setStatusCode(400);
+                }
 
-            $updateResult = $this->userModel->update($userId, $updateData);
+                $updateResult = $this->insungUsersListModel->update($user['idx'], $updateData);
 
-            if (!$updateResult) {
-                throw new \Exception('주소 저장에 실패했습니다.');
+                if (!$updateResult) {
+                    throw new \Exception('주소 저장에 실패했습니다.');
+                }
+            } else {
+                // STN 로그인: UserModel 사용
+                $user = $this->userModel->find($userId);
+                
+                if (!$user) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '사용자를 찾을 수 없습니다.'
+                    ])->setStatusCode(404);
+                }
+
+                // 사용자 주소 업데이트
+                $updateData = [
+                    'address_zonecode' => $inputData['address_zonecode'] ?? null,
+                    'address' => $inputData['address'] ?? null,
+                    'address_detail' => $inputData['address_detail'] ?? null
+                ];
+
+                // null 값 제거
+                $updateData = array_filter($updateData, function($value) {
+                    return $value !== null;
+                });
+
+                if (empty($updateData)) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '저장할 주소 정보가 없습니다.'
+                    ])->setStatusCode(400);
+                }
+
+                $updateResult = $this->userModel->update($userId, $updateData);
+
+                if (!$updateResult) {
+                    throw new \Exception('주소 저장에 실패했습니다.');
+                }
             }
 
             return $this->response->setJSON([
@@ -259,7 +361,7 @@ class Member extends BaseController
         // 유효성 검사 규칙 설정
         $validationRules = [
             'real_name' => 'required|min_length[2]|max_length[50]',
-            'phone' => 'permit_empty|min_length[10]|max_length[20]'
+            'phone' => 'permit_empty|min_length[4]|max_length[20]'
         ];
 
         $validationMessages = [
@@ -269,7 +371,7 @@ class Member extends BaseController
                 'max_length' => '담당자명은 최대 50자까지 가능합니다.'
             ],
             'phone' => [
-                'min_length' => '연락처는 최소 10자 이상이어야 합니다.',
+                'min_length' => '연락처는 최소 4자 이상이어야 합니다.',
                 'max_length' => '연락처는 최대 20자까지 가능합니다.'
             ]
         ];
@@ -305,49 +407,98 @@ class Member extends BaseController
         }
 
         try {
-            // 현재 사용자 정보 조회
-            $user = $this->userModel->find($userId);
+            $loginType = session()->get('login_type');
             
-            if (!$user) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => '사용자를 찾을 수 없습니다.'
-                ])->setStatusCode(404);
-            }
-
-            // 비밀번호 변경이 있는 경우 현재 비밀번호 확인
-            if ($isPasswordChange) {
-                if (!password_verify($inputData['current_password'], $user['password'])) {
+            // 로그인 타입에 따라 다른 모델 사용
+            if ($loginType === 'daumdata') {
+                // daumdata 로그인: InsungUsersListModel 사용
+                $user = $this->insungUsersListModel->getUserWithCompanyInfo($userId);
+                
+                if (!$user) {
                     return $this->response->setJSON([
                         'success' => false,
-                        'message' => '현재 비밀번호가 올바르지 않습니다.'
-                    ])->setStatusCode(400);
+                        'message' => '사용자를 찾을 수 없습니다.'
+                    ])->setStatusCode(404);
                 }
-            }
 
-            // 사용자 정보 업데이트
-            $updateData = [
-                'real_name' => $inputData['real_name'],
-                'phone' => $inputData['phone'] ?? null,
-                'address_zonecode' => $inputData['address_zonecode'] ?? null,
-                'address' => $inputData['address'] ?? null,
-                'address_detail' => $inputData['address_detail'] ?? null
-            ];
+                // 비밀번호 변경이 있는 경우 현재 비밀번호 확인 (daumdata는 평문)
+                if ($isPasswordChange) {
+                    if ($user['user_pass'] !== $inputData['current_password']) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => '현재 비밀번호가 올바르지 않습니다.'
+                        ])->setStatusCode(400);
+                    }
+                }
 
-            // 비밀번호 변경이 있는 경우 추가
-            if ($isPasswordChange) {
-                $updateData['password'] = $inputData['new_password']; // 평문 비밀번호 (UserModel이 자동 해시)
-            }
+                // 사용자 정보 업데이트 (daumdata 필드명 사용)
+                $updateData = [
+                    'user_name' => $inputData['real_name'],
+                    'user_tel1' => $inputData['phone'] ?? null,
+                    'user_addr' => $inputData['address'] ?? null,
+                    'user_addr_detail' => $inputData['address_detail'] ?? null
+                ];
 
-            // null 값 제거
-            $updateData = array_filter($updateData, function($value) {
-                return $value !== null;
-            });
+                // 비밀번호 변경이 있는 경우 추가 (daumdata는 평문으로 저장)
+                if ($isPasswordChange) {
+                    $updateData['user_pass'] = $inputData['new_password'];
+                }
 
-            $updateResult = $this->userModel->update($userId, $updateData);
+                // null 값 제거
+                $updateData = array_filter($updateData, function($value) {
+                    return $value !== null;
+                });
 
-            if (!$updateResult) {
-                throw new \Exception('정보 저장에 실패했습니다.');
+                $updateResult = $this->insungUsersListModel->update($user['idx'], $updateData);
+
+                if (!$updateResult) {
+                    throw new \Exception('정보 저장에 실패했습니다.');
+                }
+            } else {
+                // STN 로그인: UserModel 사용
+                $user = $this->userModel->find($userId);
+                
+                if (!$user) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '사용자를 찾을 수 없습니다.'
+                    ])->setStatusCode(404);
+                }
+
+                // 비밀번호 변경이 있는 경우 현재 비밀번호 확인
+                if ($isPasswordChange) {
+                    if (!password_verify($inputData['current_password'], $user['password'])) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => '현재 비밀번호가 올바르지 않습니다.'
+                        ])->setStatusCode(400);
+                    }
+                }
+
+                // 사용자 정보 업데이트
+                $updateData = [
+                    'real_name' => $inputData['real_name'],
+                    'phone' => $inputData['phone'] ?? null,
+                    'address_zonecode' => $inputData['address_zonecode'] ?? null,
+                    'address' => $inputData['address'] ?? null,
+                    'address_detail' => $inputData['address_detail'] ?? null
+                ];
+
+                // 비밀번호 변경이 있는 경우 추가
+                if ($isPasswordChange) {
+                    $updateData['password'] = $inputData['new_password']; // 평문 비밀번호 (UserModel이 자동 해시)
+                }
+
+                // null 값 제거
+                $updateData = array_filter($updateData, function($value) {
+                    return $value !== null;
+                });
+
+                $updateResult = $this->userModel->update($userId, $updateData);
+
+                if (!$updateResult) {
+                    throw new \Exception('정보 저장에 실패했습니다.');
+                }
             }
 
             $message = '정보가 성공적으로 저장되었습니다.';

@@ -6,18 +6,24 @@ use App\Controllers\BaseController;
 use App\Models\AdminModel;
 use App\Models\ServiceTypeModel;
 use App\Models\UserServicePermissionModel;
+use App\Models\InsungCcListModel;
+use App\Models\CcServicePermissionModel;
 
 class Admin extends BaseController
 {
     protected $adminModel;
     protected $serviceTypeModel;
     protected $userServicePermissionModel;
+    protected $insungCcListModel;
+    protected $ccServicePermissionModel;
     
     public function __construct()
     {
         $this->adminModel = new AdminModel();
         $this->serviceTypeModel = new ServiceTypeModel();
         $this->userServicePermissionModel = new UserServicePermissionModel();
+        $this->insungCcListModel = new InsungCcListModel();
+        $this->ccServicePermissionModel = new CcServicePermissionModel();
     }
     
     public function orderType()
@@ -27,9 +33,21 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 슈퍼관리자 권한 체크
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
         $userRole = session()->get('user_role');
-        if ($userRole !== 'super_admin') {
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
@@ -61,6 +79,41 @@ class Admin extends BaseController
             $categories = array_values($categories);
         }
         
+        // 콜센터 목록 조회 (daumdata 로그인인 경우)
+        $ccList = [];
+        $selectedCcCode = $this->request->getGet('cc_code');
+        
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $ccList = $this->insungCcListModel->getAllCcList();
+            
+            // 선택된 콜센터가 있으면 해당 콜센터의 서비스 권한 조회
+            if ($selectedCcCode) {
+                $ccPermissions = $this->ccServicePermissionModel->getCcServicePermissions($selectedCcCode);
+                
+                // 권한을 service_type_id를 키로 하는 배열로 변환
+                $permissionMap = [];
+                foreach ($ccPermissions as $permission) {
+                    $permissionMap[$permission['service_type_id']] = (bool)$permission['is_enabled'];
+                }
+                
+                // 서비스 타입에 권한 정보 추가
+                foreach ($serviceTypesGrouped as $category => &$services) {
+                    foreach ($services as &$service) {
+                        // 마스터 상태 저장 (뷰에서 표시용)
+                        $service['master_is_active'] = isset($service['is_active']) ? (bool)$service['is_active'] : false;
+                        
+                        // 마스터가 비활성화되어 있으면 무조건 false
+                        if (isset($service['is_active']) && $service['is_active'] == 0) {
+                            $service['is_enabled'] = false;
+                        } else {
+                            // 마스터가 활성화되어 있을 때만 콜센터별 권한 확인
+                            $service['is_enabled'] = isset($permissionMap[$service['id']]) ? $permissionMap[$service['id']] : false;
+                        }
+                    }
+                }
+            }
+        }
+        
         $data = [
             'title' => '오더유형설정',
             'content_header' => [
@@ -69,7 +122,11 @@ class Admin extends BaseController
             ],
             'service_types_grouped' => $serviceTypesGrouped,
             'stats' => $stats,
-            'categories' => $categories
+            'categories' => $categories,
+            'cc_list' => $ccList,
+            'selected_cc_code' => $selectedCcCode,
+            'login_type' => $loginType,
+            'user_type' => $userType
         ];
 
         return view('admin/order-type', $data);
@@ -186,8 +243,21 @@ class Admin extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
         }
         
-        // 슈퍼관리자 권한 체크
-        if (session()->get('user_role') !== 'super_admin') {
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
             return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
         }
         
@@ -263,8 +333,21 @@ class Admin extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
         }
         
-        // 슈퍼관리자 권한 체크
-        if (session()->get('user_role') !== 'super_admin') {
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
             return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
         }
         
@@ -332,12 +415,30 @@ class Admin extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
         }
         
-        // 슈퍼관리자 권한 체크
-        if (session()->get('user_role') !== 'super_admin') {
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
             return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
         }
         
+        $ccCode = $this->request->getPost('cc_code');
         $statusUpdates = $this->request->getPost('status_updates');
+        
+        // 디버깅 로그
+        log_message('debug', 'batchUpdateServiceStatus - ccCode: ' . ($ccCode ?? 'null'));
+        log_message('debug', 'batchUpdateServiceStatus - statusUpdates (raw): ' . print_r($statusUpdates, true));
         
         if (empty($statusUpdates)) {
             return $this->response->setJSON(['success' => false, 'message' => '업데이트할 데이터가 없습니다.']);
@@ -348,6 +449,94 @@ class Admin extends BaseController
             $statusUpdates = json_decode($statusUpdates, true);
         }
         
+        log_message('debug', 'batchUpdateServiceStatus - statusUpdates (parsed): ' . print_r($statusUpdates, true));
+        
+        // daumdata 로그인 user_type=1인 경우
+        if ($loginType === 'daumdata' && $userType == '1') {
+            // 개별 콜센터 선택인 경우
+            if ($ccCode) {
+                // 해당 콜센터의 서비스 권한만 저장
+                $permissions = [];
+                foreach ($statusUpdates as $update) {
+                    $serviceId = $update['service_id'] ?? null;
+                    $isActive = $update['is_active'] ?? 0;
+                    
+                    if ($serviceId) {
+                        $permissions[] = [
+                            'service_type_id' => $serviceId,
+                            'is_enabled' => $isActive ? 1 : 0
+                        ];
+                    }
+                }
+                
+                $result = $this->ccServicePermissionModel->batchUpdateCcServicePermissions($ccCode, $permissions);
+                
+                if ($result) {
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'message' => '콜센터별 서비스 권한이 저장되었습니다.'
+                    ]);
+                } else {
+                    return $this->response->setJSON(['success' => false, 'message' => '콜센터별 서비스 권한 저장에 실패했습니다.']);
+                }
+            } else {
+                // 전체 (마스터 설정)인 경우: 마스터 업데이트 + 모든 콜센터에 동일하게 적용
+                $successCount = 0;
+                $failCount = 0;
+                
+                // 1. 마스터 서비스 타입 상태 업데이트
+                foreach ($statusUpdates as $update) {
+                    $serviceId = $update['service_id'] ?? null;
+                    $isActive = $update['is_active'] ?? 0;
+                    
+                    if ($serviceId) {
+                        $result = $this->serviceTypeModel->update($serviceId, ['is_active' => $isActive ? 1 : 0]);
+                        if ($result) {
+                            $successCount++;
+                        } else {
+                            $failCount++;
+                        }
+                    }
+                }
+                
+                // 2. 모든 콜센터에 동일하게 적용
+                $permissions = [];
+                foreach ($statusUpdates as $update) {
+                    $serviceId = $update['service_id'] ?? null;
+                    $isActive = $update['is_active'] ?? 0;
+                    
+                    if ($serviceId) {
+                        $permissions[] = [
+                            'service_type_id' => $serviceId,
+                            'is_enabled' => $isActive ? 1 : 0
+                        ];
+                    }
+                }
+                
+                $allCcResult = $this->ccServicePermissionModel->batchUpdateAllCcServicePermissions($permissions);
+                
+                if ($successCount > 0) {
+                    $message = "{$successCount}개의 서비스 상태가 업데이트되었습니다.";
+                    if ($allCcResult) {
+                        $message .= " 모든 콜센터에 동일하게 적용되었습니다.";
+                    } else {
+                        $message .= " (콜센터 적용 중 일부 실패)";
+                    }
+                    if ($failCount > 0) {
+                        $message .= " ({$failCount}개 실패)";
+                    }
+                    
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'message' => $message
+                    ]);
+                } else {
+                    return $this->response->setJSON(['success' => false, 'message' => '상태 업데이트에 실패했습니다.']);
+                }
+            }
+        }
+        
+        // STN 로그인인 경우: 마스터 서비스 타입 상태만 업데이트
         $successCount = 0;
         $failCount = 0;
         
@@ -385,8 +574,21 @@ class Admin extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
         }
         
-        // 슈퍼관리자 권한 체크
-        if (session()->get('user_role') !== 'super_admin') {
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
             return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
         }
         
@@ -409,8 +611,21 @@ class Admin extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
         }
         
-        // 슈퍼관리자 권한 체크
-        if (session()->get('user_role') !== 'super_admin') {
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
             return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
         }
         

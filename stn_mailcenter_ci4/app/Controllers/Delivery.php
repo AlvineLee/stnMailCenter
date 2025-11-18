@@ -21,8 +21,12 @@ class Delivery extends BaseController
             return redirect()->to('/auth/login');
         }
         
+        $loginType = session()->get('login_type');
         $userRole = session()->get('user_role');
         $customerId = session()->get('customer_id');
+        $userType = session()->get('user_type');
+        $ccCode = session()->get('cc_code');
+        $compName = session()->get('comp_name');
         
         // 검색 조건 처리
         $searchType = $this->request->getGet('search_type') ?? 'all';
@@ -37,9 +41,25 @@ class Delivery extends BaseController
             'search_type' => $searchType,
             'search_keyword' => $searchKeyword,
             'status' => $statusFilter,
-            'service' => $serviceFilter,
-            'customer_id' => $userRole !== 'super_admin' ? $customerId : null
+            'service' => $serviceFilter
         ];
+        
+        // daumdata 로그인인 경우 user_type별 필터링
+        if ($loginType === 'daumdata') {
+            if ($userType == '1') {
+                // user_type = 1: 전체 고객사의 주문접수 리스트
+                $filters['customer_id'] = null; // 전체 조회
+            } elseif ($userType == '3') {
+                // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
+                $filters['cc_code'] = $ccCode;
+            } elseif ($userType == '5') {
+                // user_type = 5: 본인 고객사의 주문접수 리스트만
+                $filters['comp_name'] = $compName;
+            }
+        } else {
+            // STN 로그인인 경우 기존 로직
+            $filters['customer_id'] = $userRole !== 'super_admin' ? $customerId : null;
+        }
         
         // Model을 통한 데이터 조회
         $result = $this->deliveryModel->getDeliveryList($filters, $page, $perPage);

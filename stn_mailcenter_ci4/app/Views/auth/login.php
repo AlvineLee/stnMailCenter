@@ -22,13 +22,25 @@
                 <div class="bg-blue-100 text-blue-800 p-3 rounded-lg mb-5 text-sm"><?= $error ?></div>
             <?php endif; ?>
             
-            <?= form_open('auth/processLogin', ['class' => 'space-y-3']) ?>
-                <div>
-                    <input type="text" id="username" name="username" value="<?= old('username') ?>" placeholder="아이디 (예: admin)" required class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+            <?= form_open('auth/processLogin', ['class' => 'space-y-3', 'id' => 'loginForm']) ?>
+                <!-- 로그인 타입 선택 -->
+                <div class="flex gap-2 mb-3">
+                    <label class="flex items-center space-x-2 cursor-pointer flex-1">
+                        <input type="radio" name="login_type" value="stn" checked class="text-blue-600 focus:ring-blue-500">
+                        <span class="text-xs text-gray-700">STN 로그인</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer flex-1">
+                        <input type="radio" name="login_type" value="daumdata" class="text-blue-600 focus:ring-blue-500">
+                        <span class="text-xs text-gray-700">다음데이터 로그인</span>
+                    </label>
                 </div>
                 
                 <div>
-                    <input type="password" id="password" name="password" placeholder="비밀번호 (예: admin)" required class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                    <input type="text" id="username" name="username" value="<?= old('username') ?>" placeholder="아이디" required class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <input type="password" id="password" name="password" placeholder="비밀번호" required class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                 </div>
                 
                 <div class="flex gap-2 mt-4">

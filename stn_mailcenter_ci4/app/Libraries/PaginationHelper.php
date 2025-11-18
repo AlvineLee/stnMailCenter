@@ -20,17 +20,83 @@ class PaginationHelper
     }
 
     /**
-     * 페이징 HTML 생성
+     * 페이징 HTML 생성 (현재 스타일 유지)
+     * list-pagination, pagination, nav-button, page-number, active 클래스 사용
      */
     public function render()
     {
         $totalPages = $this->getTotalPages();
         
         if ($totalPages <= 1) {
-            return $this->renderSimplePagination();
+            return '';
         }
 
         return $this->renderFullPagination($totalPages);
+    }
+    
+    /**
+     * 페이징 HTML 생성 (현재 프로젝트 스타일)
+     */
+    public function renderWithCurrentStyle()
+    {
+        $totalPages = $this->getTotalPages();
+        
+        if ($totalPages <= 1) {
+            return '';
+        }
+        
+        $html = '<div class="list-pagination">';
+        $html .= '<div class="pagination">';
+        
+        // 이전 버튼
+        if ($this->currentPage > 1) {
+            $prevUrl = $this->getPageUrl($this->currentPage - 1);
+            $html .= '<a href="' . $prevUrl . '" class="nav-button">이전</a>';
+        } else {
+            $html .= '<span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">이전</span>';
+        }
+        
+        // 항상 5개 페이지 번호를 표시하도록 계산
+        $showPages = 5;
+        $halfPages = floor($showPages / 2);
+        
+        // 시작 페이지 계산
+        if ($this->currentPage <= $halfPages + 1) {
+            $startPage = 1;
+        } elseif ($this->currentPage >= $totalPages - $halfPages) {
+            $startPage = max(1, $totalPages - $showPages + 1);
+        } else {
+            $startPage = $this->currentPage - $halfPages;
+        }
+        
+        // 끝 페이지 계산
+        $endPage = min($totalPages, $startPage + $showPages - 1);
+        
+        // 실제 표시할 페이지 범위 재조정 (총 페이지가 5개 미만인 경우)
+        if ($totalPages < $showPages) {
+            $startPage = 1;
+            $endPage = $totalPages;
+        }
+        
+        // 페이지 번호들
+        for ($i = $startPage; $i <= $endPage; $i++) {
+            $isActive = $i == $this->currentPage;
+            $pageUrl = $this->getPageUrl($i);
+            $html .= '<a href="' . $pageUrl . '" class="page-number ' . ($isActive ? 'active' : '') . '">' . $i . '</a>';
+        }
+        
+        // 다음 버튼
+        if ($this->currentPage < $totalPages) {
+            $nextUrl = $this->getPageUrl($this->currentPage + 1);
+            $html .= '<a href="' . $nextUrl . '" class="nav-button">다음</a>';
+        } else {
+            $html .= '<span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">다음</span>';
+        }
+        
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        return $html;
     }
 
     /**

@@ -107,7 +107,7 @@ class StoreRegistration extends BaseController
         try {
             $id = $this->request->getPost('id');
             $status = $this->request->getPost('status');
-            $notes = $this->request->getPost('notes', FILTER_SANITIZE_STRING);
+            $notes = $this->request->getPost('notes');
             $userId = session('user_id') ?? 1; // 임시로 1 사용
 
             if (!$id || !in_array($status, ['approved', 'rejected'])) {

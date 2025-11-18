@@ -28,8 +28,12 @@ class Dashboard extends BaseController
             return redirect()->to('/auth/login');
         }
         
+        $loginType = session()->get('login_type');
         $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
         $customerId = session()->get('customer_id');
+        $compCode = session()->get('comp_code');
+        $ccCode = session()->get('cc_code');
         
         // 고객사 선택 (슈퍼관리자용)
         $selectedCustomerId = $this->request->getGet('customer_id') ?: $customerId;
@@ -41,10 +45,10 @@ class Dashboard extends BaseController
         }
         
         // 통계 데이터 조회
-        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole);
+        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode);
         
         // 최근 주문 조회
-        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole);
+        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode);
         
         // 선택된 고객사 정보
         $selectedCustomer = null;

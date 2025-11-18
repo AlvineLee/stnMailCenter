@@ -457,9 +457,31 @@ class Service extends BaseController
             // 3. 주문 기본 정보 저장 (tbl_orders) - Model 사용
             $orderModel = new \App\Models\OrderModel();
             
+            // 로그인 타입에 따라 user_id와 customer_id 처리
+            $loginType = session()->get('login_type');
+            $userId = null;
+            $customerId = null;
+            
+            if ($loginType === 'daumdata') {
+                // daumdata 로그인: tbl_users_list의 idx를 user_id로 사용
+                $userIdx = session()->get('user_idx');
+                if ($userIdx) {
+                    $userId = (int)$userIdx; // tbl_users_list의 idx를 사용
+                }
+                // daumdata 로그인 시 customer_id는 comp_code를 사용
+                $compCode = session()->get('comp_code');
+                if ($compCode) {
+                    $customerId = (int)$compCode; // comp_code를 customer_id로 사용
+                }
+            } else {
+                // STN 로그인
+                $userId = (int)(session()->get('user_id') ?? 1);
+                $customerId = (int)(session()->get('customer_id') ?? 1);
+            }
+            
             $orderData = [
-                'user_id' => session()->get('user_id') ?? 1, // 임시로 1 사용
-                'customer_id' => session()->get('customer_id') ?? 1, // 임시로 1 사용
+                'user_id' => $userId ?? 1,
+                'customer_id' => $customerId ?? 1,
                 'department_id' => 1, // 기본값
                 'service_type_id' => $serviceTypeId,
                 'order_number' => $orderNumber,

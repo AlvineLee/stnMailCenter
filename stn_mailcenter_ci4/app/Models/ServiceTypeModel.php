@@ -298,7 +298,8 @@ class ServiceTypeModel extends Model
     public function getDistinctCategories()
     {
         $builder = $this->builder();
-        $builder->select('DISTINCT service_category');
+        $builder->distinct();
+        $builder->select('service_category');
         $builder->where('service_category IS NOT NULL');
         $builder->where('service_category !=', '');
         $builder->orderBy('service_category', 'ASC');

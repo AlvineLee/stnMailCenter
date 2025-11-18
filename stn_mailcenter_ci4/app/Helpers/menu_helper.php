@@ -7,11 +7,31 @@ if (!function_exists('getUserServicePermissions')) {
     function getUserServicePermissions()
     {
         $userId = session()->get('user_id');
+        $loginType = session()->get('login_type');
         
         if (!$userId) {
             return [];
         }
         
+        // daumdata 로그인인 경우
+        if ($loginType === 'daumdata') {
+            $userType = session()->get('user_type');
+            
+            // user_type = 1 (메인 사이트 관리자)는 모든 서비스 접근 가능
+            if ($userType == '1') {
+                return getActiveServiceTypes();
+            }
+            
+            // 나중에 daumdata 사용자 권한 체크가 들어갈 수 있도록 구조 준비
+            // 현재는 user_type=5일 때만 주문접수 메뉴가 보이도록 처리
+            // TODO: daumdata 사용자별 서비스 권한 테이블 연동 시 여기서 권한 체크
+            // 예: $insungUserServicePermissionModel->getUserServicePermissions($userId);
+            
+            // 임시로 모든 활성 서비스 반환 (나중에 권한 체크로 변경 예정)
+            return getActiveServiceTypes();
+        }
+        
+        // STN 로그인인 경우
         // 슈퍼관리자는 모든 서비스 접근 가능
         if (session()->get('user_role') === 'super_admin') {
             return getActiveServiceTypes();
@@ -232,9 +252,11 @@ if (!function_exists('buildDynamicServiceMenu')) {
         // 지정한 순서대로 카테고리 처리
         foreach ($orderedCategories as $category => $services) {
             // 권한이 있는 서비스만 필터링
+            // $userPermissions 배열에 직접 체크 (전달받은 권한 정보 사용)
             $allowedServices = [];
             foreach ($services as $service) {
-                if (hasServicePermission($service['service_code'])) {
+                // $userPermissions 배열에 service_code가 있으면 권한 있음
+                if (isset($userPermissions[$service['service_code']])) {
                     $allowedServices[] = $service;
                 }
             }

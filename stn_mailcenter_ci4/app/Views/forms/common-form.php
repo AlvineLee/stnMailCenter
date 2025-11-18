@@ -18,12 +18,31 @@ if (session()->get('is_logged_in')) {
         <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">주문자 정보</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div class="space-y-1">
-                <input type="text" id="company_name" name="company_name" value="<?= old('company_name', session()->get('customer_name', '')) ?>" required
+                <?php 
+                // daumdata 로그인 시 comp_name, STN 로그인 시 customer_name 사용
+                $loginType = session()->get('login_type');
+                $companyName = '';
+                if ($loginType === 'daumdata') {
+                    $companyName = session()->get('comp_name', '');
+                } else {
+                    $companyName = session()->get('customer_name', '');
+                }
+                ?>
+                <input type="text" id="company_name" name="company_name" value="<?= old('company_name', $companyName) ?>" required
                        placeholder="회사명" lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <input type="tel" id="contact" name="contact" value="<?= old('contact', session()->get('phone', '')) ?>" required
+                <?php 
+                // daumdata 로그인 시 user_tel1, STN 로그인 시 phone 사용
+                $contact = '';
+                if ($loginType === 'daumdata') {
+                    $contact = session()->get('user_tel1', '');
+                } else {
+                    $contact = session()->get('phone', '');
+                }
+                ?>
+                <input type="tel" id="contact" name="contact" value="<?= old('contact', $contact) ?>" required
                        placeholder="연락처"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
             </div>
@@ -267,14 +286,46 @@ function openDaumAddressSearch(type) {
 }
 
 // 세션 정보와 사용자 정보를 JavaScript 변수로 전달
+<?php
+$loginType = session()->get('login_type');
+$sessionCustomerName = '';
+$sessionPhone = '';
+$sessionRealName = '';
+$sessionDepartment = '';
+$sessionZonecode = '';
+$sessionAddress = '';
+$sessionAddressDetail = '';
+
+if ($loginType === 'daumdata') {
+    // daumdata 로그인 시 세션 값 사용
+    $sessionCustomerName = session()->get('comp_name', '');
+    $sessionPhone = session()->get('user_tel1', '');
+    $sessionRealName = session()->get('user_name', '');
+    $sessionDepartment = session()->get('user_dept', '');
+    // daumdata 로그인 시 주소 정보
+    // user_dong은 동 이름이므로 zonecode로 사용하지 않음 (주소 검색으로 얻어야 함)
+    $sessionZonecode = ''; // zonecode는 주소 검색으로 얻어야 하므로 빈 값
+    $sessionAddress = session()->get('user_addr', '');
+    $sessionAddressDetail = session()->get('user_addr_detail', '');
+} else {
+    // STN 로그인 시
+    $sessionCustomerName = session()->get('customer_name', '');
+    $sessionPhone = session()->get('phone', '');
+    $sessionRealName = session()->get('real_name', '');
+    $sessionDepartment = $userInfo['department'] ?? '';
+    $sessionZonecode = $userInfo['address_zonecode'] ?? '';
+    $sessionAddress = $userInfo['address'] ?? '';
+    $sessionAddressDetail = $userInfo['address_detail'] ?? '';
+}
+?>
 const sessionData = {
-    customer_name: '<?= esc(session()->get('customer_name', ''), 'js') ?>',
-    phone: '<?= esc(session()->get('phone', ''), 'js') ?>',
-    real_name: '<?= esc(session()->get('real_name', ''), 'js') ?>',
-    department: '<?= esc($userInfo['department'] ?? '', 'js') ?>',
-    address_zonecode: '<?= esc($userInfo['address_zonecode'] ?? '', 'js') ?>',
-    address: '<?= esc($userInfo['address'] ?? '', 'js') ?>',
-    address_detail: '<?= esc($userInfo['address_detail'] ?? '', 'js') ?>'
+    customer_name: '<?= esc($sessionCustomerName, 'js') ?>',
+    phone: '<?= esc($sessionPhone, 'js') ?>',
+    real_name: '<?= esc($sessionRealName, 'js') ?>',
+    department: '<?= esc($sessionDepartment, 'js') ?>',
+    address_zonecode: '<?= esc($sessionZonecode, 'js') ?>',
+    address: '<?= esc($sessionAddress, 'js') ?>',
+    address_detail: '<?= esc($sessionAddressDetail, 'js') ?>'
 };
 
 // 주문자 정보 자동 입력 기능 (세션 정보 사용)

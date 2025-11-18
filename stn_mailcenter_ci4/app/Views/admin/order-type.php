@@ -3,6 +3,26 @@
 <?= $this->section('content') ?>
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
 
+    <!-- 콜센터 선택 (daumdata 로그인 user_type=1인 경우만 표시) -->
+    <?php if (isset($login_type) && $login_type === 'daumdata' && isset($user_type) && $user_type == '1' && !empty($cc_list)): ?>
+    <div class="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-center gap-4">
+            <label class="text-sm font-medium text-gray-700">콜센터 선택:</label>
+            <select id="cc_code_select" class="search-filter-select" onchange="changeCcCode()">
+                <option value="">전체 (마스터 설정)</option>
+                <?php foreach ($cc_list as $cc): ?>
+                <option value="<?= htmlspecialchars($cc['cc_code']) ?>" <?= (isset($selected_cc_code) && $selected_cc_code === $cc['cc_code']) ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($cc['cc_name']) ?> (<?= htmlspecialchars($cc['cc_code']) ?>)
+                </option>
+                <?php endforeach; ?>
+            </select>
+            <?php if (isset($selected_cc_code) && $selected_cc_code): ?>
+            <span class="text-sm text-gray-600">현재 선택: <?= htmlspecialchars($selected_cc_code) ?></span>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <!-- 통계 카드 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -103,14 +123,18 @@
             <h3 class="text-sm font-semibold text-gray-700 mb-2"><?= $categoryLabel ?></h3>
             <div class="space-y-1 sortable-service-list" data-category="<?= htmlspecialchars($category) ?>">
                 <?php foreach ($services as $service): ?>
-                <div class="flex items-center justify-between sortable-service-item hover:bg-gray-100 py-1 px-2 rounded transition-colors" 
+                <?php 
+                // 콜센터 선택 시 마스터 비활성화 서비스 체크
+                $isMasterDisabled = (isset($selected_cc_code) && $selected_cc_code && isset($service['master_is_active']) && !$service['master_is_active']);
+                ?>
+                <div class="flex items-center justify-between sortable-service-item <?= $isMasterDisabled ? 'opacity-60' : 'hover:bg-gray-100' ?> py-1 px-2 rounded transition-colors" 
                      data-service-id="<?= $service['id'] ?>"
                      data-sort-order="<?= $service['sort_order'] ?? 0 ?>">
                     <div class="flex items-center flex-1">
                         <svg class="w-4 h-4 text-gray-400 mr-2 drag-handle cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24" onclick="event.stopPropagation();">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
                         </svg>
-                        <span class="text-sm text-gray-600 service-name-clickable flex-1" 
+                        <span class="text-sm <?= $isMasterDisabled ? 'text-gray-400' : 'text-gray-600' ?> service-name-clickable flex-1" 
                               data-service-id="<?= $service['id'] ?>"
                               data-service-name="<?= htmlspecialchars($service['service_name']) ?>"
                               data-service-category="<?= htmlspecialchars($service['service_category']) ?>"
@@ -120,14 +144,20 @@
                             <?php if (!empty($service['is_external_link']) && $service['is_external_link'] == 1): ?>
                                 <span class="text-xs text-blue-500 ml-1">(외부링크)</span>
                             <?php endif; ?>
+                            <?php if ($isMasterDisabled): ?>
+                                <svg class="w-4 h-4 text-red-500 ml-1 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="마스터에서 비활성화된 서비스입니다">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path>
+                                </svg>
+                            <?php endif; ?>
                         </span>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer ml-2" onclick="event.stopPropagation();">
+                    <label class="relative inline-flex items-center ml-2 <?= $isMasterDisabled ? 'cursor-not-allowed' : 'cursor-pointer' ?>" onclick="<?= $isMasterDisabled ? 'return false;' : 'event.stopPropagation();' ?>">
                         <input type="checkbox" 
                                class="sr-only peer service-status-toggle" 
                                data-service-id="<?= $service['id'] ?>"
-                               <?= ($service['is_active'] == 1) ? 'checked' : '' ?>>
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                               <?= (isset($service['is_enabled']) && $service['is_enabled']) || (!isset($service['is_enabled']) && isset($service['is_active']) && $service['is_active'] == 1) ? 'checked' : '' ?>
+                               <?= $isMasterDisabled ? 'disabled title="마스터에서 비활성화된 서비스는 변경할 수 없습니다"' : '' ?>>
+                        <div class="w-11 h-6 <?= $isMasterDisabled ? 'bg-gray-100 opacity-50' : 'bg-gray-200' ?> peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all <?= $isMasterDisabled ? '' : 'peer-checked:bg-blue-600' ?>"></div>
                     </label>
                 </div>
                 <?php endforeach; ?>
@@ -495,6 +525,20 @@ function deactivateAll() {
     console.log('모든 서비스가 비활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
 }
 
+// 콜센터 선택 변경
+function changeCcCode() {
+    const ccCode = document.getElementById('cc_code_select').value;
+    const url = new URL(window.location.href);
+    
+    if (ccCode) {
+        url.searchParams.set('cc_code', ccCode);
+    } else {
+        url.searchParams.delete('cc_code');
+    }
+    
+    window.location.href = url.toString();
+}
+
 // 설정 저장 (일괄 상태 업데이트)
 function saveSettings() {
     // 모든 토글 상태 수집
@@ -513,15 +557,31 @@ function saveSettings() {
         return;
     }
     
+    console.log('저장할 데이터:', statusUpdates);
+    
     const formData = new FormData();
     formData.append('status_updates', JSON.stringify(statusUpdates));
+    
+    // 콜센터 코드가 선택되어 있으면 함께 전송
+    const ccCodeSelect = document.getElementById('cc_code_select');
+    if (ccCodeSelect && ccCodeSelect.value) {
+        formData.append('cc_code', ccCodeSelect.value);
+        console.log('콜센터 코드:', ccCodeSelect.value);
+    }
     
     fetch('<?= base_url('admin/batchUpdateServiceStatus') ?>', {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('응답 상태:', response.status);
+        if (!response.ok) {
+            throw new Error('HTTP error! status: ' + response.status);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('서버 응답:', data);
         if (data.success) {
             alert(data.message);
             location.reload();
@@ -531,7 +591,7 @@ function saveSettings() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('설정 저장 중 오류가 발생했습니다.');
+        alert('설정 저장 중 오류가 발생했습니다: ' + error.message);
     });
 }
 

@@ -348,6 +348,44 @@
                         $currentAdminLink.addClass('active');
                     }
                 }
+                // 인성 시스템 관련 페이지인 경우 (insung)
+                else if (currentPath.includes('/insung/')) {
+                    // 고객 관리 메뉴 활성화
+                    const $customerMenu = $('.nav-item.has-submenu').filter(function() {
+                        return $(this).find('.nav-text').text() === '고객 관리';
+                    });
+                    
+                    if ($customerMenu.length) {
+                        $customerMenu.addClass('active');
+                        $customerMenu.find('.nav-arrow').text('^');
+                    }
+                    
+                    // 콜센터 관리 메뉴 활성화 (user_type = 1인 경우)
+                    const $callCenterMenu = $('.nav-item.has-submenu').filter(function() {
+                        return $(this).find('.nav-text').text() === '콜센터 관리';
+                    });
+                    
+                    if ($callCenterMenu.length) {
+                        $callCenterMenu.addClass('active');
+                        $callCenterMenu.find('.nav-arrow').text('^');
+                    }
+                    
+                    // 현재 인성 시스템 서브메뉴 링크 활성화
+                    const currentInsungPage = currentPath.split('/insung/')[1];
+                    let $currentLink = null;
+                    
+                    if (currentInsungPage === 'cc-list') {
+                        $currentLink = $(`.submenu a[href*="insung/cc-list"]`);
+                    } else if (currentInsungPage === 'company-list') {
+                        $currentLink = $(`.submenu a[href*="insung/company-list"]`);
+                    } else if (currentInsungPage === 'user-list') {
+                        $currentLink = $(`.submenu a[href*="insung/user-list"]`);
+                    }
+                    
+                    if ($currentLink && $currentLink.length) {
+                        $currentLink.addClass('active');
+                    }
+                }
                 // 기본적으로는 아무 메뉴도 펼치지 않음 (홈페이지 등)
                 else {
                     // 아무것도 하지 않음
@@ -371,7 +409,7 @@
         
         <main class="main-content">
             <?php if (isset($content_header)): ?>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-3 w-full">
+            <div class="bg-white rounded-lg shadow-sm border-2 border-gray-300 py-6 px-6 mb-3 w-full">
                 <div class="flex items-center">
                     <h1 class="text-xl font-bold text-gray-800"><?= $content_header['title'] ?></h1>
                     <p class="text-sm text-gray-600 ml-3"><?= $content_header['description'] ?></p>
@@ -380,9 +418,24 @@
             <?php endif; ?>
             
             <?php if (session()->getFlashdata('success')): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            <div id="successMessage" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 transition-opacity duration-1000">
                 <?= session()->getFlashdata('success') ?>
             </div>
+            <script>
+            // 5초 후 서서히 숨기기
+            document.addEventListener('DOMContentLoaded', function() {
+                const successMessage = document.getElementById('successMessage');
+                if (successMessage) {
+                    setTimeout(function() {
+                        successMessage.style.opacity = '0';
+                        successMessage.style.transition = 'opacity 1s ease-out';
+                        setTimeout(function() {
+                            successMessage.style.display = 'none';
+                        }, 1000);
+                    }, 5000);
+                }
+            });
+            </script>
             <?php endif; ?>
             
             <?php if (session()->getFlashdata('error')): ?>

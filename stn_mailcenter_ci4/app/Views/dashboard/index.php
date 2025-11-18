@@ -62,13 +62,13 @@
     </div>
 
     <!-- 메인 콘텐츠 영역 -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- 최근 주문 -->
         <div class="lg:col-span-2">
             <div class="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div class="p-6 border-b border-gray-200">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900">최근 주문</h3>
+                        <h3 class="text-lg font-semibold text-gray-900">오늘의 주문</h3>
                         <a href="<?= base_url('delivery/list') ?>" class="text-sm text-blue-600 hover:text-blue-800">전체보기</a>
                     </div>
                 </div>
@@ -82,7 +82,7 @@
                                         <span class="text-xs font-medium text-gray-900"><?= $order['id'] ?></span>
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <span class="text-xs font-medium text-gray-900"><?= $order['service'] ?> - <?= $order['customer'] ?></span>
+                                        <span class="text-xs font-medium text-gray-900"><?= $order['service'] ?? '-' ?> - <?= $order['customer'] ?? '-' ?></span>
                                     </div>
                                 </div>
                             </div>
@@ -105,7 +105,7 @@
         </div>
 
         <!-- 빠른 액션 -->
-        <div class="space-y-6">
+        <div class="space-y-4">
             <!-- 빠른 주문접수 -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">빠른 주문접수</h3>

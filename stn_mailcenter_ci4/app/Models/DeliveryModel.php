@@ -64,8 +64,19 @@ class DeliveryModel extends Model
         $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
         $builder->join('tbl_orders_quick oq', 'o.id = oq.order_id', 'left');
         
-        // 권한에 따른 필터링
-        if (isset($filters['customer_id']) && $filters['customer_id']) {
+        // daumdata 로그인 필터링 (cc_code 또는 comp_name)
+        if (isset($filters['cc_code']) && $filters['cc_code']) {
+            // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
+            // tbl_orders의 company_name과 tbl_company_list의 comp_name을 매칭
+            // tbl_company_list를 통해 cc_code로 필터링
+            $builder->join('tbl_company_list cl', 'o.company_name = cl.comp_name', 'inner');
+            $builder->join('tbl_cc_list ccl', 'cl.cc_idx = ccl.idx', 'inner');
+            $builder->where('ccl.cc_code', $filters['cc_code']);
+        } elseif (isset($filters['comp_name']) && $filters['comp_name']) {
+            // user_type = 5: 본인 고객사의 주문접수 리스트만
+            $builder->where('o.company_name', $filters['comp_name']);
+        } elseif (isset($filters['customer_id']) && $filters['customer_id']) {
+            // STN 로그인: 기존 로직
             $builder->where('o.customer_id', $filters['customer_id']);
         }
         

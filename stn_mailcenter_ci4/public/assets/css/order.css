@@ -1,7 +1,8 @@
 /* 주문 폼 스타일 */
 .order-form {
     border-radius: 16px;
-    max-width: 800px;
+    max-width: 100%;
+    width: 100%;
 }
 
 .form-section {

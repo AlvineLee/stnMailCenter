@@ -218,6 +218,19 @@ $routes->group('group-company', function($routes) {
 // 기본 홈 라우트 (리다이렉트)
 $routes->get('home', 'Dashboard::index');
 
+// 인성 시스템 관련 라우트
+$routes->group('insung', function($routes) {
+    $routes->get('cc-list', 'Insung::ccList');
+    $routes->get('company-list', 'Insung::companyList');
+    $routes->get('user-list', 'Insung::userList');
+    $routes->get('getCompaniesByCc', 'Insung::getCompaniesByCc');
+    $routes->get('getCompaniesByCcForSelect', 'Insung::getCompaniesByCcForSelect');
+    $routes->post('uploadCcLogo', 'Insung::uploadCcLogo');
+    $routes->delete('deleteCcLogo/(:segment)', 'Insung::deleteCcLogo/$1');
+    $routes->post('uploadCompanyLogos', 'Insung::uploadCompanyLogos');
+    $routes->delete('deleteCompanyLogo/(:segment)', 'Insung::deleteCompanyLogo/$1');
+});
+
 // 테스트 라우트
 $routes->get('test/db', 'Test::db');
 $routes->get('test/tables', 'Test::tables');

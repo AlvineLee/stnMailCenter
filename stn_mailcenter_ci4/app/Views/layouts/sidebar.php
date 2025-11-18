@@ -1,18 +1,29 @@
 <aside class="sidebar">
     <div class="sidebar-header">
         <?php
-        // 로그인한 사용자의 고객사 로고 조회 (본점 로고)
+        // 로그인한 사용자의 고객사 로고 조회
         $customerLogoPath = null;
-        $customerId = session()->get('customer_id');
-        if ($customerId) {
-            $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
-            
-            // 사용자가 속한 본점 ID 찾기
-            $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
-            if ($headOfficeId) {
-                $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
-                if ($headOffice && !empty($headOffice['logo_path'])) {
-                    $customerLogoPath = base_url($headOffice['logo_path']);
+        $loginType = session()->get('login_type');
+        
+        if ($loginType === 'daumdata') {
+            // daumdata 로그인: 세션에서 로고 경로 확인
+            $companyLogoPathFromSession = session()->get('company_logo_path');
+            if ($companyLogoPathFromSession) {
+                $customerLogoPath = base_url($companyLogoPathFromSession);
+            }
+        } else {
+            // STN 로그인: 본점 로고 조회
+            $customerId = session()->get('customer_id');
+            if ($customerId) {
+                $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
+                
+                // 사용자가 속한 본점 ID 찾기
+                $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
+                if ($headOfficeId) {
+                    $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
+                    if ($headOffice && !empty($headOffice['logo_path'])) {
+                        $customerLogoPath = base_url($headOffice['logo_path']);
+                    }
                 }
             }
         }
@@ -32,7 +43,7 @@
     
     <div class="user-info">
         <div class="user-details">
-            <span class="user-name"><?= session()->get('real_name') ?? session()->get('username') ?? 'Guest' ?></span>
+            <span class="user-name"><?= session()->get('real_name') ?? session()->get('user_name') ?? session()->get('username') ?? 'Guest' ?></span>
         </div>
         <a href="<?= base_url('auth/logout') ?>" class="logout-link">➡ logout</a>
     </div>
@@ -98,6 +109,70 @@
                     <span class="nav-text">회원정보</span>
                 </a>
             </li>
+            <?php
+            $loginType = session()->get('login_type');
+            $userType = session()->get('user_type');
+            $userRole = session()->get('user_role');
+            
+            // daumdata 로그인 메뉴
+            if ($loginType === 'daumdata'):
+                // 고객 관리 메뉴 (user_type = 1 또는 3)
+                if ($userType == '1' || $userType == '3'):
+            ?>
+            <li class="nav-item has-submenu">
+                <a href="#" class="nav-link" data-toggle="submenu">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-text">고객 관리</span>
+                    <span class="nav-arrow">v</span>
+                </a>
+                <ul class="submenu">
+                    <?php if ($userType == '1'): ?>
+                        <!-- user_type = 1: 전체 메뉴 -->
+                        <li><a href="<?= base_url('insung/company-list') ?>">고객사 관리</a></li>
+                        <li><a href="<?= base_url('insung/user-list') ?>">고객사 회원정보</a></li>
+                    <?php else: ?>
+                        <!-- user_type = 3: 고객사회원정보만 -->
+                        <li><a href="<?= base_url('insung/user-list') ?>">고객사 회원정보</a></li>
+                    <?php endif; ?>
+                </ul>
+            </li>
+            <?php
+                endif;
+                
+                // 콜센터 관리 메뉴 (user_type = 1)
+                if ($userType == '1'):
+            ?>
+            <li class="nav-item has-submenu">
+                <a href="#" class="nav-link" data-toggle="submenu">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">콜센터 관리</span>
+                    <span class="nav-arrow">v</span>
+                </a>
+                <ul class="submenu">
+                    <li><a href="<?= base_url('insung/cc-list') ?>">콜센터 목록</a></li>
+                </ul>
+            </li>
+            <?php
+                endif;
+                
+                // 관리자 설정 메뉴 (user_type = 1)
+                if ($userType == '1'):
+            ?>
+            <li class="nav-item has-submenu">
+                <a href="#" class="nav-link" data-toggle="submenu">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">관리자 설정</span>
+                    <span class="nav-arrow">v</span>
+                </a>
+                <ul class="submenu">
+                    <li><a href="<?= base_url('admin/order-type') ?>">오더유형 설정</a></li>
+                </ul>
+            </li>
+            <?php
+                endif;
+            else:
+                // STN 로그인 메뉴
+            ?>
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
                     <span class="nav-icon">👥</span>
@@ -132,7 +207,7 @@
                     <li><a href="<?= base_url('store-registration') ?>">🏪 입점관리</a></li>
                 </ul>
             </li>
-            <?php if (session()->get('user_role') === 'super_admin'): ?>
+            <?php if ($userRole === 'super_admin'): ?>
             
             <!-- 콜센터 관리 -->
             <li class="nav-item has-submenu">
@@ -175,6 +250,7 @@
                     <li><a href="<?= base_url('admin/notification') ?>">알림설정</a></li>
                 </ul>
             </li>
+            <?php endif; ?>
             <?php endif; ?>
         </ul>
     </nav>

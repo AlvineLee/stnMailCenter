@@ -111,10 +111,50 @@
     </div>
 </div>
 
+<!-- 경고 메시지 모달 -->
+<div id="warningModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-sm" style="z-index: 10000 !important;">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-bold text-gray-800">알림</h3>
+        </div>
+        <div class="px-6 py-4">
+            <p id="warningMessage" class="text-gray-700 whitespace-pre-line"></p>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+            <button onclick="closeWarningModal()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                확인
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- 다음 주소 검색 API 스크립트 -->
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 
 <script>
+// 경고 모달 열기
+function showWarningModal(message) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    document.getElementById('warningMessage').textContent = message;
+    document.getElementById('warningModal').classList.remove('hidden');
+}
+
+// 경고 모달 닫기
+function closeWarningModal() {
+    document.getElementById('warningModal').classList.add('hidden');
+    
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
 // 다음 주소 검색 API
 function openAddressSearch() {
     new daum.Postcode({
@@ -180,7 +220,7 @@ function saveAll() {
 
     // 기본 정보 유효성 검사
     if (!realName) {
-        alert('담당자명을 입력해주세요.');
+        showWarningModal('담당자명을 입력해주세요.');
         return;
     }
 
@@ -190,17 +230,17 @@ function saveAll() {
         passwordChange = true;
         
         if (!currentPassword) {
-            alert('현재 비밀번호를 입력해주세요.');
+            showWarningModal('현재 비밀번호를 입력해주세요.');
             return;
         }
 
         if (!newPassword || newPassword.length < 4) {
-            alert('새 비밀번호는 최소 4자 이상이어야 합니다.');
+            showWarningModal('새 비밀번호는 최소 4자 이상이어야 합니다.');
             return;
         }
 
         if (newPassword !== newPasswordConfirm) {
-            alert('새 비밀번호가 일치하지 않습니다.');
+            showWarningModal('새 비밀번호가 일치하지 않습니다.');
             return;
         }
     }
@@ -232,7 +272,7 @@ function saveAll() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message || '정보가 성공적으로 저장되었습니다.');
+            showWarningModal(data.message || '정보가 성공적으로 저장되었습니다.');
             // 비밀번호 필드 초기화
             if (passwordChange) {
                 document.getElementById('current-password').value = '';
@@ -240,18 +280,36 @@ function saveAll() {
                 document.getElementById('new-password-confirm').value = '';
             }
             // 페이지 새로고침하여 최신 정보 표시
-            location.reload();
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
         } else {
-            alert(data.message || '정보 저장에 실패했습니다.');
+            // 에러 메시지 구성
+            let errorMessage = data.message || '정보 저장에 실패했습니다.';
             if (data.errors) {
+                const errorList = Object.values(data.errors).join('\n');
+                if (errorList) {
+                    errorMessage += '\n\n' + errorList;
+                }
                 console.error('Validation errors:', data.errors);
             }
+            showWarningModal(errorMessage);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('정보 저장 중 오류가 발생했습니다.');
+        showWarningModal('정보 저장 중 오류가 발생했습니다.');
     });
 }
+
+// ESC 키로 팝업 닫기
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const warningModal = document.getElementById('warningModal');
+        if (warningModal && !warningModal.classList.contains('hidden')) {
+            closeWarningModal();
+        }
+    }
+});
 </script>
 <?= $this->endSection() ?>
