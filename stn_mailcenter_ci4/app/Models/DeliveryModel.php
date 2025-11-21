@@ -251,4 +251,78 @@ class DeliveryModel extends Model
             'next_page' => $page < $totalPages ? $page + 1 : null
         ];
     }
+
+    /**
+     * 인성 주문번호가 있는 주문들 조회 (동기화용)
+     * 취소/완료된 주문은 제외
+     * 주문별 API 정보를 JOIN하여 함께 조회 (세션 의존 제거)
+     * 
+     * @param array $filters 필터 조건 (daumdata 로그인 필터링 포함)
+     * @return array 주문 목록 (API 정보 포함)
+     */
+    public function getInsungOrdersForSync($filters = [])
+    {
+        $builder = $this->db->table('tbl_orders o');
+        
+        // 주문 정보와 API 정보를 함께 조회
+        $builder->select('
+            o.id,
+            o.order_number,
+            o.insung_order_number,
+            o.status,
+            o.total_amount,
+            o.created_at,
+            o.updated_at,
+            api.mcode as m_code,
+            api.cccode as cc_code,
+            api.token,
+            api.idx as api_idx,
+            u.user_id as insung_user_id
+        ');
+        
+        // 인성 시스템 주문만 조회
+        $builder->where('o.order_system', 'insung');
+        
+        // 인성 주문번호가 있는 주문만 조회
+        $builder->where('o.insung_order_number IS NOT NULL');
+        $builder->where('o.insung_order_number !=', '');
+        
+        // 취소/완료된 주문은 제외 (동기화 불필요)
+        $builder->whereNotIn('o.status', ['cancelled', 'delivered']);
+        
+        // API 정보를 위한 JOIN
+        // tbl_orders.user_id -> tbl_users_list.idx
+        $builder->join('tbl_users_list u', 'o.user_id = u.idx', 'inner');
+        
+        // tbl_users_list.user_company -> tbl_company_list.comp_code
+        $builder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'inner');
+        
+        // tbl_company_list.cc_idx -> tbl_cc_list.idx
+        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+        
+        // tbl_cc_list.cc_code -> tbl_api_list.api_code (collation 충돌 해결)
+        $builder->join('tbl_api_list api', 'CONVERT(cc.cc_code USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(api.api_code USING utf8mb4) COLLATE utf8mb4_general_ci', 'inner', false);
+        
+        // API 정보가 있는 주문만 조회 (NULL 체크)
+        $builder->where('api.mcode IS NOT NULL');
+        $builder->where('api.cccode IS NOT NULL');
+        $builder->where('api.token IS NOT NULL');
+        $builder->where('api.token !=', '');
+        
+        // daumdata 로그인 필터링 (선택적)
+        if (isset($filters['cc_code']) && $filters['cc_code']) {
+            $builder->where('cc.cc_code', $filters['cc_code']);
+        } elseif (isset($filters['comp_name']) && $filters['comp_name']) {
+            $builder->where('c.comp_name', $filters['comp_name']);
+        } elseif (isset($filters['customer_id']) && $filters['customer_id']) {
+            $builder->where('o.customer_id', $filters['customer_id']);
+        }
+        
+        // 최근 업데이트된 주문부터 (최대 50개)
+        $builder->orderBy('o.updated_at', 'DESC');
+        $builder->limit(50);
+        
+        $query = $builder->get();
+        return $query->getResultArray();
+    }
 }

@@ -49,11 +49,16 @@ class InsungUsersListModel extends Model
             b.comp_owner,
             b.cc_idx,
             b.logo_path,
-            c.cc_code
+            d.mcode as m_code,
+            d.cccode as cc_code,
+            d.token,
+            d.ckey
         ');
         
         $builder->join('tbl_company_list b', 'a.user_company = b.comp_code', 'left');
         $builder->join('tbl_cc_list c', 'b.cc_idx = c.idx', 'left');
+        // collation 충돌 해결: CONVERT를 사용하여 collation 통일
+        $builder->join('tbl_api_list d', 'CONVERT(c.cc_code USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(d.api_code USING utf8mb4) COLLATE utf8mb4_general_ci', 'left', false);
         $builder->where('a.user_id', $userId);
         $builder->where('a.user_pass', $password); // 비밀번호는 평문으로 저장되어 있다고 가정
         
@@ -88,11 +93,16 @@ class InsungUsersListModel extends Model
             b.comp_owner,
             b.cc_idx,
             b.logo_path,
-            c.cc_code
+            d.mcode as m_code,
+            d.cccode as cc_code,
+            d.token,
+            d.ckey
         ');
         
         $builder->join('tbl_company_list b', 'a.user_company = b.comp_code', 'left');
         $builder->join('tbl_cc_list c', 'b.cc_idx = c.idx', 'left');
+        // collation 충돌 해결: CONVERT를 사용하여 collation 통일
+        $builder->join('tbl_api_list d', 'CONVERT(c.cc_code USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(d.api_code USING utf8mb4) COLLATE utf8mb4_general_ci', 'left', false);
         $builder->where('a.user_id', $userId);
         
         $query = $builder->get();

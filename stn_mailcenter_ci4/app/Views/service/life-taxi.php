@@ -28,7 +28,8 @@
                                name="departure_address" 
                                readonly
                                placeholder="현재 위치를 가져오는 중..." 
-                               class="flex-1 w-full px-4 py-2 text-sm border border-gray-300 rounded-md bg-gray-50">
+                               class="flex-1 w-full px-4 py-2 text-sm border border-gray-300 rounded-md bg-gray-50 cursor-pointer"
+                               onclick="openDepartureAddressSearch()">
                         <input type="hidden" id="departure_lat" name="departure_lat">
                         <input type="hidden" id="departure_lng" name="departure_lng">
                         <input type="hidden" id="departure_zonecode" name="departure_zonecode">
@@ -334,9 +335,60 @@ function setDepartureMarker(lat, lng) {
     // 폼에 좌표 저장
     document.getElementById('departure_lat').value = lat;
     document.getElementById('departure_lng').value = lng;
+    
+    // 지도 범위 조정
+    const bounds = new kakao.maps.LatLngBounds();
+    bounds.extend(markerPosition);
+    if (destinationMarker) {
+        bounds.extend(destinationMarker.getPosition());
+    }
+    map.setBounds(bounds);
+    
+    // 지도 중심 이동
+    map.setCenter(markerPosition);
 }
 
-// 도착지 주소검색 팝업 열기
+// 출발지 주소 검색
+function openDepartureAddressSearch() {
+    new daum.Postcode({
+        oncomplete: function(data) {
+            let addr = '';
+            if (data.userSelectedType === 'R') {
+                addr = data.roadAddress;
+            } else {
+                addr = data.jibunAddress;
+            }
+            
+            document.getElementById('departure_address').value = addr;
+            document.getElementById('departure_zonecode').value = data.zonecode;
+            
+            // 주소로 좌표 검색
+            geocoder.addressSearch(addr, function(result, status) {
+                if (status === kakao.maps.services.Status.OK) {
+                    const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
+                    
+                    // 출발지 마커 표시
+                    setDepartureMarker(result[0].y, result[0].x);
+                    
+                    // currentLocation 업데이트
+                    currentLocation = {
+                        lat: result[0].y,
+                        lng: result[0].x
+                    };
+                    
+                    // 경로 계산 (도착지가 설정되어 있는 경우)
+                    const destLat = parseFloat(document.getElementById('destination_lat').value);
+                    const destLng = parseFloat(document.getElementById('destination_lng').value);
+                    if (destLat && destLng && !isNaN(destLat) && !isNaN(destLng)) {
+                        calculateRoute(result[0].y, result[0].x, destLat, destLng);
+                    }
+                }
+            });
+        }
+    }).open();
+}
+
+// 도착지 주소 검색
 function openDestinationAddressSearch() {
     new daum.Postcode({
         oncomplete: function(data) {
@@ -359,7 +411,11 @@ function openDestinationAddressSearch() {
                     setDestinationMarker(result[0].y, result[0].x);
                     
                     // 경로 계산
-                    if (currentLocation) {
+                    const startLat = parseFloat(document.getElementById('departure_lat').value);
+                    const startLng = parseFloat(document.getElementById('departure_lng').value);
+                    if (startLat && startLng && !isNaN(startLat) && !isNaN(startLng)) {
+                        calculateRoute(startLat, startLng, result[0].y, result[0].x);
+                    } else if (currentLocation) {
                         calculateRoute(currentLocation.lat, currentLocation.lng, result[0].y, result[0].x);
                     }
                 }

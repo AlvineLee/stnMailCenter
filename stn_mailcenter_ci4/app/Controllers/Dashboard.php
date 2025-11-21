@@ -5,6 +5,8 @@ namespace App\Controllers;
 use App\Controllers\BaseController;
 use App\Models\OrderModel;
 use App\Models\DashboardModel;
+use App\Libraries\InsungApiService;
+use App\Models\InsungApiListModel;
 
 class Dashboard extends BaseController
 {
@@ -182,5 +184,236 @@ class Dashboard extends BaseController
         ];
         
         return view('dashboard/orders', $data);
+    }
+    
+    /**
+     * 인성 API 인증 테스트
+     */
+    public function testInsungApi()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ]);
+        }
+        
+        $loginType = session()->get('login_type');
+        if ($loginType !== 'daumdata') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'daumdata 로그인만 테스트 가능합니다.'
+            ]);
+        }
+        
+        try {
+            $mCode = session()->get('m_code');
+            $ccCode = session()->get('cc_code');
+            $token = session()->get('token');
+            $userId = session()->get('user_id');
+            
+            if (empty($mCode) || empty($ccCode) || empty($token)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '세션에 API 정보가 없습니다.',
+                    'session_data' => [
+                        'm_code' => $mCode,
+                        'cc_code' => $ccCode,
+                        'token' => $token ? '있음' : '없음'
+                    ]
+                ]);
+            }
+            
+            // API 정보 조회 (api_idx 찾기)
+            $apiModel = new InsungApiListModel();
+            $apiInfo = $apiModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+            
+            if (!$apiInfo) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보를 찾을 수 없습니다.',
+                    'search_params' => [
+                        'mcode' => $mCode,
+                        'cccode' => $ccCode
+                    ]
+                ]);
+            }
+            
+            $apiIdx = $apiInfo['idx'];
+            
+            // InsungApiService 인스턴스 생성
+            $insungApi = new InsungApiService();
+            
+            // 회원 상세 조회 API 호출 (토큰 자동 갱신 포함)
+            $result = $insungApi->getMemberDetail($mCode, $ccCode, $token, $userId, $apiIdx);
+            
+            if (!$result) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 호출 실패 (응답 없음)'
+                ]);
+            }
+            
+            $code = isset($result[0]->code) ? $result[0]->code : 'unknown';
+            
+            if ($code == "1000") {
+                // 성공
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'API 인증 성공',
+                    'code' => $code,
+                    'data' => [
+                        'user_id' => $userId,
+                        'm_code' => $mCode,
+                        'cc_code' => $ccCode,
+                        'member_info' => isset($result[1]) ? $result[1] : null
+                    ],
+                    'raw_response' => $result
+                ]);
+            } else if ($code == "1001") {
+                // 토큰 만료 (이미 자동 갱신 및 재시도됨)
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '토큰 만료 (자동 갱신 시도됨)',
+                    'code' => $code,
+                    'note' => '토큰이 갱신되었을 수 있습니다. 다시 시도해주세요.'
+                ]);
+            } else {
+                // 기타 에러
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 호출 오류',
+                    'code' => $code,
+                    'raw_response' => $result
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Insung API Test Error: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '테스트 중 오류 발생: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    
+    /**
+     * 토큰 갱신 테스트
+     */
+    public function testTokenRefresh()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ]);
+        }
+        
+        $loginType = session()->get('login_type');
+        if ($loginType !== 'daumdata') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'daumdata 로그인만 테스트 가능합니다.'
+            ]);
+        }
+        
+        try {
+            $mCode = session()->get('m_code');
+            $ccCode = session()->get('cc_code');
+            
+            if (empty($mCode) || empty($ccCode)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '세션에 API 정보가 없습니다.'
+                ]);
+            }
+            
+            // API 정보 조회
+            $apiModel = new InsungApiListModel();
+            $apiInfo = $apiModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+            
+            if (!$apiInfo) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보를 찾을 수 없습니다.'
+                ]);
+            }
+            
+            $apiIdx = $apiInfo['idx'];
+            $oldToken = $apiInfo['token'] ?? '';
+            $mcode = $apiInfo['mcode'] ?? '';
+            $cccode = $apiInfo['cccode'] ?? '';
+            $ckey = $apiInfo['ckey'] ?? '';
+            
+            // 필수 필드 확인
+            if (empty($mcode) || empty($cccode) || empty($ckey)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보에 필수 필드가 누락되었습니다.',
+                    'api_idx' => $apiIdx,
+                    'missing_fields' => [
+                        'mcode' => empty($mcode),
+                        'cccode' => empty($cccode),
+                        'ckey' => empty($ckey)
+                    ]
+                ]);
+            }
+            
+            // ckey 값 확인 (디버깅용 - 처음 10자만 표시)
+            $ckeyPreview = strlen($ckey) > 10 ? substr($ckey, 0, 10) . '...' : $ckey;
+            
+            // InsungApiService 인스턴스 생성
+            $insungApi = new InsungApiService();
+            
+            // 토큰 갱신
+            $newToken = $insungApi->updateTokenKey($apiIdx);
+            
+            if ($newToken) {
+                // 갱신된 토큰으로 세션 업데이트
+                session()->set('token', $newToken);
+                
+                // DB에서 갱신된 토큰 확인
+                $updatedApiInfo = $apiModel->getApiInfoByIdx($apiIdx);
+                $dbToken = $updatedApiInfo['token'] ?? '';
+                
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => '토큰 갱신 성공',
+                    'data' => [
+                        'api_idx' => $apiIdx,
+                        'mcode' => $mcode,
+                        'cccode' => $cccode,
+                        'old_token' => $oldToken ? substr($oldToken, 0, 20) . '...' : '없음',
+                        'new_token' => substr($newToken, 0, 20) . '...',
+                        'token_length' => strlen($newToken),
+                        'db_token_updated' => !empty($dbToken) && $dbToken === $newToken
+                    ]
+                ]);
+            } else {
+                // 로그 파일에서 최근 에러 확인을 위한 안내
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '토큰 갱신 실패',
+                    'api_idx' => $apiIdx,
+                    'mcode' => $mcode,
+                    'cccode' => $cccode,
+                    'ckey_exists' => !empty($ckey),
+                    'ckey_length' => strlen($ckey),
+                    'ckey_preview' => $ckeyPreview,
+                    'note' => 'ckey 인증 실패. DB의 ckey 값이 인성 API 서버에 등록된 값과 일치하는지 확인하세요.'
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Token Refresh Test Error: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '테스트 중 오류 발생: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 }

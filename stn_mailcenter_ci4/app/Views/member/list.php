@@ -74,8 +74,8 @@
                    id="phone"
                    value="<?= esc($user['phone'] ?? '') ?>" 
                    class="form-input">
-        </div>
-    </div>
+            </div>
+            </div>
 
     <!-- 비밀번호 변경 섹션 -->
     <div class="border-t border-gray-200 pt-6">
@@ -108,8 +108,8 @@
                 class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-3 rounded-md transition-colors">
             저장
         </button>
+        </div>
     </div>
-</div>
 
 <!-- 경고 메시지 모달 -->
 <div id="warningModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
@@ -119,7 +119,7 @@
         </div>
         <div class="px-6 py-4">
             <p id="warningMessage" class="text-gray-700 whitespace-pre-line"></p>
-        </div>
+    </div>
         <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
             <button onclick="closeWarningModal()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
                 확인

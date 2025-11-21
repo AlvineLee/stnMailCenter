@@ -79,7 +79,8 @@ class Filters extends BaseFilters
         'after' => [
             // 'honeypot',
             // 'secureheaders',
-            'toolbar' => ['except' => ['delivery/printWaybill']], // 송장출력 페이지에서는 Debug Toolbar 비활성화
+            // Debug Toolbar는 development 환경에서만 활성화
+            // 'toolbar' => ['except' => ['delivery/printWaybill']], // 송장출력 페이지에서는 Debug Toolbar 비활성화
         ],
     ];
 

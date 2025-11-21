@@ -791,17 +791,38 @@ function uploadLogoFile(event) {
 function deleteLogo() {
     const customerId = document.getElementById('logo_customer_id').value;
     
+    if (!customerId) {
+        alert('고객사 ID가 없습니다.');
+        return;
+    }
+    
     if (!confirm('로고를 삭제하시겠습니까?')) {
         return;
     }
     
+    // CSRF 토큰 가져오기
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const csrfHeader = document.querySelector('meta[name="csrf-header"]')?.getAttribute('content') || 'X-CSRF-TOKEN';
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    };
+    
+    if (csrfToken) {
+        headers[csrfHeader] = csrfToken;
+    }
+    
     fetch('<?= base_url('group-company/deleteLogo') ?>/' + customerId, {
-        method: 'DELETE',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+        method: 'POST',
+        headers: headers
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             alert(data.message);
@@ -813,7 +834,7 @@ function deleteLogo() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('로고 삭제 중 오류가 발생했습니다.');
+        alert('로고 삭제 중 오류가 발생했습니다: ' + error.message);
     });
 }
 

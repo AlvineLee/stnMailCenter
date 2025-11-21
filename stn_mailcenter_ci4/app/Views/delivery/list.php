@@ -1481,6 +1481,133 @@ function cancelOrder(orderId) {
         alert('주문 취소: ' + orderId);
     }
 }
+
+// 인성 API 주문 동기화 (리스트 페이지 접근 시에만 실행)
+<?php if (session()->get('login_type') === 'daumdata'): ?>
+// 동기화 중 플래그 (중복 실행 방지)
+let isSyncing = false;
+let syncIndicator = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // URL 파라미터로 새로고침 여부 확인 (동기화 후 자동 새로고침인지 체크)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAutoReload = urlParams.get('synced') === '1';
+    
+    // 자동 새로고침이 아닌 경우에만 동기화 실행
+    if (!isAutoReload) {
+        // 페이지 로드 후 약간의 지연을 두고 동기화 실행
+        setTimeout(function() {
+            syncInsungOrders();
+        }, 1500);
+    }
+});
+
+function syncInsungOrders() {
+    // 이미 동기화 중이면 실행하지 않음
+    if (isSyncing) {
+        return;
+    }
+    
+    isSyncing = true;
+    
+    // 기존 인디케이터가 있으면 제거
+    if (syncIndicator && syncIndicator.parentNode) {
+        syncIndicator.parentNode.removeChild(syncIndicator);
+    }
+    
+    const startTime = Date.now();
+    
+    fetch('/delivery/syncInsungOrders', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        // 동기화할 주문이 없으면 인디케이터 표시하지 않음
+        if (data.success && data.total_count === 0) {
+            isSyncing = false;
+            return;
+        }
+        
+        // 동기화할 주문이 있으면 인디케이터 표시
+        const elapsedTime = Date.now() - startTime;
+        const minDisplayTime = 2000; // 최소 2초 표시
+        
+        // 동기화 중 표시
+        syncIndicator = document.createElement('div');
+        syncIndicator.id = 'sync-indicator';
+        syncIndicator.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #6366f1; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10000; font-size: 14px; display: flex; align-items: center; gap: 10px;';
+        syncIndicator.innerHTML = '<span>⏳</span><span>인성 API 동기화 중...</span>';
+        document.body.appendChild(syncIndicator);
+        
+        // 동기화 완료 표시
+        if (data.success) {
+            syncIndicator.style.background = '#10b981';
+            syncIndicator.innerHTML = '<span>✅</span><span>' + (data.message || `${data.synced_count}개 주문 동기화 완료`) + '</span>';
+            
+            // 최소 표시 시간 보장
+            const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
+            
+            setTimeout(function() {
+                if (syncIndicator && syncIndicator.parentNode) {
+                    syncIndicator.parentNode.removeChild(syncIndicator);
+                    syncIndicator = null;
+                }
+                
+                // 동기화된 주문이 있으면 리스트 새로고침 (3초 후)
+                // synced=1 파라미터를 추가하여 자동 새로고침임을 표시
+                if (data.synced_count > 0) {
+                    setTimeout(function() {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('synced', '1');
+                        window.location.href = currentUrl.toString();
+                    }, 3000);
+                }
+            }, remainingTime + 1000);
+        } else {
+            syncIndicator.style.background = '#ef4444';
+            syncIndicator.innerHTML = '<span>❌</span><span>동기화 실패: ' + (data.message || '알 수 없는 오류') + '</span>';
+            
+            const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
+            
+            setTimeout(function() {
+                if (syncIndicator && syncIndicator.parentNode) {
+                    syncIndicator.parentNode.removeChild(syncIndicator);
+                    syncIndicator = null;
+                }
+            }, remainingTime + 2000);
+        }
+    })
+    .catch(error => {
+        console.error('Sync error:', error);
+        // 에러 발생 시에만 인디케이터 표시
+        syncIndicator = document.createElement('div');
+        syncIndicator.id = 'sync-indicator';
+        syncIndicator.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10000; font-size: 14px; display: flex; align-items: center; gap: 10px;';
+        syncIndicator.innerHTML = '<span>❌</span><span>동기화 중 오류 발생</span>';
+        document.body.appendChild(syncIndicator);
+        
+        setTimeout(function() {
+            if (syncIndicator && syncIndicator.parentNode) {
+                syncIndicator.parentNode.removeChild(syncIndicator);
+                syncIndicator = null;
+            }
+        }, 3000);
+    })
+    .finally(() => {
+        isSyncing = false;
+    });
+}
+<?php endif; ?>
 </script>
 
 <?= $this->endSection() ?>

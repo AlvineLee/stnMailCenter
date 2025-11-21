@@ -13,16 +13,16 @@
             }
         } else {
             // STN 로그인: 본점 로고 조회
-            $customerId = session()->get('customer_id');
-            if ($customerId) {
-                $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
-                
-                // 사용자가 속한 본점 ID 찾기
-                $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
-                if ($headOfficeId) {
-                    $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
-                    if ($headOffice && !empty($headOffice['logo_path'])) {
-                        $customerLogoPath = base_url($headOffice['logo_path']);
+        $customerId = session()->get('customer_id');
+        if ($customerId) {
+            $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
+            
+            // 사용자가 속한 본점 ID 찾기
+            $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
+            if ($headOfficeId) {
+                $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
+                if ($headOffice && !empty($headOffice['logo_path'])) {
+                    $customerLogoPath = base_url($headOffice['logo_path']);
                     }
                 }
             }

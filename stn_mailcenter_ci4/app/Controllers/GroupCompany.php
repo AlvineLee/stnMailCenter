@@ -113,7 +113,8 @@ class GroupCompany extends BaseController
                 'customer_code' => $customerCode,
                 'customer_name' => $inputData['company_name'],
                 'contact_phone' => !empty($inputData['contact_phone']) ? $inputData['contact_phone'] : null,
-                'address' => !empty($inputData['address']) ? $inputData['address'] : null
+                'address' => !empty($inputData['address']) ? $inputData['address'] : null,
+                'memo' => !empty($inputData['memo']) ? $inputData['memo'] : null
             ];
 
             $customerId = $this->customerHierarchyModel->createHeadOffice($customerData);
@@ -458,6 +459,14 @@ class GroupCompany extends BaseController
         }
 
         try {
+            // customerId 유효성 검사
+            if (empty($customerId)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '고객사 ID가 필요합니다.'
+                ])->setStatusCode(400);
+            }
+
             // 고객사 정보 조회
             $customer = $this->customerHierarchyModel->getCustomerById($customerId);
             
@@ -472,7 +481,10 @@ class GroupCompany extends BaseController
             if (!empty($customer['logo_path'])) {
                 $oldLogoPath = FCPATH . $customer['logo_path'];
                 if (file_exists($oldLogoPath)) {
-                    @unlink($oldLogoPath);
+                    if (!@unlink($oldLogoPath)) {
+                        log_message('warning', "GroupCompany::deleteLogo - Failed to delete logo file: {$oldLogoPath}");
+                        // 파일 삭제 실패해도 DB 업데이트는 진행
+                    }
                 }
             }
 
@@ -482,7 +494,8 @@ class GroupCompany extends BaseController
             ]);
 
             if (!$updateResult) {
-                throw new \Exception('로고 삭제에 실패했습니다.');
+                log_message('error', "GroupCompany::deleteLogo - Update failed for customer ID: {$customerId}");
+                throw new \Exception('로고 삭제에 실패했습니다. 데이터베이스 업데이트 오류.');
             }
 
             return $this->response->setJSON([
@@ -492,11 +505,12 @@ class GroupCompany extends BaseController
 
         } catch (\Exception $e) {
             log_message('error', 'GroupCompany::deleteLogo - ' . $e->getMessage());
+            log_message('error', 'GroupCompany::deleteLogo - Stack trace: ' . $e->getTraceAsString());
             
             return $this->response->setJSON([
                 'success' => false,
                 'message' => $e->getMessage()
-                ])->setStatusCode(500);
+            ])->setStatusCode(500);
         }
     }
 

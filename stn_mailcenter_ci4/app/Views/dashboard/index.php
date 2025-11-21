@@ -1,6 +1,44 @@
 <?= $this->extend('layouts/header') ?>
 
 <?= $this->section('content') ?>
+<?php
+// 임시 디버그: m_code, cc_code 확인
+$loginType = session()->get('login_type');
+if ($loginType === 'daumdata') {
+    $mCode = session()->get('m_code');
+    $ccCode = session()->get('cc_code');
+    $ckey = session()->get('ckey');
+    $ukey = session()->get('ukey');
+    $akey = session()->get('akey');
+?>
+<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded">
+    <p class="font-bold">[임시 디버그] 세션 값 확인</p>
+    <p><strong>m_code:</strong> <?= htmlspecialchars($mCode ?? '없음') ?></p>
+    <p><strong>cc_code:</strong> <?= htmlspecialchars($ccCode ?? '없음') ?></p>
+    <p><strong>token:</strong> <?= htmlspecialchars(session()->get('token') ?? '없음') ?></p>
+    <p><strong>ckey:</strong> <?= htmlspecialchars($ckey ?? '없음') ?></p>
+    <p><strong>ukey:</strong> <?= htmlspecialchars($ukey ?? '없음') ?></p>
+    <p><strong>akey:</strong> <?= htmlspecialchars($akey ?? '없음') ?></p>
+    <p><strong>login_type:</strong> <?= htmlspecialchars($loginType ?? '없음') ?></p>
+    
+    <!-- API 인증 테스트 섹션 -->
+    <div class="mt-4 pt-4 border-t border-yellow-600">
+        <p class="font-bold mb-2">인성 API 인증 테스트</p>
+        <div class="space-y-2">
+            <button id="testInsungApi" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">
+                API 인증 테스트 실행
+            </button>
+            <button id="testTokenRefresh" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm">
+                토큰 갱신 테스트
+            </button>
+        </div>
+        <div id="apiTestResult" class="mt-3 p-3 bg-white rounded border border-yellow-300 hidden">
+            <h4 class="font-semibold mb-2 text-sm">테스트 결과:</h4>
+            <pre id="apiTestResultContent" class="text-xs overflow-auto max-h-40 whitespace-pre-wrap"></pre>
+        </div>
+    </div>
+</div>
+<?php } ?>
 <div class="space-y-6">
     <!-- 통계 카드 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -173,4 +211,107 @@
         </div>
     </div>
 </div>
+
+<?php if ($loginType === 'daumdata'): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // API 인증 테스트
+    const testInsungApiBtn = document.getElementById('testInsungApi');
+    const testTokenRefreshBtn = document.getElementById('testTokenRefresh');
+    const apiTestResult = document.getElementById('apiTestResult');
+    const apiTestResultContent = document.getElementById('apiTestResultContent');
+    
+    // CSRF 토큰 가져오기
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const csrfHeader = document.querySelector('meta[name="csrf-header"]')?.getAttribute('content') || 'X-CSRF-TOKEN';
+    
+    if (testInsungApiBtn) {
+        testInsungApiBtn.addEventListener('click', function() {
+            apiTestResult.classList.remove('hidden');
+            apiTestResultContent.textContent = '테스트 실행 중...';
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+            
+            if (csrfToken) {
+                headers[csrfHeader] = csrfToken;
+            }
+            
+            fetch('<?= base_url('dashboard/test-insung-api') ?>', {
+                method: 'POST',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                apiTestResultContent.textContent = JSON.stringify(data, null, 2);
+                apiTestResult.classList.remove('border-yellow-300', 'bg-green-50', 'bg-red-50');
+                if (data.success) {
+                    apiTestResult.classList.add('border-green-300', 'bg-green-50');
+                } else {
+                    apiTestResult.classList.add('border-red-300', 'bg-red-50');
+                }
+            })
+            .catch(error => {
+                apiTestResultContent.textContent = '에러: ' + error.message;
+                apiTestResult.classList.remove('border-yellow-300', 'bg-green-50');
+                apiTestResult.classList.add('border-red-300', 'bg-red-50');
+            });
+        });
+    }
+    
+    if (testTokenRefreshBtn) {
+        testTokenRefreshBtn.addEventListener('click', function() {
+            apiTestResult.classList.remove('hidden');
+            apiTestResultContent.textContent = '토큰 갱신 테스트 실행 중...';
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+            
+            if (csrfToken) {
+                headers[csrfHeader] = csrfToken;
+            }
+            
+            fetch('<?= base_url('dashboard/test-token-refresh') ?>', {
+                method: 'POST',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                apiTestResultContent.textContent = JSON.stringify(data, null, 2);
+                apiTestResult.classList.remove('border-yellow-300', 'bg-green-50', 'bg-red-50');
+                if (data.success) {
+                    apiTestResult.classList.add('border-green-300', 'bg-green-50');
+                    // 토큰 갱신 성공 시 1초 후 페이지 새로고침
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    apiTestResult.classList.add('border-red-300', 'bg-red-50');
+                }
+            })
+            .catch(error => {
+                apiTestResultContent.textContent = '에러: ' + error.message;
+                apiTestResult.classList.remove('border-yellow-300', 'bg-green-50');
+                apiTestResult.classList.add('border-red-300', 'bg-red-50');
+            });
+        });
+    }
+});
+</script>
+<?php endif; ?>
+
 <?= $this->endSection() ?>

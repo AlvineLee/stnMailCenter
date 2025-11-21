@@ -24,13 +24,13 @@ class Database extends Config
      *
      * @var array<string, mixed>
      */
-    // STN MailCenter 데이터베이스 연결 설정 (로컬 MariaDB)
+    // STN MailCenter 데이터베이스 연결 설정
     public array $default = [
         'DSN'          => '',
         'hostname'     => 'localhost',
-        'username'     => 'root',  // 로컬 MariaDB 사용자명
-        'password'     => 'rbghkd75!@#$',      // 로컬 MariaDB 비밀번호 (비어있으면 비밀번호 없음)
-        'database'     => 'mailcenter',  // 데이터베이스명
+        'username'     => 'root',
+        'password'     => 'rbghkd75!@#$',
+        'database'     => 'mailcenter',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
         'pConnect'     => false,
@@ -193,6 +193,12 @@ class Database extends Config
     public function __construct()
     {
         parent::__construct();
+
+        // 환경변수에서 DB 설정 읽기
+        $this->default['hostname'] = getenv('DB_HOSTNAME') ?: 'localhost';
+        $this->default['username'] = getenv('DB_USERNAME') ?: 'root';
+        $this->default['password'] = getenv('DB_PASSWORD') ?: 'rbghkd75!@#$';
+        $this->default['database'] = getenv('DB_DATABASE') ?: 'mailcenter';
 
         // Ensure that we always set the database group to 'tests' if
         // we are currently running an automated test suite, so that

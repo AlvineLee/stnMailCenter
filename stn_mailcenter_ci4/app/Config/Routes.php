@@ -29,6 +29,8 @@ $routes->group('dashboard', function($routes) {
     $routes->get('/', 'Dashboard::index');
     $routes->post('submitOrder', 'Dashboard::submitOrder');
     $routes->get('orders', 'Dashboard::orders');
+    $routes->post('test-insung-api', 'Dashboard::testInsungApi');
+    $routes->post('test-token-refresh', 'Dashboard::testTokenRefresh');
 });
 
 // 서비스 관련 라우트
@@ -79,6 +81,7 @@ $routes->group('delivery', function($routes) {
     $routes->get('getOrderDetail', 'Delivery::getOrderDetail');
     $routes->post('updateStatus', 'Delivery::updateStatus');
     $routes->get('printWaybill', 'Delivery::printWaybill');
+    $routes->post('syncInsungOrders', 'Delivery::syncInsungOrders');
 });
 
 // 회원정보 관련 라우트
@@ -209,6 +212,7 @@ $routes->group('group-company', function($routes) {
     $routes->post('createHeadOfficeAccount', 'GroupCompany::createHeadOfficeAccount');
     $routes->post('changePassword', 'GroupCompany::changePassword');
     $routes->post('uploadLogo', 'GroupCompany::uploadLogo');
+    $routes->post('deleteLogo/(:num)', 'GroupCompany::deleteLogo/$1');
     $routes->delete('deleteLogo/(:num)', 'GroupCompany::deleteLogo/$1');
     // 오더유형 설정 관련 라우트
     $routes->get('getUserServicePermissions', 'GroupCompany::getUserServicePermissions');

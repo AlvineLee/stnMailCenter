@@ -395,6 +395,42 @@
     </script>
     <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/order.css') ?>">
+    <script>
+    // 공통 AJAX 응답 처리 함수 (JSON 파싱 에러 방지)
+    window.safeJsonParse = async function(response) {
+        const contentType = response.headers.get('content-type');
+        
+        // Content-Type이 JSON이 아니면 에러 처리
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('Non-JSON response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                contentType: contentType,
+                body: text.substring(0, 500) // 처음 500자만 로그
+            });
+            
+            // HTML 에러 페이지인 경우
+            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                throw new Error('서버에서 HTML 응답을 반환했습니다. (에러 페이지일 수 있습니다)');
+            }
+            
+            throw new Error('JSON이 아닌 응답을 받았습니다: ' + response.statusText);
+        }
+        
+        return response.json();
+    };
+    
+    // 전역 에러 핸들러 (처리되지 않은 Promise rejection)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && event.reason.message && event.reason.message.includes('Unexpected token')) {
+            console.error('JSON 파싱 에러 감지:', event.reason);
+            console.error('이 에러는 서버가 HTML을 반환했을 때 발생합니다.');
+            // 사용자에게는 조용히 처리 (콘솔에만 로그)
+            event.preventDefault(); // 기본 에러 표시 방지
+        }
+    });
+    </script>
 </head>
 <body>
     <!-- 햄버거 메뉴 버튼 -->

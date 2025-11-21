@@ -402,7 +402,8 @@ class CustomerHierarchyModel extends Model
         if (isset($data['is_active'])) {
             $dbData['is_active'] = $data['is_active'] ? 1 : 0;
         }
-        if (isset($data['logo_path'])) {
+        // logo_path는 null 값도 허용하므로 array_key_exists 사용
+        if (array_key_exists('logo_path', $data)) {
             $dbData['logo_path'] = $data['logo_path'];
         }
 

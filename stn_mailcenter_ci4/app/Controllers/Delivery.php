@@ -448,4 +448,189 @@ class Delivery extends BaseController
             return redirect()->to('/delivery/list')->with('error', '송장출력 중 오류가 발생했습니다.');
         }
     }
+
+    /**
+     * 인성 API 주문 동기화 (AJAX)
+     * 배송조회 리스트 진입 시 인성 주문번호가 있는 주문들의 최신 상태를 동기화
+     * 세션 의존 제거: 각 주문의 user_id를 통해 DB에서 API 정보를 조회
+     */
+    public function syncInsungOrders()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+        
+        $loginType = session()->get('login_type');
+        
+        // daumdata 로그인만 동기화 가능
+        if ($loginType !== 'daumdata') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '인성 API 동기화는 daumdata 로그인에서만 가능합니다.'
+            ])->setStatusCode(403);
+        }
+        
+        try {
+            // 사용자 권한에 따른 필터 조건 구성 (선택적)
+            $userType = session()->get('user_type');
+            $ccCode = session()->get('cc_code');
+            $compName = session()->get('comp_name');
+            
+            $filters = [];
+            if ($userType == '3') {
+                // user_type = 3: 소속 콜센터의 고객사 주문만
+                $filters['cc_code'] = $ccCode;
+            } elseif ($userType == '5') {
+                // user_type = 5: 본인 고객사의 주문만
+                $filters['comp_name'] = $compName;
+            }
+            // user_type = 1: 필터 없음 (전체 조회)
+            
+            // 인성 주문번호가 있는 주문들 조회 (API 정보 포함)
+            $orders = $this->deliveryModel->getInsungOrdersForSync($filters);
+            
+            if (empty($orders)) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'synced_count' => 0,
+                    'message' => '동기화할 주문이 없습니다.'
+                ]);
+            }
+            
+            // 인성 API 서비스 초기화
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $orderModel = new \App\Models\OrderModel();
+            
+            $syncedCount = 0;
+            $errorCount = 0;
+            $skippedCount = 0;
+            $errors = [];
+            
+            // 각 주문에 대해 인성 API로 상세 조회 및 업데이트
+            foreach ($orders as $order) {
+                try {
+                    // 주문별 API 정보 확인 (DB에서 조회된 정보 사용)
+                    $mCode = $order['m_code'] ?? null;
+                    $ccCode = $order['cc_code'] ?? null;
+                    $token = $order['token'] ?? null;
+                    $userId = $order['insung_user_id'] ?? null;
+                    $apiIdx = $order['api_idx'] ?? null;
+                    $serialNumber = $order['insung_order_number'] ?? null;
+                    
+                    // 필수 API 정보가 없으면 스킵
+                    if (!$mCode || !$ccCode || !$token || !$userId || !$apiIdx || !$serialNumber) {
+                        $skippedCount++;
+                        $errors[] = "주문번호 {$order['order_number']}: API 정보가 불완전합니다.";
+                        log_message('warning', "Insung order sync skipped: Order ID {$order['id']}, Missing API info");
+                        continue;
+                    }
+                    
+                    // 인성 API로 주문 상세 조회 (주문별 API 정보 사용)
+                    $apiResult = $insungApiService->getOrderDetail($mCode, $ccCode, $token, $userId, $serialNumber, $apiIdx);
+                    
+                    if (!$apiResult['success'] || !isset($apiResult['data'])) {
+                        $errorCount++;
+                        $errors[] = "주문번호 {$order['order_number']}: {$apiResult['message']}";
+                        log_message('warning', "Insung order sync failed: Order ID {$order['id']}, Message: {$apiResult['message']}");
+                        continue;
+                    }
+                    
+                    $apiData = $apiResult['data'];
+                    
+                    // API 응답 파싱 (레거시 코드 구조 참고)
+                    // $apiData[0]: 응답 코드
+                    // $apiData[1]: 고객 정보
+                    // $apiData[2]: 기사 정보
+                    // $apiData[3]: 주문 시간 정보
+                    // $apiData[4]: 주소 정보
+                    // $apiData[5]: 금액 정보
+                    // $apiData[7]: 완료 시간
+                    // $apiData[9]: 기타 정보
+                    
+                    $updateData = [];
+                    
+                    // 상태 매핑 (save_state -> status)
+                    if (isset($apiData[5]) && isset($apiData[5]->save_state)) {
+                        $saveState = $apiData[5]->save_state ?? '';
+                        $status = $this->mapInsungStatusToLocal($saveState);
+                        if ($status) {
+                            $updateData['status'] = $status;
+                        }
+                    }
+                    
+                    // 금액 업데이트
+                    if (isset($apiData[5]) && isset($apiData[5]->total_cost)) {
+                        $totalCost = $apiData[5]->total_cost ?? '';
+                        // "원" 제거 및 쉼표 제거 후 숫자로 변환
+                        $totalCost = str_replace(['원', ','], '', $totalCost);
+                        if (is_numeric($totalCost)) {
+                            $updateData['total_amount'] = (float)$totalCost;
+                        }
+                    }
+                    
+                    // 업데이트할 데이터가 있으면 DB 업데이트
+                    if (!empty($updateData)) {
+                        $orderModel->update($order['id'], $updateData);
+                        $syncedCount++;
+                        
+                        log_message('info', "Insung order synced: Order ID {$order['id']}, Serial {$serialNumber}, Updated: " . json_encode($updateData));
+                    }
+                    
+                } catch (\Exception $e) {
+                    $errorCount++;
+                    $errors[] = "주문번호 {$order['order_number']}: " . $e->getMessage();
+                    log_message('error', "Insung order sync error for order {$order['order_number']}: " . $e->getMessage());
+                }
+            }
+            
+            $message = "{$syncedCount}개 주문이 동기화되었습니다.";
+            if ($skippedCount > 0) {
+                $message .= " ({$skippedCount}개 스킵)";
+            }
+            if ($errorCount > 0) {
+                $message .= " ({$errorCount}개 실패)";
+            }
+            
+            return $this->response->setJSON([
+                'success' => true,
+                'synced_count' => $syncedCount,
+                'error_count' => $errorCount,
+                'skipped_count' => $skippedCount,
+                'total_count' => count($orders),
+                'message' => $message,
+                'errors' => $errors
+            ]);
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Delivery::syncInsungOrders - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '동기화 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 인성 API 상태를 로컬 DB 상태로 매핑
+     * 
+     * @param string $insungStatus 인성 API의 save_state 값
+     * @return string|null 로컬 DB의 status 값
+     */
+    private function mapInsungStatusToLocal($insungStatus)
+    {
+        $statusMap = [
+            '접수' => 'processing',
+            '배차' => 'processing',
+            '운행' => 'completed',
+            '완료' => 'delivered',
+            '예약' => 'pending',
+            '취소' => 'cancelled'
+        ];
+        
+        return $statusMap[$insungStatus] ?? null;
+    }
 }

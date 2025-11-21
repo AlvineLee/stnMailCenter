@@ -11,6 +11,26 @@
             <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
             <div class="w-full lg:w-1/3">
                 <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
+                    <!-- 운송장 바코드 등록 (메일룸 서비스 전용) -->
+                    <div class="mb-3">
+                        <section class="bg-yellow-50 rounded-lg shadow-sm border border-yellow-200 p-3">
+                            <div class="flex items-center gap-3">
+                                <label for="tracking_barcode" class="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                                    운송장 바코드등록
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="tracking_barcode" 
+                                    name="tracking_barcode" 
+                                    value="<?= old('tracking_barcode', '') ?>" 
+                                    placeholder="바코드를 스캔하세요"
+                                    autocomplete="off"
+                                    class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent bg-white"
+                                >
+                            </div>
+                        </section>
+                    </div>
+                    
                     <!-- 공통 폼 (주문자정보, 출발지, 도착지) -->
                     <?= $this->include('forms/common-form') ?>
                 </div>
@@ -115,6 +135,57 @@
 
 <!-- 주문 폼 유효성 검사 스크립트 -->
 <script src="<?= base_url('assets/js/order-form-validation.js') ?>"></script>
+
+<!-- 운송장 바코드 등록 스크립트 -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const barcodeInput = document.getElementById('tracking_barcode');
+    
+    if (barcodeInput) {
+        // 페이지 로드 시 바코드 입력 필드에 자동 포커스
+        setTimeout(function() {
+            barcodeInput.focus();
+        }, 100);
+        
+        // 바코드 리더기 지원: 빠른 입력 감지 및 Enter 키 처리
+        let barcodeTimer = null;
+        let barcodeValue = '';
+        
+        barcodeInput.addEventListener('keydown', function(e) {
+            // Enter 키가 눌리면 바코드 입력 완료로 간주
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // 바코드 값이 있으면 처리
+                if (barcodeInput.value.trim()) {
+                    console.log('바코드 스캔 완료:', barcodeInput.value);
+                    // 여기에 바코드 처리 로직 추가 가능
+                }
+            }
+        });
+        
+        // 바코드 리더기는 보통 빠르게 연속 입력하므로
+        // 입력이 멈춘 후 일정 시간이 지나면 자동으로 처리할 수도 있음
+        barcodeInput.addEventListener('input', function(e) {
+            clearTimeout(barcodeTimer);
+            
+            // 입력이 멈춘 후 500ms 후에 자동 처리 (선택사항)
+            barcodeTimer = setTimeout(function() {
+                if (barcodeInput.value.trim().length > 5) { // 최소 길이 체크
+                    console.log('바코드 자동 인식:', barcodeInput.value);
+                }
+            }, 500);
+        });
+        
+        // 다른 필드로 이동했다가 돌아오면 다시 포커스 (선택사항)
+        barcodeInput.addEventListener('blur', function() {
+            // 필요시 자동으로 다시 포커스
+            // setTimeout(function() {
+            //     barcodeInput.focus();
+            // }, 100);
+        });
+    }
+});
+</script>
 
 <?= $this->endSection() ?>
 

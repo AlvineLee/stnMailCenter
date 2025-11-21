@@ -485,6 +485,7 @@ class Service extends BaseController
                 'department_id' => 1, // 기본값
                 'service_type_id' => $serviceTypeId,
                 'order_number' => $orderNumber,
+                'order_system' => ($loginType === 'daumdata') ? 'insung' : 'stn',
                 'company_name' => $this->request->getPost('company_name'),
                 'contact' => $this->request->getPost('contact'),
                 'address' => $this->request->getPost('address'),
@@ -535,6 +536,77 @@ class Service extends BaseController
             }
             
             log_message('debug', 'Order inserted with ID: ' . $orderId);
+            
+            // 3-1. daumdata 로그인 + 퀵 서비스인 경우 인성 API 주문 접수
+            if ($loginType === 'daumdata' && in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
+                try {
+                    $insungApiService = new \App\Libraries\InsungApiService();
+                    $insungApiListModel = new \App\Models\InsungApiListModel();
+                    
+                    // 세션에서 API 정보 가져오기
+                    $mCode = session()->get('m_code');
+                    $ccCode = session()->get('cc_code');
+                    $token = session()->get('token');
+                    $userId = session()->get('user_id'); // daumdata의 user_id
+                    
+                    // api_idx 조회 (cc_code로 조회)
+                    $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                    $apiIdx = $apiInfo ? $apiInfo['idx'] : null;
+                    
+                    if ($mCode && $ccCode && $token && $userId && $apiIdx) {
+                        // 인성 API에 전달할 주문 데이터 구성
+                        $insungOrderData = [
+                            'service_type' => $serviceType,
+                            'delivery_method' => $this->request->getPost('delivery_method') ?? 'motorcycle',
+                            'company_name' => $this->request->getPost('company_name'),
+                            'contact' => $this->request->getPost('contact'),
+                            'departure_company_name' => $this->request->getPost('departure_company_name'),
+                            'departure_contact' => $this->request->getPost('departure_contact'),
+                            'departure_address' => $this->request->getPost('departure_address'),
+                            'departure_detail' => $this->request->getPost('departure_detail'),
+                            'departure_manager' => $this->request->getPost('departure_manager'),
+                            'departure_department' => $this->request->getPost('departure_department'),
+                            'departure_dong' => $this->request->getPost('departure_dong'),
+                            'departure_lon' => $this->request->getPost('departure_lon') ?? '',
+                            'departure_lat' => $this->request->getPost('departure_lat') ?? '',
+                            'destination_company_name' => $this->request->getPost('destination_company_name'),
+                            'destination_contact' => $this->request->getPost('destination_contact'),
+                            'destination_address' => $this->request->getPost('destination_address'),
+                            'detail_address' => $this->request->getPost('detail_address'),
+                            'destination_manager' => $this->request->getPost('destination_manager'),
+                            'destination_department' => $this->request->getPost('destination_department'),
+                            'destination_dong' => $this->request->getPost('destination_dong'),
+                            'destination_lon' => $this->request->getPost('destination_lon') ?? '',
+                            'destination_lat' => $this->request->getPost('destination_lat') ?? '',
+                            'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
+                            'delivery_content' => $this->request->getPost('delivery_content'),
+                            'notes' => $this->request->getPost('notes'),
+                            'payment_type' => $this->request->getPost('payment_type'),
+                            'total_amount' => $this->request->getPost('total_amount') ?? '0',
+                            'distance' => $this->request->getPost('distance') ?? ''
+                        ];
+                        
+                        $insungResult = $insungApiService->registerOrder($mCode, $ccCode, $token, $userId, $insungOrderData, $apiIdx);
+                        
+                        if ($insungResult['success'] && !empty($insungResult['serial_number'])) {
+                            // 인성 주문번호 저장
+                            $orderModel->update($orderId, [
+                                'insung_order_number' => $insungResult['serial_number']
+                            ]);
+                            
+                            log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}");
+                        } else {
+                            log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: {$insungResult['message']}");
+                            // 인성 API 실패해도 주문은 정상 처리됨
+                        }
+                    } else {
+                        log_message('warning', "Insung API order registration skipped. Missing required session data. Order ID: {$orderId}");
+                    }
+                } catch (\Exception $e) {
+                    log_message('error', "Insung API order registration exception: " . $e->getMessage());
+                    // 인성 API 실패해도 주문은 정상 처리됨
+                }
+            }
             
             // 4. 해외특송 또는 택배서비스인 경우 송장번호 할당 및 플랫폼코드 저장
             if (in_array($serviceType, ['international', 'parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag'])) {

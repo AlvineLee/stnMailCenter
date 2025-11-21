@@ -18,6 +18,8 @@ class OrderModel extends Model
         'department_id',
         'service_type_id',
         'order_number',
+        'insung_order_number',
+        'order_system',
         'company_name',
         'contact',
         'address',
