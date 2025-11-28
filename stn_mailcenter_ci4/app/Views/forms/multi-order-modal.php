@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const file = excelFile.files[0];
-        console.log('업로드된 파일:', file.name);
+        // console.log('업로드된 파일:', file.name);
         
         // FormData 생성
         const formData = new FormData();
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             alert('파일 업로드 중 오류가 발생했습니다.');
         })
         .finally(() => {
