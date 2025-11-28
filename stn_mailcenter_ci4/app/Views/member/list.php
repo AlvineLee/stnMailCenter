@@ -1,115 +1,129 @@
 <?= $this->extend('layouts/header') ?>
 
 <?= $this->section('content') ?>
-<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <!-- 사용자 정보 섹션 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <!-- 왼쪽 컬럼 -->
-        <div class="space-y-4">
-            <div class="form-field">
-                <label class="form-label">아이디</label>
-                <input type="text" 
-                       value="<?= esc($user['username'] ?? '') ?>" 
-                       readonly 
-                       class="form-input bg-gray-50 text-gray-600">
+
+    <div class="w-full max-w-full flex flex-col md:flex-row gap-4 box-border">
+        <!-- 왼쪽 패널: 기본정보 -->
+        <div class="flex-1 w-full min-w-0">
+            <div class="mb-1">
+                <section class="bg-blue-50 rounded-lg shadow-sm border-2 border-blue-300 p-3">
+                    <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">기본정보</h2>
+                    <div class="space-y-3">
+                        <div class="form-field">
+                            <label class="form-label">아이디</label>
+                            <input type="text" 
+                                   value="<?= esc($user['username'] ?? '') ?>" 
+                                   readonly 
+                                   class="form-input bg-gray-50 text-gray-600">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">소속 빌딩</label>
+                            <input type="text" 
+                                   value="<?= esc($user['customer_name'] ?? '') ?>" 
+                                   readonly 
+                                   class="form-input bg-gray-50 text-gray-600">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">상호명</label>
+                            <input type="text" 
+                                   value="<?= esc($user['customer_name'] ?? '') ?>" 
+                                   readonly 
+                                   class="form-input bg-gray-50 text-gray-600">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">담당자</label>
+                            <input type="text" 
+                                   id="real_name"
+                                   value="<?= esc($user['real_name'] ?? '') ?>" 
+                                   class="form-input">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">담당자 연락처</label>
+                            <input type="text" 
+                                   id="phone"
+                                   value="<?= esc($user['phone'] ?? '') ?>" 
+                                   class="form-input">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">주소</label>
+                            <div class="flex space-x-2 mb-2">
+                                <input type="text" 
+                                       id="address_zonecode" 
+                                       value="<?= esc($user['address_zonecode'] ?? '') ?>" 
+                                       placeholder="우편번호"
+                                       class="form-input w-24">
+                                <button type="button" 
+                                        onclick="openAddressSearch()" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors whitespace-nowrap">
+                                    주소검색
+                                </button>
+                            </div>
+                            <input type="text" 
+                                   id="address" 
+                                   value="<?= esc($user['address'] ?? '') ?>" 
+                                   placeholder="주소"
+                                   class="form-input mb-2">
+                            <input type="text" 
+                                   id="address_detail" 
+                                   value="<?= esc($user['address_detail'] ?? '') ?>" 
+                                   placeholder="상세주소"
+                                   class="form-input">
+                        </div>
+                    </div>
+                </section>
             </div>
-            <div class="form-field">
-                <label class="form-label">소속 빌딩</label>
-                <input type="text" 
-                       value="<?= esc($user['customer_name'] ?? '') ?>" 
-                       readonly 
-                       class="form-input bg-gray-50 text-gray-600">
+        </div>
+
+        <!-- 가운데 패널: 비밀번호정보 -->
+        <div class="flex-1 w-full min-w-0">
+            <div class="mb-1">
+                <section class="bg-gray-50 rounded-lg shadow-sm border-2 border-gray-300 p-3">
+                    <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">비밀번호정보</h2>
+                    <div class="space-y-3">
+                        <div class="form-field">
+                            <label class="form-label required">현재 비밀번호</label>
+                            <input type="password" 
+                                   id="current-password" 
+                                   class="form-input"
+                                   placeholder="현재 비밀번호를 입력하세요">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label required">새 비밀번호</label>
+                            <input type="password" 
+                                   id="new-password" 
+                                   class="form-input"
+                                   placeholder="새 비밀번호를 입력하세요">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label required">새 비밀번호 확인</label>
+                            <input type="password" 
+                                   id="new-password-confirm" 
+                                   class="form-input"
+                                   placeholder="새 비밀번호를 다시 입력하세요">
+                        </div>
+                    </div>
+                </section>
             </div>
-            <div class="form-field">
-                <label class="form-label">주소</label>
-                <div class="flex space-x-2 mb-2">
-                    <input type="text" 
-                           id="address_zonecode" 
-                           value="<?= esc($user['address_zonecode'] ?? '') ?>" 
-                           placeholder="우편번호"
-                           class="form-input w-24">
+        </div>
+
+        <!-- 오른쪽 패널: 저장/취소 버튼 -->
+        <div class="w-full md:w-64 flex-shrink-0 max-w-full box-border">
+            <div class="sticky top-4">
+                <div class="flex flex-col space-y-2 bg-white rounded-lg shadow-sm border-2 border-gray-300 p-4 box-border">
+                    <button onclick="saveAll()" 
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors w-full md:w-auto box-border whitespace-nowrap">
+                        저장
+                    </button>
                     <button type="button" 
-                            onclick="openAddressSearch()" 
-                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap">
-                        주소검색
+                            onclick="location.reload()" 
+                            class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm font-medium transition-colors w-full md:w-auto box-border whitespace-nowrap">
+                        취소
                     </button>
                 </div>
-                <input type="text" 
-                       id="address" 
-                       value="<?= esc($user['address'] ?? '') ?>" 
-                       placeholder="주소"
-                       class="form-input mb-2">
-                <input type="text" 
-                       id="address_detail" 
-                       value="<?= esc($user['address_detail'] ?? '') ?>" 
-                       placeholder="상세주소"
-                       class="form-input">
-            </div>
-        </div>
-
-        <!-- 오른쪽 컬럼 -->
-        <div class="space-y-4">
-            <div class="form-field">
-                <label class="form-label">상호명</label>
-                <input type="text" 
-                       value="<?= esc($user['customer_name'] ?? '') ?>" 
-                       readonly 
-                       class="form-input bg-gray-50 text-gray-600">
             </div>
         </div>
     </div>
 
-    <!-- 담당자 정보 (한 줄 배치) -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div class="form-field">
-            <label class="form-label">담당자</label>
-            <input type="text" 
-                   id="real_name"
-                   value="<?= esc($user['real_name'] ?? '') ?>" 
-                   class="form-input">
-        </div>
-        <div class="form-field">
-            <label class="form-label">담당자 연락처</label>
-            <input type="text" 
-                   id="phone"
-                   value="<?= esc($user['phone'] ?? '') ?>" 
-                   class="form-input">
-            </div>
-            </div>
-
-    <!-- 비밀번호 변경 섹션 -->
-    <div class="border-t border-gray-200 pt-6">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">비밀번호 변경</h3>
-        <div class="space-y-4 max-w-md">
-            <div class="form-field">
-                <label class="form-label required">현재 비밀번호</label>
-                <input type="password" 
-                       id="current-password" 
-                       class="form-input">
-            </div>
-            <div class="form-field">
-                <label class="form-label required">새 비밀번호</label>
-                <input type="password" 
-                       id="new-password" 
-                       class="form-input">
-            </div>
-            <div class="form-field">
-                <label class="form-label required">새 비밀번호 확인</label>
-                <input type="password" 
-                       id="new-password-confirm" 
-                       class="form-input">
-            </div>
-        </div>
-    </div>
-
-    <!-- 저장 버튼 -->
-    <div class="mt-6 flex justify-center">
-        <button onclick="saveAll()" 
-                class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-3 rounded-md transition-colors">
-            저장
-        </button>
-        </div>
-    </div>
 
 <!-- 경고 메시지 모달 -->
 <div id="warningModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
@@ -291,13 +305,13 @@ function saveAll() {
                 if (errorList) {
                     errorMessage += '\n\n' + errorList;
                 }
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
             showWarningModal(errorMessage);
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         showWarningModal('정보 저장 중 오류가 발생했습니다.');
     });
 }

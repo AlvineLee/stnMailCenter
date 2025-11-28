@@ -64,7 +64,7 @@
 
 <!-- 고객사 목록 레이어 팝업 -->
 <div id="companyListModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-y-auto" style="z-index: 10000 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-y-auto" style="z-index: 10000 !important;" onclick="event.stopPropagation()">
         <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
             <h3 class="text-lg font-bold text-gray-800 flex-1 min-w-0">
                 소속 고객사 목록 - <span id="modal-cc-name" class="whitespace-nowrap"></span>
@@ -86,16 +86,16 @@
             <!-- 고객사 목록 -->
             <div id="companyListContent" class="hidden">
                 <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200">
-                        <thead class="bg-gray-50">
+                    <table style="background: #fafafa; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; width: 100%;">
+                        <thead>
                             <tr>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">고객사 코드</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">고객사명</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">대표자</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">연락처</th>
+                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">고객사 코드</th>
+                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">고객사명</th>
+                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">대표자</th>
+                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">연락처</th>
                             </tr>
                         </thead>
-                        <tbody id="companyListBody" class="divide-y divide-gray-200">
+                        <tbody id="companyListBody">
                             <!-- AJAX로 로드될 내용 -->
                         </tbody>
                     </table>
@@ -121,6 +121,7 @@ function showCompanyList(ccCode, ccName) {
     
     document.getElementById('modal-cc-name').textContent = ccName;
     document.getElementById('companyListModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
     document.getElementById('companyListLoading').classList.remove('hidden');
     document.getElementById('companyListContent').classList.add('hidden');
     document.getElementById('companyListBody').innerHTML = '';
@@ -136,13 +137,15 @@ function showCompanyList(ccCode, ccName) {
                 document.getElementById('companyListContent').classList.remove('hidden');
                 
                 let html = '';
-                data.companies.forEach(company => {
+                data.companies.forEach((company, index) => {
+                    // style_guide.md 기준: 짝수/홀수 행 배경색 적용
+                    const rowBg = index % 2 === 0 ? '#fafafa' : '#f5f5f5';
                     html += `
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-2 text-sm">${company.comp_code || '-'}</td>
-                            <td class="px-4 py-2 text-sm">${company.comp_name || '-'}</td>
-                            <td class="px-4 py-2 text-sm">${company.comp_owner || '-'}</td>
-                            <td class="px-4 py-2 text-sm">${company.contact_phone || '-'}</td>
+                        <tr style="background: ${rowBg};" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='${rowBg}';">
+                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.comp_code || '-'}</td>
+                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.comp_name || '-'}</td>
+                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.comp_owner || '-'}</td>
+                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.contact_phone || '-'}</td>
                         </tr>
                     `;
                 });
@@ -153,7 +156,7 @@ function showCompanyList(ccCode, ccName) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             document.getElementById('companyListLoading').classList.add('hidden');
             alert('고객사 목록을 불러오는 중 오류가 발생했습니다.');
         });
@@ -161,12 +164,20 @@ function showCompanyList(ccCode, ccName) {
 
 function closeCompanyListModal() {
     document.getElementById('companyListModal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
     
     // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
     if (typeof window.restoreSidebarZIndex === 'function') {
         window.restoreSidebarZIndex();
     }
 }
+
+// 모달 외부 클릭 시 닫기
+document.getElementById('companyListModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeCompanyListModal();
+    }
+});
 
 // ESC 키로 팝업 닫기
 document.addEventListener('keydown', function(e) {

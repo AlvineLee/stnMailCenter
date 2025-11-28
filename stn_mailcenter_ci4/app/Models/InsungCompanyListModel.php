@@ -67,9 +67,8 @@ class InsungCompanyListModel extends Model
         $countBuilder = clone $builder;
         $totalCount = $countBuilder->countAllResults();
         
-        // 정렬 및 페이징
-        $builder->orderBy('cc.cc_code', 'ASC');
-        $builder->orderBy('c.comp_code', 'ASC');
+        // 정렬 및 페이징 (고객사명 오름차순)
+        $builder->orderBy('c.comp_name', 'ASC');
         $offset = ($page - 1) * $perPage;
         $builder->limit($perPage, $offset);
         

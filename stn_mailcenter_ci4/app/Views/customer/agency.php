@@ -475,7 +475,7 @@ function loadCustomerInfo(customerId) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('고객사 정보 조회 중 오류가 발생했습니다.');
     });
 }
@@ -533,12 +533,12 @@ function createCustomer(event) {
         } else {
             alert(data.message || '대리점 등록에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('대리점 등록 중 오류가 발생했습니다.');
     });
 }
@@ -582,12 +582,12 @@ function updateCustomer(event) {
         } else {
             alert(data.message || '대리점 수정에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('대리점 수정 중 오류가 발생했습니다.');
     });
 }

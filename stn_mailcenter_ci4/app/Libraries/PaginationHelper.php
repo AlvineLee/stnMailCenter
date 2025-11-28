@@ -48,6 +48,14 @@ class PaginationHelper
         $html = '<div class="list-pagination">';
         $html .= '<div class="pagination">';
         
+        // 처음 버튼
+        if ($this->currentPage > 1) {
+            $firstUrl = $this->getPageUrl(1);
+            $html .= '<a href="' . $firstUrl . '" class="nav-button">처음</a>';
+        } else {
+            $html .= '<span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">처음</span>';
+        }
+        
         // 이전 버튼
         if ($this->currentPage > 1) {
             $prevUrl = $this->getPageUrl($this->currentPage - 1);
@@ -93,6 +101,14 @@ class PaginationHelper
             $html .= '<span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">다음</span>';
         }
         
+        // 마지막 버튼
+        if ($this->currentPage < $totalPages) {
+            $lastUrl = $this->getPageUrl($totalPages);
+            $html .= '<a href="' . $lastUrl . '" class="nav-button">마지막</a>';
+        } else {
+            $html .= '<span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">마지막</span>';
+        }
+        
         $html .= '</div>';
         $html .= '</div>';
         
@@ -127,6 +143,13 @@ class PaginationHelper
     {
         $html = '<div class="flex justify-center">';
         $html .= '<div class="flex items-center gap-2">';
+
+        // 처음 버튼
+        if ($this->currentPage > 1) {
+            $html .= '<button onclick="goToPage(1)" class="nav-button px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500">처음</button>';
+        } else {
+            $html .= '<button class="nav-button px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500" disabled>처음</button>';
+        }
 
         // 이전 버튼
         if ($this->currentPage > 1) {
@@ -171,6 +194,13 @@ class PaginationHelper
             $html .= '<button onclick="goToPage(' . $nextPage . ')" class="nav-button px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500">다음</button>';
         } else {
             $html .= '<button class="nav-button px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500" disabled>다음</button>';
+        }
+
+        // 마지막 버튼
+        if ($this->currentPage < $totalPages) {
+            $html .= '<button onclick="goToPage(' . $totalPages . ')" class="nav-button px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500">마지막</button>';
+        } else {
+            $html .= '<button class="nav-button px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500" disabled>마지막</button>';
         }
 
         $html .= '</div>';

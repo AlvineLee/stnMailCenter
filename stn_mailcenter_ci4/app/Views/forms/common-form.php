@@ -13,10 +13,10 @@ if (session()->get('is_logged_in')) {
 ?>
 
 <!-- 주문자 정보 -->
-<div class="mb-2">
+<div class="mb-1">
     <section class="bg-blue-50 rounded-lg shadow-sm border border-blue-200 p-3">
         <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">주문자 정보</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div class="space-y-1">
                 <?php 
                 // daumdata 로그인 시 comp_name, STN 로그인 시 customer_name 사용
@@ -60,7 +60,7 @@ if (session()->get('is_logged_in')) {
 </div>
 
 <!-- 출발지 정보 -->
-<div class="mb-2">
+<div class="mb-1">
     <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
         <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">출발지</h2>
         
@@ -120,6 +120,10 @@ if (session()->get('is_logged_in')) {
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             <input type="text" id="departure_detail" name="departure_detail" value="<?= old('departure_detail') ?>" placeholder="상세주소" required lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <!-- 루비 버전 참조: s_dong2 필드 (data.bname1 값) -->
+            <input type="hidden" id="departure_dong2" name="departure_dong2" value="<?= old('departure_dong2') ?>">
+            <!-- 루비 버전 참조: s_fulladdr 필드 (지번 주소, 좌표 조회용) -->
+            <input type="hidden" id="departure_fulladdr" name="departure_fulladdr" value="<?= old('departure_fulladdr') ?>">
             
             <!-- 해외특송 서비스인 경우 국가/지역 필드 추가 -->
             <?php if (isset($service_type) && $service_type === 'international'): ?>
@@ -131,7 +135,7 @@ if (session()->get('is_logged_in')) {
 </div>
 
 <!-- 경유지 정보 (배송방법이 경유일 때만 표시) -->
-<div class="mb-2" id="waypointSection" style="display: none;">
+<div class="mb-1" id="waypointSection" style="display: none;">
     <section class="bg-blue-25 rounded-lg shadow-sm border border-blue-100 p-3">
         <h2 class="text-sm font-semibold text-blue-600 mb-3 pb-1 border-b border-blue-200">경유지 정보</h2>
         <div class="space-y-2">
@@ -148,7 +152,7 @@ if (session()->get('is_logged_in')) {
 </div>
 
 <!-- 도착지 정보 -->
-<div class="mb-2">
+<div class="mb-1">
     <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
         <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">도착지</h2>
         
@@ -208,6 +212,10 @@ if (session()->get('is_logged_in')) {
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             <input type="text" id="destination_detail" name="destination_detail" value="<?= old('destination_detail') ?>" placeholder="상세주소" required lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <!-- 루비 버전 참조: d_dong2 필드 (data.bname1 값) -->
+            <input type="hidden" id="destination_dong2" name="destination_dong2" value="<?= old('destination_dong2') ?>">
+            <!-- 루비 버전 참조: d_fulladdr 필드 (지번 주소, 좌표 조회용) -->
+            <input type="hidden" id="destination_fulladdr" name="destination_fulladdr" value="<?= old('destination_fulladdr') ?>">
             
             <!-- 해외특송 서비스인 경우 국가/지역 필드 추가 -->
             <?php if (isset($service_type) && $service_type === 'international'): ?>
@@ -256,9 +264,27 @@ function openDaumAddressSearch(type) {
             }
 
             // 주소 필드에 값 설정
+            // 루비 버전 참조: $s_dong2 또는 $s_dong (동 이름) 사용, 우편번호가 아님
+            // data.bname1이 있으면 우선 사용, 없으면 data.bname 사용
+            // 루비 버전: s_dongname에 data.bname, s_dong2에 data.bname1 설정
+            const dongName = data.bname || ''; // departure_dong에 bname 설정
+            const dongName2 = data.bname1 || ''; // departure_dong2에 bname1 설정
+            
+            // 루비 버전 참조: s_fulladdr는 지번 주소 (jibunAddress 또는 autoJibunAddress)
+            const jibunAddr = data.jibunAddress || data.autoJibunAddress || '';
+            
             if (type === 'departure') {
-                document.getElementById('departure_dong').value = data.zonecode;
+                document.getElementById('departure_dong').value = dongName; // 동 이름 사용 (우편번호 아님)
+                const dong2Field = document.getElementById('departure_dong2');
+                if (dong2Field) {
+                    dong2Field.value = dongName2; // bname1 값 설정
+                }
                 document.getElementById('departure_address').value = addr + extraAddr;
+                // 루비 버전 참조: departure_fulladdr에 지번 주소 저장 (좌표 조회용)
+                const fulladdrField = document.getElementById('departure_fulladdr');
+                if (fulladdrField) {
+                    fulladdrField.value = jibunAddr;
+                }
                 // 상세주소 필드가 있으면 건물명 등 설정 (없으면 빈 값)
                 const detailField = document.getElementById('departure_detail');
                 if (detailField) {
@@ -269,8 +295,17 @@ function openDaumAddressSearch(type) {
                     }, 100);
                 }
             } else if (type === 'destination') {
-                document.getElementById('destination_dong').value = data.zonecode;
+                document.getElementById('destination_dong').value = dongName; // 동 이름 사용 (우편번호 아님)
+                const dong2Field = document.getElementById('destination_dong2');
+                if (dong2Field) {
+                    dong2Field.value = dongName2; // bname1 값 설정
+                }
                 document.getElementById('destination_address').value = addr + extraAddr;
+                // 루비 버전 참조: destination_fulladdr에 지번 주소 저장 (좌표 조회용)
+                const fulladdrField = document.getElementById('destination_fulladdr');
+                if (fulladdrField) {
+                    fulladdrField.value = jibunAddr;
+                }
                 // 상세주소 필드가 있으면 건물명 등 설정 (없으면 빈 값)
                 const detailField = document.getElementById('destination_detail');
                 if (detailField) {
@@ -293,6 +328,7 @@ $sessionPhone = '';
 $sessionRealName = '';
 $sessionDepartment = '';
 $sessionZonecode = '';
+$sessionDong = ''; // 동 이름 (우편번호 아님)
 $sessionAddress = '';
 $sessionAddressDetail = '';
 
@@ -303,7 +339,8 @@ if ($loginType === 'daumdata') {
     $sessionRealName = session()->get('user_name', '');
     $sessionDepartment = session()->get('user_dept', '');
     // daumdata 로그인 시 주소 정보
-    // user_dong은 동 이름이므로 zonecode로 사용하지 않음 (주소 검색으로 얻어야 함)
+    // user_dong은 동 이름이므로 그대로 사용
+    $sessionDong = session()->get('user_dong', ''); // 동 이름 사용
     $sessionZonecode = ''; // zonecode는 주소 검색으로 얻어야 하므로 빈 값
     $sessionAddress = session()->get('user_addr', '');
     $sessionAddressDetail = session()->get('user_addr_detail', '');
@@ -314,6 +351,8 @@ if ($loginType === 'daumdata') {
     $sessionRealName = session()->get('real_name', '');
     $sessionDepartment = $userInfo['department'] ?? '';
     $sessionZonecode = $userInfo['address_zonecode'] ?? '';
+    // userInfo에서 동 이름 가져오기 (user_dong 필드가 있는 경우)
+    $sessionDong = $userInfo['user_dong'] ?? '';
     $sessionAddress = $userInfo['address'] ?? '';
     $sessionAddressDetail = $userInfo['address_detail'] ?? '';
 }
@@ -324,6 +363,7 @@ const sessionData = {
     real_name: '<?= esc($sessionRealName, 'js') ?>',
     department: '<?= esc($sessionDepartment, 'js') ?>',
     address_zonecode: '<?= esc($sessionZonecode, 'js') ?>',
+    dong: '<?= esc($sessionDong, 'js') ?>', // 동 이름 (우편번호 아님)
     address: '<?= esc($sessionAddress, 'js') ?>',
     address_detail: '<?= esc($sessionAddressDetail, 'js') ?>'
 };
@@ -335,7 +375,7 @@ function copyOrdererInfo(type) {
     const contact = sessionData.phone || document.getElementById('contact').value;
     const department = sessionData.department || '';
     const manager = sessionData.real_name || '';
-    const zonecode = sessionData.address_zonecode || '';
+    const dongName = sessionData.dong || ''; // 동 이름 사용 (우편번호 아님)
     const address = sessionData.address || '';
     const addressDetail = sessionData.address_detail || '';
     
@@ -349,7 +389,7 @@ function copyOrdererInfo(type) {
             document.getElementById('departure_manager').value = manager;
         }
         if (document.getElementById('departure_dong')) {
-            document.getElementById('departure_dong').value = zonecode;
+            document.getElementById('departure_dong').value = dongName; // 동 이름 사용 (우편번호 아님)
         }
         if (document.getElementById('departure_address')) {
             document.getElementById('departure_address').value = address;
@@ -367,7 +407,7 @@ function copyOrdererInfo(type) {
             document.getElementById('destination_manager').value = manager;
         }
         if (document.getElementById('destination_dong')) {
-            document.getElementById('destination_dong').value = zonecode;
+            document.getElementById('destination_dong').value = dongName; // 동 이름 사용 (우편번호 아님)
         }
         if (document.getElementById('destination_address')) {
             document.getElementById('destination_address').value = address;
@@ -657,8 +697,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // 폼 제출 시 쿠키에 저장
+    // 비용은 서버단에서 무조건 거리 기반으로 계산하므로 클라이언트에서 설정할 필요 없음
     if (orderForm) {
-        orderForm.addEventListener('submit', function() {
+        orderForm.addEventListener('submit', function(e) {
+            // 요금 필드는 서버에서 계산하므로 0으로 설정 (또는 설정하지 않음)
+            const totalAmountInput = document.getElementById('total_amount');
+            const addCostInput = document.getElementById('add_cost');
+            const discountCostInput = document.getElementById('discount_cost');
+            const deliveryCostInput = document.getElementById('delivery_cost');
+            
+            // 서버에서 거리 기반으로 계산하므로 모두 0으로 설정
+            if (totalAmountInput) {
+                totalAmountInput.value = '0';
+            }
+            if (addCostInput) {
+                addCostInput.value = '0';
+            }
+            if (discountCostInput) {
+                discountCostInput.value = '0';
+            }
+            if (deliveryCostInput) {
+                deliveryCostInput.value = '0';
+            }
+            
             saveDepartureInfo();
             saveDestinationInfo();
         });

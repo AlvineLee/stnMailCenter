@@ -92,7 +92,8 @@ class Delivery extends BaseController
                 'pending' => '대기중',
                 'processing' => '처리중',
                 'completed' => '완료',
-                'cancelled' => '취소'
+                'cancelled' => '취소',
+                'api_failed' => 'API실패'
             ],
             'search_type_options' => [
                 'all' => '전체',
@@ -170,7 +171,8 @@ class Delivery extends BaseController
                 'processing' => '접수완료',
                 'completed' => '배송중',
                 'delivered' => '배송완료',
-                'cancelled' => '취소'
+                'cancelled' => '취소',
+                'api_failed' => 'API실패'
             ];
             
             $paymentLabels = [
@@ -466,11 +468,11 @@ class Delivery extends BaseController
         
         $loginType = session()->get('login_type');
         
-        // daumdata 로그인만 동기화 가능
-        if ($loginType !== 'daumdata') {
+        // daumdata 또는 STN 로그인만 동기화 가능
+        if (!in_array($loginType, ['daumdata', 'stn'])) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => '인성 API 동기화는 daumdata 로그인에서만 가능합니다.'
+                'message' => '인성 API 동기화는 daumdata 또는 STN 로그인에서만 가능합니다.'
             ])->setStatusCode(403);
         }
         
@@ -521,6 +523,23 @@ class Delivery extends BaseController
                     $apiIdx = $order['api_idx'] ?? null;
                     $serialNumber = $order['insung_order_number'] ?? null;
                     
+                    // STN 로그인 주문의 경우 기본 API 정보 사용
+                    if (empty($mCode) || empty($ccCode)) {
+                        $mCode = '4540';
+                        $ccCode = '7829';
+                        $userId = '에스티엔온라인접수';
+                        
+                        // 기본 API 정보로 api_idx 조회
+                        $insungApiListModel = new \App\Models\InsungApiListModel();
+                        $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                        if ($apiInfo) {
+                            $apiIdx = $apiInfo['idx'];
+                            $token = $apiInfo['token'] ?? '';
+                        }
+                        
+                        log_message('info', "STN login order sync - Using default API info: mcode={$mCode}, cccode={$ccCode}, user_id={$userId}");
+                    }
+                    
                     // 필수 API 정보가 없으면 스킵
                     if (!$mCode || !$ccCode || !$token || !$userId || !$apiIdx || !$serialNumber) {
                         $skippedCount++;
@@ -554,21 +573,57 @@ class Delivery extends BaseController
                     $updateData = [];
                     
                     // 상태 매핑 (save_state -> status)
-                    if (isset($apiData[5]) && isset($apiData[5]->save_state)) {
-                        $saveState = $apiData[5]->save_state ?? '';
+                    // 인성 API 응답 구조: $apiData[5]에 금액 및 상태 정보 포함
+                    $saveState = null;
+                    if (isset($apiData[5])) {
+                        // 객체 형태인 경우
+                        if (is_object($apiData[5]) && isset($apiData[5]->save_state)) {
+                            $saveState = $apiData[5]->save_state ?? '';
+                        } 
+                        // 배열 형태인 경우
+                        elseif (is_array($apiData[5]) && isset($apiData[5]['save_state'])) {
+                            $saveState = $apiData[5]['save_state'] ?? '';
+                        }
+                        // 다른 위치에 있을 수도 있음 (응답 구조 확인 필요)
+                        // $apiData[9]에 기타 정보가 있을 수 있음
+                    }
+                    
+                    // $apiData[9]에도 상태 정보가 있을 수 있음
+                    if (empty($saveState) && isset($apiData[9])) {
+                        if (is_object($apiData[9]) && isset($apiData[9]->save_state)) {
+                            $saveState = $apiData[9]->save_state ?? '';
+                        } elseif (is_array($apiData[9]) && isset($apiData[9]['save_state'])) {
+                            $saveState = $apiData[9]['save_state'] ?? '';
+                        }
+                    }
+                    
+                    // 상태가 있으면 매핑하여 업데이트
+                    if (!empty($saveState)) {
                         $status = $this->mapInsungStatusToLocal($saveState);
-                        if ($status) {
+                        if ($status && $status !== $order['status']) {
                             $updateData['status'] = $status;
+                            log_message('info', "Insung order status change detected: Order ID {$order['id']}, Serial {$serialNumber}, Old: {$order['status']}, New: {$status}, Insung State: {$saveState}");
                         }
                     }
                     
                     // 금액 업데이트
-                    if (isset($apiData[5]) && isset($apiData[5]->total_cost)) {
-                        $totalCost = $apiData[5]->total_cost ?? '';
-                        // "원" 제거 및 쉼표 제거 후 숫자로 변환
-                        $totalCost = str_replace(['원', ','], '', $totalCost);
-                        if (is_numeric($totalCost)) {
-                            $updateData['total_amount'] = (float)$totalCost;
+                    if (isset($apiData[5])) {
+                        $totalCost = null;
+                        if (is_object($apiData[5]) && isset($apiData[5]->total_cost)) {
+                            $totalCost = $apiData[5]->total_cost ?? '';
+                        } elseif (is_array($apiData[5]) && isset($apiData[5]['total_cost'])) {
+                            $totalCost = $apiData[5]['total_cost'] ?? '';
+                        }
+                        
+                        if (!empty($totalCost)) {
+                            // "원" 제거 및 쉼표 제거 후 숫자로 변환
+                            $totalCost = str_replace(['원', ','], '', $totalCost);
+                            if (is_numeric($totalCost)) {
+                                $newAmount = (float)$totalCost;
+                                if ($newAmount != $order['total_amount']) {
+                                    $updateData['total_amount'] = $newAmount;
+                                }
+                            }
                         }
                     }
                     
@@ -578,6 +633,9 @@ class Delivery extends BaseController
                         $syncedCount++;
                         
                         log_message('info', "Insung order synced: Order ID {$order['id']}, Serial {$serialNumber}, Updated: " . json_encode($updateData));
+                    } else {
+                        // 상태가 변경되지 않았어도 동기화 시도는 기록
+                        log_message('debug', "Insung order sync checked: Order ID {$order['id']}, Serial {$serialNumber}, No changes detected. Current status: {$order['status']}, Insung state: " . ($saveState ?? 'N/A'));
                     }
                     
                 } catch (\Exception $e) {
@@ -622,15 +680,46 @@ class Delivery extends BaseController
      */
     private function mapInsungStatusToLocal($insungStatus)
     {
+        // 인성 API 상태값을 로컬 DB 상태로 매핑
+        // 취소 상태도 정확히 매핑되도록 개선
         $statusMap = [
             '접수' => 'processing',
             '배차' => 'processing',
             '운행' => 'completed',
             '완료' => 'delivered',
             '예약' => 'pending',
-            '취소' => 'cancelled'
+            '취소' => 'cancelled',
+            '취소됨' => 'cancelled',
+            '취소처리' => 'cancelled',
+            '취소완료' => 'cancelled',
+            'A취소' => 'cancelled',  // A 접두사가 붙은 취소 상태
+            'A예약' => 'pending',    // A 접두사가 붙은 예약 상태
+            'A접수' => 'processing', // A 접두사가 붙은 접수 상태
+            // 숫자 코드도 처리 (인성 API에서 숫자로 반환할 수도 있음)
+            '10' => 'processing',  // 접수
+            '20' => 'processing',  // 배차
+            '30' => 'completed',   // 운행
+            '40' => 'delivered',   // 완료
+            '50' => 'cancelled',   // 취소
         ];
         
-        return $statusMap[$insungStatus] ?? null;
+        // "A" 접두사가 붙은 상태값 처리 (예: "A취소", "A예약", "A접수")
+        if (preg_match('/^A(.+)$/u', $insungStatus, $matches)) {
+            $baseStatus = trim($matches[1]);
+            if (isset($statusMap[$baseStatus])) {
+                return $statusMap[$baseStatus];
+            }
+        }
+        
+        // 대소문자 구분 없이 매핑
+        $insungStatus = trim($insungStatus);
+        $mappedStatus = $statusMap[$insungStatus] ?? null;
+        
+        // 매핑되지 않은 경우 로그 기록
+        if (!$mappedStatus && !empty($insungStatus)) {
+            log_message('warning', "Unmapped Insung status: '{$insungStatus}'");
+        }
+        
+        return $mappedStatus;
     }
 }

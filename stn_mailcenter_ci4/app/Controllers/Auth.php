@@ -63,6 +63,44 @@ class Auth extends BaseController
             if ($user) {
                 // ckey 기반 ukey, akey 생성
                 $ckey = $user['ckey'] ?? '';
+                $mCode = $user['m_code'] ?? '';
+                $ccCode = $user['cc_code'] ?? '';
+                $apiIdx = null;
+                
+                // API 정보가 있으면 토큰 갱신 시도
+                if (!empty($mCode) && !empty($ccCode) && !empty($ckey)) {
+                    try {
+                        $insungApiListModel = new \App\Models\InsungApiListModel();
+                        $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                        
+                        if ($apiInfo && isset($apiInfo['idx'])) {
+                            $apiIdx = $apiInfo['idx'];
+                            
+                            // OAuth 인증을 통해 새 토큰 발급
+                            $insungApiService = new \App\Libraries\InsungApiService();
+                            
+                            // ukey, akey 생성 (로그인 시마다 새로 생성)
+                            $keyStr = getenv('INSUNG_KEY_STR') ?: 'myapikey';
+                            $ukey = $keyStr . trim($ckey);
+                            $akey = md5($ukey);
+                            
+                            // 토큰 갱신 (OAuth 인증)
+                            $newToken = $insungApiService->updateTokenKey($apiIdx);
+                            
+                            if ($newToken) {
+                                log_message('info', "OAuth token refreshed on login for user: {$username}, api_idx: {$apiIdx}");
+                                $user['token'] = $newToken; // 새 토큰으로 업데이트
+                            } else {
+                                log_message('warning', "OAuth token refresh failed on login for user: {$username}, using existing token");
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        log_message('error', "OAuth token refresh error on login: " . $e->getMessage());
+                        // 토큰 갱신 실패해도 로그인은 진행 (기존 토큰 사용)
+                    }
+                }
+                
+                // ukey, akey 생성 (세션 저장용)
                 $randomPrefix = bin2hex(random_bytes(4)); // 임의의 8글자 생성 (16진수)
                 $ukey = $randomPrefix . $ckey; // 8글자 + ckey
                 $akey = md5($ukey); // ukey를 MD5로 변환
@@ -84,9 +122,9 @@ class Auth extends BaseController
                     'comp_owner' => $user['comp_owner'] ?? '',
                     'comp_tel' => $user['comp_tel'] ?? '',
                     'comp_code' => $user['comp_code'] ?? null, // customer_id로 사용
-                    'cc_code' => $user['cc_code'] ?? '', // tbl_api_list의 cc_code 우선, 없으면 tbl_cc_list의 cc_code
-                    'm_code' => $user['m_code'] ?? '', // 인성 API m_code (tbl_api_list에서)
-                    'token' => $user['token'] ?? '', // 인성 API token (tbl_api_list에서)
+                    'cc_code' => $ccCode, // tbl_api_list의 cc_code 우선, 없으면 tbl_cc_list의 cc_code
+                    'm_code' => $mCode, // 인성 API m_code (tbl_api_list에서)
+                    'token' => $user['token'] ?? '', // 인성 API token (갱신된 토큰 또는 기존 토큰)
                     'ckey' => $ckey, // 인성 API ckey (tbl_api_list에서)
                     'ukey' => $ukey, // 임의의 8글자 + ckey
                     'akey' => $akey, // ukey를 MD5로 변환한 값
@@ -106,42 +144,42 @@ class Auth extends BaseController
             }
         } else {
             // 기존 STN 로그인 처리
-            $user = $this->authModel->authenticate($username, $password);
+        $user = $this->authModel->authenticate($username, $password);
+        
+        // 디버깅용 로그 (임시)
+        log_message('debug', 'Login attempt: username=' . $username . ', user_found=' . ($user ? 'yes' : 'no'));
+        
+        if ($user) {
+            // 고객사 정보 조회
+            $customerInfo = $this->authModel->getCustomerInfo($user['customer_id']);
             
-            // 디버깅용 로그 (임시)
-            log_message('debug', 'Login attempt: username=' . $username . ', user_found=' . ($user ? 'yes' : 'no'));
-            
-            if ($user) {
-                // 고객사 정보 조회
-                $customerInfo = $this->authModel->getCustomerInfo($user['customer_id']);
-                
-                // 세션에 사용자 정보 저장
-                $userData = [
-                    'user_id' => $user['id'],
-                    'username' => $user['username'],
-                    'real_name' => $user['real_name'],
-                    'email' => $user['email'],
-                    'phone' => $user['phone'],
-                    'customer_id' => $user['customer_id'],
-                    'customer_name' => $customerInfo['customer_name'] ?? '',
-                    'customer_code' => $customerInfo['customer_code'] ?? '',
-                    'hierarchy_level' => $customerInfo['hierarchy_level'] ?? '',
-                    'user_role' => $user['user_role'],
-                    'department_id' => $user['department_id'],
+            // 세션에 사용자 정보 저장
+            $userData = [
+                'user_id' => $user['id'],
+                'username' => $user['username'],
+                'real_name' => $user['real_name'],
+                'email' => $user['email'],
+                'phone' => $user['phone'],
+                'customer_id' => $user['customer_id'],
+                'customer_name' => $customerInfo['customer_name'] ?? '',
+                'customer_code' => $customerInfo['customer_code'] ?? '',
+                'hierarchy_level' => $customerInfo['hierarchy_level'] ?? '',
+                'user_role' => $user['user_role'],
+                'department_id' => $user['department_id'],
                     'login_type' => 'stn',
-                    'is_logged_in' => true
-                ];
-                
-                session()->set($userData);
-                
-                // 마지막 로그인 시간 업데이트
-                $this->authModel->updateUserInfo($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
-                
-                return redirect()->to('/')->with('success', '로그인되었습니다.');
-            } else {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', '아이디 또는 비밀번호가 올바르지 않습니다.');
+                'is_logged_in' => true
+            ];
+            
+            session()->set($userData);
+            
+            // 마지막 로그인 시간 업데이트
+            $this->authModel->updateUserInfo($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
+            
+            return redirect()->to('/')->with('success', '로그인되었습니다.');
+        } else {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', '아이디 또는 비밀번호가 올바르지 않습니다.');
             }
         }
     }

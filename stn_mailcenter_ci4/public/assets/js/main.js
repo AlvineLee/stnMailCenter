@@ -7,12 +7,12 @@ if (typeof window.safeJsonParse === 'undefined') {
         // Content-Type이 JSON이 아니면 에러 처리
         if (!contentType || !contentType.includes('application/json')) {
             const text = await response.text();
-            console.error('Non-JSON response received:', {
-                status: response.status,
-                statusText: response.statusText,
-                contentType: contentType,
-                body: text.substring(0, 500) // 처음 500자만 로그
-            });
+            // console.error('Non-JSON response received:', {
+            //     status: response.status,
+            //     statusText: response.statusText,
+            //     contentType: contentType,
+            //     body: text.substring(0, 500) // 처음 500자만 로그
+            // });
             
             // HTML 에러 페이지인 경우
             if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
@@ -28,10 +28,7 @@ if (typeof window.safeJsonParse === 'undefined') {
 
 // 메인 JavaScript 파일 (jQuery)
 $(document).ready(function() {
-    // 모바일 메뉴 토글
-    $('#mobileMenuToggle').on('click', function() {
-        $('.sidebar').toggleClass('open');
-    });
+    // 모바일 메뉴 토글 - 스와이프 제스처로 대체됨 (header.php에서 처리)
     
     // 사이드바 메뉴 활성화
     const currentPage = window.location.pathname.split('/').pop() || 'index.php';

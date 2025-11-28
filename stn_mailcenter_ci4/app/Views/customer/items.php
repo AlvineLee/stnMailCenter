@@ -132,7 +132,7 @@ function saveItems() {
         billing_items: billingItems
     };
 
-    console.log('저장할 데이터:', data);
+    // console.log('저장할 데이터:', data);
     
     // 실제 구현에서는 AJAX로 서버에 전송
     alert('설정이 저장되었습니다.');

@@ -206,6 +206,34 @@ if ($loginType === 'daumdata') {
                             정상
                         </span>
                     </div>
+                    <div class="pt-3 border-t border-gray-200">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">DB 서버</span>
+                                <span class="text-xs font-medium text-gray-900"><?= htmlspecialchars($db_info['hostname'] ?? 'unknown') ?></span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">DB 이름</span>
+                                <span class="text-xs font-medium text-gray-900"><?= htmlspecialchars($db_info['database'] ?? 'unknown') ?></span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">포트</span>
+                                <span class="text-xs font-medium text-gray-900"><?= htmlspecialchars($db_info['port'] ?? '3306') ?></span>
+                            </div>
+                            <?php if (isset($db_info['source'])): ?>
+                            <div class="pt-2 mt-2 border-t border-gray-200">
+                                <div class="text-xs text-gray-400 space-y-1">
+                                    <div>설정 위치:</div>
+                                    <div class="pl-2">
+                                        <div>• env 파일: <?= htmlspecialchars($db_info['source']['env_file_exists']) ?></div>
+                                        <div>• 환경변수: <?= htmlspecialchars($db_info['source']['env_hostname']) ?></div>
+                                        <div>• Config 값: <?= htmlspecialchars($db_info['source']['config_hostname']) ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

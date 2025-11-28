@@ -11,10 +11,81 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
         $(document).ready(function() {
-            // 햄버거 메뉴 토글 기능
-            $('#mobileMenuToggle').on('click', function() {
-                $('.sidebar').toggleClass('open');
-                $(this).toggleClass('active');
+            // 스와이프 제스처로 사이드바 제어
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchEndX = 0;
+            let touchEndY = 0;
+            let isProcessing = false; // 중복 처리 방지 플래그
+            const minSwipeDistance = 50; // 최소 스와이프 거리
+            
+            // 터치 시작
+            $(document).on('touchstart', function(e) {
+                if (isProcessing) return; // 이미 처리 중이면 무시
+                touchStartX = e.originalEvent.touches[0].clientX;
+                touchStartY = e.originalEvent.touches[0].clientY;
+            });
+            
+            // 터치 종료
+            $(document).on('touchend', function(e) {
+                if (isProcessing) return; // 이미 처리 중이면 무시
+                
+                touchEndX = e.originalEvent.changedTouches[0].clientX;
+                touchEndY = e.originalEvent.changedTouches[0].clientY;
+                
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = touchEndY - touchStartY;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
+                
+                // 수평 스와이프가 수직 스와이프보다 크고, 최소 거리 이상일 때만 처리
+                if (absDeltaX > absDeltaY && absDeltaX > minSwipeDistance) {
+                    isProcessing = true; // 처리 시작
+                    
+                    // 왼쪽 화면 끝(20px 이내)에서 오른쪽으로 스와이프하면 메뉴 열기
+                    if (touchStartX <= 20 && deltaX > 0 && !$('.sidebar').hasClass('open')) {
+                        $('.sidebar').addClass('open');
+                    }
+                    // 사이드바가 열려있고, 사이드바 영역에서 왼쪽으로 스와이프하면 메뉴 닫기
+                    else if ($('.sidebar').hasClass('open') && deltaX < 0) {
+                        const sidebar = $('.sidebar')[0];
+                        if (sidebar) {
+                            const sidebarRect = sidebar.getBoundingClientRect();
+                            // 터치 시작점이 사이드바 영역 내에 있는지 확인
+                            if (touchStartX >= sidebarRect.left && touchStartX <= sidebarRect.right) {
+                                $('.sidebar').removeClass('open');
+                            }
+                        }
+                    }
+                    
+                    // 300ms 후 플래그 해제 (중복 방지)
+                    setTimeout(function() {
+                        isProcessing = false;
+                    }, 300);
+                }
+            });
+            
+            // 햄버거 메뉴 버튼 클릭 이벤트
+            $('#mobileMenuToggle').on('click', function(e) {
+                e.stopPropagation(); // 이벤트 전파 방지
+                const $sidebar = $('.sidebar');
+                const isOpen = $sidebar.hasClass('open');
+                
+                if (isOpen) {
+                    $sidebar.removeClass('open');
+                    $(this).removeClass('active');
+                } else {
+                    $sidebar.addClass('open');
+                    $(this).addClass('active');
+                }
+            });
+            
+            // 사이드바가 닫힐 때 햄버거 버튼도 비활성화
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.sidebar').length && !$(e.target).closest('#mobileMenuToggle').length && $('.sidebar').hasClass('open')) {
+                    $('.sidebar').removeClass('open');
+                    $('#mobileMenuToggle').removeClass('active');
+                }
             });
             
             // 사이드바 닫기 버튼 기능
@@ -23,19 +94,10 @@
                 $('#mobileMenuToggle').removeClass('active');
             });
             
-            // 사이드바 외부 클릭 시 메뉴 닫기
-            $(document).on('click', function(e) {
-                if (!$(e.target).closest('.sidebar, #mobileMenuToggle').length) {
-                    $('.sidebar').removeClass('open');
-                    $('#mobileMenuToggle').removeClass('active');
-                }
-            });
-            
             // 레이어 팝업이 열릴 때 사이드바 숨기기 (공통 함수)
             window.hideSidebarForModal = function() {
                 if (window.innerWidth <= 1023) {
                     $('.sidebar').removeClass('open');
-                    $('#mobileMenuToggle').removeClass('active');
                 }
             };
             
@@ -88,7 +150,7 @@
             // 서브메뉴 링크 클릭 시 해당 메뉴 활성화
             $('.submenu a[href]').on('click', function() {
                 const href = $(this).attr('href');
-                console.log('Submenu link clicked:', href);
+                // console.log('Submenu link clicked:', href);
                 
                 // 다른 모든 서브메뉴 닫기 (현재 클릭한 링크의 부모 제외)
                 const $currentSubmenu = $(this).closest('.submenu');
@@ -121,7 +183,7 @@
                     return;
                 }
                 
-                console.log('Top-level menu clicked:', $(this).attr('href'));
+                // console.log('Top-level menu clicked:', $(this).attr('href'));
                 
                 // 모든 서브메뉴 닫기
                 $('.submenu .has-submenu').removeClass('active').find('.nav-arrow').text('v');
@@ -137,12 +199,18 @@
             
             // 현재 페이지에 맞는 메뉴 활성화
             const currentPath = window.location.pathname;
-            console.log('Current path:', currentPath);
+            // console.log('Current path:', currentPath);
+            
+            // 먼저 모든 메뉴 닫기
+            $('.nav-item.has-submenu').removeClass('active').find('.nav-arrow').text('v');
+            $('.submenu .has-submenu').removeClass('active').find('.nav-arrow').text('v');
+            $('.submenu a').removeClass('active');
+            $('.nav-item').removeClass('active');
             
             // 서비스 페이지인 경우 해당 서비스 메뉴 활성화
             if (currentPath.includes('/service/')) {
                 const serviceName = currentPath.split('/service/')[1];
-                console.log('Service name:', serviceName);
+                // console.log('Service name:', serviceName);
                 
                 // 다른 모든 서브메뉴 닫기 (현재 서비스에 해당하는 것만 열기 위해)
                 $('.submenu .has-submenu').removeClass('active').find('.nav-arrow').text('v');
@@ -237,6 +305,45 @@
                     
                     if ($memberMenu.length) {
                         $memberMenu.addClass('active');
+                    }
+                }
+                // 인성(insung) 관련 페이지인 경우 (고객사 관리, 고객사 회원정보)
+                else if (currentPath.includes('/insung/')) {
+                    const $customerMenu = $('.nav-item.has-submenu').filter(function() {
+                        return $(this).find('.nav-text').text() === '고객 관리';
+                    });
+                    
+                    if ($customerMenu.length) {
+                        $customerMenu.addClass('active');
+                        $customerMenu.find('.nav-arrow').text('^');
+                    }
+                    
+                    // 현재 인성 페이지 링크 활성화
+                    if (currentPath.includes('/insung/user-list')) {
+                        const $userListLink = $('.submenu a[href*="insung/user-list"]');
+                        if ($userListLink.length) {
+                            $userListLink.addClass('active');
+                        }
+                    } else if (currentPath.includes('/insung/company-list')) {
+                        const $companyListLink = $('.submenu a[href*="insung/company-list"]');
+                        if ($companyListLink.length) {
+                            $companyListLink.addClass('active');
+                        }
+                    } else if (currentPath.includes('/insung/cc-list')) {
+                        // 콜센터 목록은 콜센터 관리 메뉴에 속함
+                        const $callCenterMenu = $('.nav-item.has-submenu').filter(function() {
+                            return $(this).find('.nav-text').text() === '콜센터 관리';
+                        });
+                        
+                        if ($callCenterMenu.length) {
+                            $callCenterMenu.addClass('active');
+                            $callCenterMenu.find('.nav-arrow').text('^');
+                        }
+                        
+                        const $ccListLink = $('.submenu a[href*="insung/cc-list"]');
+                        if ($ccListLink.length) {
+                            $ccListLink.addClass('active');
+                        }
                     }
                 }
                 // 고객관리 관련 페이지인 경우 (고객관리, 부서관리, 청구관리, 항목관리, 입점관리)
@@ -403,12 +510,12 @@
         // Content-Type이 JSON이 아니면 에러 처리
         if (!contentType || !contentType.includes('application/json')) {
             const text = await response.text();
-            console.error('Non-JSON response received:', {
-                status: response.status,
-                statusText: response.statusText,
-                contentType: contentType,
-                body: text.substring(0, 500) // 처음 500자만 로그
-            });
+            // console.error('Non-JSON response received:', {
+            //     status: response.status,
+            //     statusText: response.statusText,
+            //     contentType: contentType,
+            //     body: text.substring(0, 500) // 처음 500자만 로그
+            // });
             
             // HTML 에러 페이지인 경우
             if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
@@ -424,8 +531,8 @@
     // 전역 에러 핸들러 (처리되지 않은 Promise rejection)
     window.addEventListener('unhandledrejection', function(event) {
         if (event.reason && event.reason.message && event.reason.message.includes('Unexpected token')) {
-            console.error('JSON 파싱 에러 감지:', event.reason);
-            console.error('이 에러는 서버가 HTML을 반환했을 때 발생합니다.');
+            // console.error('JSON 파싱 에러 감지:', event.reason);
+            // console.error('이 에러는 서버가 HTML을 반환했을 때 발생합니다.');
             // 사용자에게는 조용히 처리 (콘솔에만 로그)
             event.preventDefault(); // 기본 에러 표시 방지
         }
@@ -433,10 +540,12 @@
     </script>
 </head>
 <body>
-    <!-- 햄버거 메뉴 버튼 -->
-    <button id="mobileMenuToggle" class="fixed top-4 left-4 z-50 lg:hidden bg-white p-2 rounded-md shadow-lg border border-gray-200">
-        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+    <!-- 햄버거 메뉴 버튼 - 1023px 이하에서만 표시 (PC 모드에서 브라우저를 줄였을 때 메뉴 활성화용) -->
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" aria-label="메뉴 열기">
+        <svg class="hamburger-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
         </svg>
     </button>
     
@@ -447,8 +556,8 @@
             <?php if (isset($content_header)): ?>
             <div class="bg-white rounded-lg shadow-sm border-2 border-gray-300 py-6 px-6 mb-3 w-full">
                 <div class="flex items-center">
-                    <h1 class="text-xl font-bold text-gray-800"><?= $content_header['title'] ?></h1>
-                    <p class="text-sm text-gray-600 ml-3"><?= $content_header['description'] ?></p>
+                    <h1 class="text-xl font-bold text-gray-900"><?= $content_header['title'] ?></h1>
+                    <p class="text-sm text-gray-900 ml-3"><?= $content_header['description'] ?></p>
                 </div>
             </div>
             <?php endif; ?>

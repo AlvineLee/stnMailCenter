@@ -488,6 +488,8 @@ class Service extends BaseController
                 'order_system' => ($loginType === 'daumdata') ? 'insung' : 'stn',
                 'company_name' => $this->request->getPost('company_name'),
                 'contact' => $this->request->getPost('contact'),
+                'sms_telno' => $this->request->getPost('sms_telno') ?? $this->request->getPost('contact'),
+                'o_c_code' => $this->request->getPost('o_c_code') ?? null,
                 'address' => $this->request->getPost('address'),
                 'departure_company_name' => $this->request->getPost('departure_company_name'),
                 'departure_contact' => $this->request->getPost('departure_contact'),
@@ -495,7 +497,11 @@ class Service extends BaseController
                 'departure_detail' => $this->request->getPost('departure_detail'),
                 'departure_manager' => $this->request->getPost('departure_manager'),
                 'departure_department' => $this->request->getPost('departure_department'),
-                'departure_dong' => $this->request->getPost('departure_dong'),
+                // 루비 버전 참조: departure_dong2가 있으면 우선 사용, 없으면 departure_dong 사용
+                'departure_dong' => $this->request->getPost('departure_dong2') ?: $this->request->getPost('departure_dong'),
+                'departure_lon' => $this->request->getPost('departure_lon') ?? null,
+                'departure_lat' => $this->request->getPost('departure_lat') ?? null,
+                's_c_code' => $this->request->getPost('s_c_code') ?? null,
                 'waypoint_address' => $this->request->getPost('waypoint_address'),
                 'waypoint_detail' => $this->request->getPost('waypoint_detail'),
                 'waypoint_contact' => $this->request->getPost('waypoint_contact'),
@@ -508,7 +514,11 @@ class Service extends BaseController
                 'detail_address' => $this->request->getPost('detail_address'),
                 'destination_manager' => $this->request->getPost('destination_manager'),
                 'destination_department' => $this->request->getPost('destination_department'),
-                'destination_dong' => $this->request->getPost('destination_dong'),
+                // 루비 버전 참조: destination_dong2가 있으면 우선 사용, 없으면 destination_dong 사용
+                'destination_dong' => $this->request->getPost('destination_dong2') ?: $this->request->getPost('destination_dong'),
+                'destination_lon' => $this->request->getPost('destination_lon') ?? null,
+                'destination_lat' => $this->request->getPost('destination_lat') ?? null,
+                'd_c_code' => $this->request->getPost('d_c_code') ?? null,
                 'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
                 'quantity' => $this->request->getPost('quantity') ?? 1,
                 'unit' => $this->request->getPost('unit') ?? '개',
@@ -516,7 +526,21 @@ class Service extends BaseController
                 'box_medium_overload' => $this->request->getPost('box_medium_overload') ? 1 : 0,
                 'pouch_medium_overload' => $this->request->getPost('pouch_medium_overload') ? 1 : 0,
                 'bag_medium_overload' => ($serviceType === 'parcel-bag' && $this->request->getPost('bag_medium_overload')) ? 1 : 0,
-                'status' => 'pending'
+                'status' => 'pending',
+                'state' => '10', // 인성 API 처리상태: 10(접수)
+                'total_amount' => $this->request->getPost('total_amount') ?? 0,
+                'add_cost' => $this->request->getPost('add_cost') ?? 0,
+                'discount_cost' => $this->request->getPost('discount_cost') ?? 0,
+                'delivery_cost' => $this->request->getPost('delivery_cost') ?? 0,
+                'car_kind' => $this->request->getPost('car_kind') ?? null,
+                'payment_type' => $this->request->getPost('payment_type'),
+                'notes' => $this->request->getPost('notes'),
+                'reserve_check' => $this->request->getPost('reserve_check') ?? 0,
+                'reserve_date' => $this->request->getPost('reserve_date') ?? null,
+                'reserve_hour' => $this->request->getPost('reserve_hour') ?? null,
+                'reserve_min' => $this->request->getPost('reserve_min') ?? null,
+                'reserve_sec' => $this->request->getPost('reserve_sec') ?? 0,
+                'notification_service' => $this->request->getPost('notification_service') ? 1 : 0
             ];
             
             // life-driver 서비스의 경우 추가 필드를 tbl_orders에도 저장
@@ -537,8 +561,8 @@ class Service extends BaseController
             
             log_message('debug', 'Order inserted with ID: ' . $orderId);
             
-            // 3-1. daumdata 로그인 + 퀵 서비스인 경우 인성 API 주문 접수
-            if ($loginType === 'daumdata' && in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
+            // 3-1. 퀵 서비스인 경우 인성 API 주문 접수
+            if (in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
                 try {
                     $insungApiService = new \App\Libraries\InsungApiService();
                     $insungApiListModel = new \App\Models\InsungApiListModel();
@@ -547,42 +571,84 @@ class Service extends BaseController
                     $mCode = session()->get('m_code');
                     $ccCode = session()->get('cc_code');
                     $token = session()->get('token');
-                    $userId = session()->get('user_id'); // daumdata의 user_id
+                    $userId = session()->get('user_id');
                     
-                    // api_idx 조회 (cc_code로 조회)
+                    // STN 로그인인 경우 (mcode, cccode가 없는 경우) 기본값 사용
+                    $isStnLogin = empty($mCode) || empty($ccCode);
+                    if ($isStnLogin) {
+                        $mCode = '4540';
+                        $ccCode = '7829';
+                        $userId = '에스티엔온라인접수'; // STN 로그인 시 고정 user_id
+                        log_message('info', "STN login detected - Using default mcode={$mCode}, cccode={$ccCode}, user_id={$userId}");
+                    }
+                    
+                    // api_idx 조회 (mcode, cccode로 조회)
                     $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
                     $apiIdx = $apiInfo ? $apiInfo['idx'] : null;
+                    
+                    // 토큰이 없으면 DB에서 가져오기
+                    if (empty($token) && $apiInfo) {
+                        $token = $apiInfo['token'] ?? '';
+                    }
+                    
+                    // daumdata 로그인인 경우 user_id가 없으면 세션에서 가져오기
+                    if (!$isStnLogin && empty($userId)) {
+                        $userId = session()->get('user_id') ?? '1';
+                    }
                     
                     if ($mCode && $ccCode && $token && $userId && $apiIdx) {
                         // 인성 API에 전달할 주문 데이터 구성
                         $insungOrderData = [
                             'service_type' => $serviceType,
                             'delivery_method' => $this->request->getPost('delivery_method') ?? 'motorcycle',
+                            'deliveryMethod' => $this->request->getPost('deliveryMethod') ?? $this->request->getPost('delivery_method') ?? 'one_way', // 배송방법 (편도/왕복/경유)
+                            'deliveryType' => $this->request->getPost('deliveryType') ?? $this->request->getPost('delivery_type') ?? 'normal', // 배송형태 (일반/급송)
+                            'urgency_level' => $this->request->getPost('urgency_level') ?? 'normal', // 긴급도
                             'company_name' => $this->request->getPost('company_name'),
                             'contact' => $this->request->getPost('contact'),
+                            'sms_telno' => $this->request->getPost('sms_telno') ?? $this->request->getPost('contact'),
+                            'o_c_code' => $this->request->getPost('o_c_code') ?? '',
                             'departure_company_name' => $this->request->getPost('departure_company_name'),
                             'departure_contact' => $this->request->getPost('departure_contact'),
                             'departure_address' => $this->request->getPost('departure_address'),
                             'departure_detail' => $this->request->getPost('departure_detail'),
                             'departure_manager' => $this->request->getPost('departure_manager'),
                             'departure_department' => $this->request->getPost('departure_department'),
-                            'departure_dong' => $this->request->getPost('departure_dong'),
+                            // 루비 버전 참조: departure_dong2가 있으면 우선 사용, 없으면 departure_dong 사용
+                            'departure_dong' => $this->request->getPost('departure_dong2') ?: $this->request->getPost('departure_dong'),
                             'departure_lon' => $this->request->getPost('departure_lon') ?? '',
                             'departure_lat' => $this->request->getPost('departure_lat') ?? '',
+                            // 루비 버전 참조: departure_fulladdr (지번 주소, 좌표 조회용)
+                            'departure_fulladdr' => $this->request->getPost('departure_fulladdr') ?? '',
+                            's_c_code' => $this->request->getPost('s_c_code') ?? '',
                             'destination_company_name' => $this->request->getPost('destination_company_name'),
                             'destination_contact' => $this->request->getPost('destination_contact'),
                             'destination_address' => $this->request->getPost('destination_address'),
                             'detail_address' => $this->request->getPost('detail_address'),
                             'destination_manager' => $this->request->getPost('destination_manager'),
                             'destination_department' => $this->request->getPost('destination_department'),
-                            'destination_dong' => $this->request->getPost('destination_dong'),
+                            // 루비 버전 참조: destination_dong2가 있으면 우선 사용, 없으면 destination_dong 사용
+                            'destination_dong' => $this->request->getPost('destination_dong2') ?: $this->request->getPost('destination_dong'),
                             'destination_lon' => $this->request->getPost('destination_lon') ?? '',
                             'destination_lat' => $this->request->getPost('destination_lat') ?? '',
+                            // 루비 버전 참조: destination_fulladdr (지번 주소, 좌표 조회용)
+                            'destination_fulladdr' => $this->request->getPost('destination_fulladdr') ?? '',
+                            'd_c_code' => $this->request->getPost('d_c_code') ?? '',
                             'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
-                            'delivery_content' => $this->request->getPost('delivery_content'),
-                            'notes' => $this->request->getPost('notes'),
+                            'delivery_content' => $this->request->getPost('delivery_content') ?? $this->request->getPost('special_instructions') ?? $this->request->getPost('deliveryInstructions') ?? '',
+                            'notes' => $this->request->getPost('notes') ?? $this->request->getPost('special_instructions') ?? $this->request->getPost('deliveryInstructions') ?? '',
                             'payment_type' => $this->request->getPost('payment_type'),
-                            'total_amount' => $this->request->getPost('total_amount') ?? '0',
+                            'total_amount' => $this->request->getPost('total_amount') ? (string)(float)$this->request->getPost('total_amount') : '0',
+                            'add_cost' => $this->request->getPost('add_cost') ? (string)(float)$this->request->getPost('add_cost') : '0',
+                            'discount_cost' => $this->request->getPost('discount_cost') ? (string)(float)$this->request->getPost('discount_cost') : '0',
+                            'delivery_cost' => $this->request->getPost('delivery_cost') ? (string)(float)$this->request->getPost('delivery_cost') : '0',
+                            // 차량무게와 차량종류를 조합하여 car_kind 생성
+                            'car_kind' => $this->buildCarKind($this->request->getPost('truck_capacity'), $this->request->getPost('truck_body_type')),
+                            'reserve_check' => $this->request->getPost('reserve_check') ?? '0',
+                            'reserve_date' => $this->request->getPost('reserve_date') ?? '',
+                            'reserve_hour' => $this->request->getPost('reserve_hour') ?? '',
+                            'reserve_min' => $this->request->getPost('reserve_min') ?? '',
+                            'reserve_sec' => $this->request->getPost('reserve_sec') ?? '0',
                             'distance' => $this->request->getPost('distance') ?? ''
                         ];
                         
@@ -597,14 +663,30 @@ class Service extends BaseController
                             log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}");
                         } else {
                             log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: {$insungResult['message']}");
-                            // 인성 API 실패해도 주문은 정상 처리됨
+                            // 인성 API 실패 시 주문 상태를 'api_failed'로 변경
+                            try {
+                                $orderModel->update($orderId, [
+                                    'status' => 'api_failed'
+                                ]);
+                                log_message('info', "Order status updated to 'api_failed' for Order ID: {$orderId}");
+                            } catch (\Exception $e) {
+                                log_message('error', "Failed to update order status to 'api_failed' for Order ID: {$orderId}. Error: " . $e->getMessage());
+                            }
                         }
                     } else {
                         log_message('warning', "Insung API order registration skipped. Missing required session data. Order ID: {$orderId}");
                     }
                 } catch (\Exception $e) {
                     log_message('error', "Insung API order registration exception: " . $e->getMessage());
-                    // 인성 API 실패해도 주문은 정상 처리됨
+                    // 인성 API 예외 발생 시 주문 상태를 'api_failed'로 변경
+                    try {
+                        $orderModel->update($orderId, [
+                            'status' => 'api_failed'
+                        ]);
+                        log_message('info', "Order status updated to 'api_failed' due to exception for Order ID: {$orderId}");
+                    } catch (\Exception $updateException) {
+                        log_message('error', "Failed to update order status to 'api_failed' for Order ID: {$orderId}. Error: " . $updateException->getMessage());
+                    }
                 }
             }
             
@@ -1092,6 +1174,79 @@ class Service extends BaseController
         
         // 기본값 (quick-motorcycle)
         return 1;
+    }
+    
+    /**
+     * 차량무게와 차량종류를 조합하여 car_kind 생성
+     * 루비 버전 참조: car_kind는 select 태그(<select name="car_kind" id="itemtype_kind">)에서 직접 선택된 값
+     * 만약 select에서 선택된 값이 없으면, truck_capacity와 truck_body_type을 조합하여 생성
+     * 
+     * @param string|null $truckCapacity 차량무게 (예: '25t', '5t')
+     * @param string|null $truckBodyType 차량종류 (예: 'extra_long_axle', 'cargo', 'plus_wing')
+     * @return string car_kind 값 (빈 문자열 또는 조합된 값)
+     */
+    private function buildCarKind($truckCapacity = null, $truckBodyType = null)
+    {
+        // 루비 버전 참조: car_kind는 select 태그에서 직접 선택된 값이 우선
+        $carKind = $this->request->getPost('car_kind');
+        if (!empty($carKind)) {
+            return $carKind;
+        }
+        
+        // 트럭이 아닌 경우 (다마스, 라보 등) car_kind는 빈 값
+        $deliveryMethod = $this->request->getPost('delivery_method');
+        $serviceType = $this->request->getPost('service_type');
+        
+        // 트럭 서비스가 아닌 경우 빈 값 반환
+        if ($deliveryMethod !== 'truck' && !in_array($serviceType, ['quick-vehicle', 'quick-moving'])) {
+            return '';
+        }
+        
+        // 인성 API 문서 참조: 차종구분 코드 매핑
+        // API 문서: 01: 플축카고, 11: 리프트카고, 12: 플러스리, 42: 플축리, 02: 윙바디, 03: 플러스윙, 04: 축윙, 05: 플축윙, 14: 리프트윙, 16: 플러스윙리, 17: 플축윙리, 06: 탑, 08: 리프트탑, 07: 호루, 50: 리프트호루, 47: 자바라, 51: 리프트자바라, 18: 냉동탑, 19: 냉장탑, 21: 냉동윙, 22: 냉장윙, 23: 냉동탑리, 24: 냉장탑리, 25: 냉동플축윙, 26: 냉장플축윙, 27: 냉동플축리, 28: 냉장플축리, 29: 평카, 30: 로브이, 31: 츄레라, 34: 로베드, 32: 사다리, 33: 초장축
+        $bodyTypeMap = [
+            'plus_axle_cargo' => '01',          // 플축카고
+            'lift_cargo' => '11',               // 리프트카고
+            'plus_lift' => '12',                // 플러스리
+            'plus_axle_lift' => '42',           // 플축리
+            'wing_body' => '02',                // 윙바디
+            'plus_wing' => '03',                // 플러스윙
+            'axle_wing' => '04',                // 축윙
+            'plus_axle_wing' => '05',           // 플축윙
+            'lift_wing' => '14',                // 리프트윙
+            'plus_wing_lift' => '16',           // 플러스윙리
+            'plus_axle_wing_lift' => '17',      // 플축윙리
+            'top' => '06',                      // 탑
+            'lift_top' => '08',                 // 리프트탑
+            'tarpaulin' => '07',                // 호루
+            'lift_tarpaulin' => '50',           // 리프트호루
+            'jabara' => '47',                   // 자바라
+            'lift_jabara' => '51',              // 리프트자바라
+            'refrigerated_top' => '18',         // 냉동탑
+            'cold_storage_top' => '19',         // 냉장탑
+            'refrigerated_wing' => '21',        // 냉동윙
+            'cold_storage_wing' => '22',         // 냉장윙
+            'refrigerated_top_lift' => '23',    // 냉동탑리
+            'cold_storage_top_lift' => '24',    // 냉장탑리
+            'refrigerated_plus_axle_wing' => '25', // 냉동플축윙
+            'cold_storage_plus_axle_wing' => '26', // 냉장플축윙
+            'refrigerated_plus_axle_lift' => '27', // 냉동플축리
+            'cold_storage_plus_axle_lift' => '28', // 냉장플축리
+            'flat_car' => '29',                 // 평카
+            'lowboy' => '30',                   // 로브이
+            'trailer' => '31',                  // 츄레라
+            'lowbed' => '34',                   // 로베드
+            'ladder' => '32',                   // 사다리
+            'extra_long_axle' => '33',          // 초장축
+        ];
+        
+        // truck_body_type이 있으면 숫자 코드로 변환
+        if (!empty($truckBodyType) && isset($bodyTypeMap[$truckBodyType])) {
+            return $bodyTypeMap[$truckBodyType];
+        }
+        
+        // 매핑되지 않은 경우 빈 값 반환 (인성 API가 특정 형식만 받으므로)
+        return '';
     }
     
     /**

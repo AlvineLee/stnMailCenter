@@ -153,6 +153,8 @@ $routes->group('billing', function($routes) {
 $routes->group('admin', function($routes) {
     $routes->get('order-type', 'Admin::orderType');
     $routes->get('notification', 'Admin::notification');
+    $routes->get('pricing', 'Admin::pricing');
+    $routes->post('savePricing', 'Admin::savePricing');
     $routes->post('updateServicePermission', 'Admin::updateServicePermission');
     $routes->post('createServicePermission', 'Admin::createServicePermission');
     // 서비스 타입 관리
@@ -233,6 +235,9 @@ $routes->group('insung', function($routes) {
     $routes->delete('deleteCcLogo/(:segment)', 'Insung::deleteCcLogo/$1');
     $routes->post('uploadCompanyLogos', 'Insung::uploadCompanyLogos');
     $routes->delete('deleteCompanyLogo/(:segment)', 'Insung::deleteCompanyLogo/$1');
+    $routes->post('getInsungMemberList', 'Insung::getInsungMemberList');
+    $routes->post('useInsungMember', 'Insung::useInsungMember');
+    $routes->post('batchUseInsungMembers', 'Insung::batchUseInsungMembers');
 });
 
 // 테스트 라우트

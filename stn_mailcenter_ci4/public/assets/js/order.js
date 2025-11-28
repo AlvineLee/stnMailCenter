@@ -116,7 +116,7 @@ $(document).ready(function() {
         }
         
         // 주문 접수 처리 (실제로는 서버로 전송)
-        console.log('주문 데이터:', orderData);
+        // console.log('주문 데이터:', orderData);
         
         // 성공 메시지
         alert('주문이 성공적으로 접수되었습니다!');

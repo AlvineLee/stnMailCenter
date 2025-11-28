@@ -14,8 +14,8 @@
                     <!-- 운송장 바코드 등록 (메일룸 서비스 전용) -->
                     <div class="mb-3">
                         <section class="bg-yellow-50 rounded-lg shadow-sm border border-yellow-200 p-3">
-                            <div class="flex items-center gap-3">
-                                <label for="tracking_barcode" class="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 min-w-0">
+                                <label for="tracking_barcode" class="text-sm font-semibold text-gray-700 whitespace-nowrap flex-shrink-0">
                                     운송장 바코드등록
                                 </label>
                                 <input 
@@ -25,7 +25,7 @@
                                     value="<?= old('tracking_barcode', '') ?>" 
                                     placeholder="바코드를 스캔하세요"
                                     autocomplete="off"
-                                    class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent bg-white"
+                                    class="flex-1 min-w-0 w-full sm:w-auto px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white transition-colors"
                                 >
                             </div>
                         </section>
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 // 바코드 값이 있으면 처리
                 if (barcodeInput.value.trim()) {
-                    console.log('바코드 스캔 완료:', barcodeInput.value);
+                    // console.log('바코드 스캔 완료:', barcodeInput.value);
                     // 여기에 바코드 처리 로직 추가 가능
                 }
             }
@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // 입력이 멈춘 후 500ms 후에 자동 처리 (선택사항)
             barcodeTimer = setTimeout(function() {
                 if (barcodeInput.value.trim().length > 5) { // 최소 길이 체크
-                    console.log('바코드 자동 인식:', barcodeInput.value);
+                    // console.log('바코드 자동 인식:', barcodeInput.value);
                 }
             }, 500);
         });

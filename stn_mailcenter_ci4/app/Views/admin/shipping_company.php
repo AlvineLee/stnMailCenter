@@ -198,7 +198,7 @@ function editCompany(id) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             alert('운송사 정보를 불러오는데 실패했습니다.');
         });
 }
@@ -241,12 +241,12 @@ document.getElementById('companyForm').addEventListener('submit', function(e) {
         } else {
             alert(data.message || '운송사 저장에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('운송사 저장 중 오류가 발생했습니다.');
     });
 });

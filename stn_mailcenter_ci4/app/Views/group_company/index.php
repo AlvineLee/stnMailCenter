@@ -356,12 +356,12 @@ function createHeadOfficeAccount(event) {
         } else {
             alert(data.message || '계정 생성에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('계정 생성 중 오류가 발생했습니다.');
     });
 }
@@ -411,7 +411,7 @@ function viewAccount(userId) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('계정 정보 조회 중 오류가 발생했습니다.');
     });
 }
@@ -476,7 +476,7 @@ function changePassword() {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('비밀번호 변경 중 오류가 발생했습니다.');
     });
 }
@@ -537,7 +537,7 @@ function manageLogo(customerId, customerName) {
         }, 100);
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         document.getElementById('logoModal').classList.remove('hidden');
         
         setTimeout(() => {
@@ -735,7 +735,7 @@ function uploadLogoFromClipboard(base64Data) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('로고 업로드 중 오류가 발생했습니다.');
     });
 }
@@ -779,7 +779,7 @@ function uploadLogoFile(event) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             alert('로고 업로드 중 오류가 발생했습니다.');
         });
     } else {
@@ -833,7 +833,7 @@ function deleteLogo() {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('로고 삭제 중 오류가 발생했습니다: ' + error.message);
     });
 }
@@ -881,7 +881,7 @@ function openOrderTypeModal(userId, userName) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             document.getElementById('modal-loading').classList.add('hidden');
             alert('데이터를 불러오는 중 오류가 발생했습니다.');
             closeOrderTypeModal();
@@ -1044,7 +1044,7 @@ function saveUserServiceSettings() {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('설정 저장 중 오류가 발생했습니다.');
     });
 }

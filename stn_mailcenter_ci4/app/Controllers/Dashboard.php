@@ -58,6 +58,26 @@ class Dashboard extends BaseController
             $selectedCustomer = $this->dashboardModel->getCustomerById($selectedCustomerId);
         }
         
+        // DB 연결 정보 가져오기
+        $dbConfig = config('Database');
+        
+        // 환경 변수에서 직접 읽기 (디버깅용)
+        $envHostname = getenv('DB_HOSTNAME');
+        $envDatabase = getenv('DB_DATABASE');
+        $envUsername = getenv('DB_USERNAME');
+        
+        $dbInfo = [
+            'hostname' => $dbConfig->default['hostname'] ?? 'unknown',
+            'database' => $dbConfig->default['database'] ?? 'unknown',
+            'username' => $dbConfig->default['username'] ?? 'unknown',
+            'port' => $dbConfig->default['port'] ?? 3306,
+            'source' => [
+                'env_hostname' => $envHostname ?: 'not set',
+                'config_hostname' => $dbConfig->default['hostname'] ?? 'not set',
+                'env_file_exists' => file_exists(ROOTPATH . 'env') ? 'yes (env)' : (file_exists(ROOTPATH . '.env') ? 'yes (.env)' : 'no')
+            ]
+        ];
+        
         $data = [
             'title' => 'STN Network - 대시보드',
             'content_header' => [
@@ -74,7 +94,8 @@ class Dashboard extends BaseController
             'recent_orders' => $recent_orders,
             'customers' => $customers,
             'selected_customer_id' => $selectedCustomerId,
-            'selected_customer' => $selectedCustomer
+            'selected_customer' => $selectedCustomer,
+            'db_info' => $dbInfo
         ];
         
         return view('dashboard/index', $data);

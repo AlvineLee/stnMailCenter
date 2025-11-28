@@ -45,7 +45,7 @@
         <div class="user-details">
             <span class="user-name"><?= session()->get('real_name') ?? session()->get('user_name') ?? session()->get('username') ?? 'Guest' ?></span>
         </div>
-        <a href="<?= base_url('auth/logout') ?>" class="logout-link">➡ logout</a>
+        <a href="<?= base_url('auth/logout') ?>" class="logout-link">🚪 로그아웃</a>
     </div>
     
     <nav class="sidebar-nav">
@@ -166,6 +166,7 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('admin/order-type') ?>">오더유형 설정</a></li>
+                    <li><a href="<?= base_url('admin/pricing') ?>">요금설정</a></li>
                 </ul>
             </li>
             <?php
@@ -246,6 +247,7 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('admin/order-type') ?>">오더유형 설정</a></li>
+                    <li><a href="<?= base_url('admin/pricing') ?>">요금설정</a></li>
                     <li><a href="<?= base_url('shipping-company') ?>">운송사 관리</a></li>
                     <li><a href="<?= base_url('admin/notification') ?>">알림설정</a></li>
                 </ul>

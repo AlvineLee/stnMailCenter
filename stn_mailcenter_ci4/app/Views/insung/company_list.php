@@ -35,8 +35,8 @@
     </div>
 
     <!-- 검색 결과 정보 -->
-    <div class="mb-4 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
+    <div class="mb-4 px-2 md:px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div class="text-sm text-gray-700">
                 <?php if (isset($pagination) && $pagination): ?>
                     총 <?= number_format($pagination['total_count']) ?>건 중 
@@ -45,12 +45,13 @@
                     검색 결과가 없습니다.
                 <?php endif; ?>
             </div>
-            <div class="flex gap-2">
+            <div class="flex gap-2 w-full sm:w-auto">
                 <button onclick="openCompanyLogoModal()" 
                         id="bulkLogoBtn"
-                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:bg-gray-400 disabled:cursor-not-allowed flex-1 sm:flex-none"
                         disabled>
-                    선택한 고객사 로고 업로드
+                    <span class="hidden sm:inline">선택한 고객사 로고 업로드</span>
+                    <span class="sm:hidden">로고 업로드</span>
                 </button>
             </div>
         </div>
@@ -128,63 +129,22 @@
 
     <!-- 페이지네이션 -->
     <?php if (isset($pagination) && $pagination && $pagination['total_pages'] > 1): ?>
-    <div class="list-pagination">
-        <div class="pagination">
-            <?php
-            $currentPage = $pagination['current_page'];
-            $totalPages = $pagination['total_pages'];
-            $queryParams = [
-                'cc_code' => $cc_code_filter ?? 'all',
-                'search_name' => $search_name ?? ''
-            ];
-            ?>
-            
-            <?php if ($pagination['has_previous']): ?>
-                <a href="<?= base_url('insung/company-list?' . http_build_query(array_merge($queryParams, ['page' => $currentPage - 1]))) ?>" class="nav-button">이전</a>
-            <?php else: ?>
-                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">이전</span>
-            <?php endif; ?>
-            
-            <?php
-            // 항상 5개 페이지 번호를 표시하도록 계산
-            $showPages = 5; // 표시할 페이지 개수
-            $halfPages = floor($showPages / 2); // 2
-            
-            // 시작 페이지 계산
-            if ($currentPage <= $halfPages + 1) {
-                // 앞부분: 1부터 시작
-                $startPage = 1;
-            } elseif ($currentPage >= $totalPages - $halfPages) {
-                // 뒷부분: 끝에서 5개
-                $startPage = max(1, $totalPages - $showPages + 1);
-            } else {
-                // 중간: 현재 페이지 중심
-                $startPage = $currentPage - $halfPages;
-            }
-            
-            // 끝 페이지 계산
-            $endPage = min($totalPages, $startPage + $showPages - 1);
-            
-            // 실제 표시할 페이지 범위 재조정 (총 페이지가 5개 미만인 경우)
-            if ($totalPages < $showPages) {
-                $startPage = 1;
-                $endPage = $totalPages;
-            }
-            
-            for ($i = $startPage; $i <= $endPage; $i++):
-                $isActive = $i == $currentPage;
-                $pageQueryParams = array_merge($queryParams, ['page' => $i]);
-            ?>
-                <a href="<?= base_url('insung/company-list?' . http_build_query($pageQueryParams)) ?>" class="page-number <?= $isActive ? 'active' : '' ?>"><?= $i ?></a>
-            <?php endfor; ?>
-            
-            <?php if ($pagination['has_next']): ?>
-                <a href="<?= base_url('insung/company-list?' . http_build_query(array_merge($queryParams, ['page' => $currentPage + 1]))) ?>" class="nav-button">다음</a>
-            <?php else: ?>
-                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">다음</span>
-            <?php endif; ?>
-        </div>
-    </div>
+    <?php
+    // 공통 페이징 라이브러리 사용
+    $paginationHelper = new \App\Libraries\PaginationHelper(
+        $pagination['total_count'],
+        $pagination['per_page'],
+        $pagination['current_page'],
+        base_url('insung/company-list'),
+        array_filter([
+            'cc_code' => ($cc_code_filter ?? 'all') !== 'all' ? $cc_code_filter : null,
+            'search_name' => !empty($search_name) ? $search_name : null
+        ], function($value) {
+            return $value !== null && $value !== '';
+        })
+    );
+    echo $paginationHelper->renderWithCurrentStyle();
+    ?>
     <?php endif; ?>
 </div>
 
@@ -571,7 +531,7 @@ function uploadCompanyLogos(event) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             closeCompanyLogoModal();
             showWarningModal('로고 업로드 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
         });
@@ -615,7 +575,7 @@ function uploadCompanyLogos(event) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             closeCompanyLogoModal();
             showWarningModal('로고 업로드 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
         });

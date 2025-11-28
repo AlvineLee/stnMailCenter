@@ -46,8 +46,8 @@
     </div>
 
     <!-- 검색 결과 정보 -->
-    <div class="mb-4 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
+    <div class="mb-4 px-2 md:px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div class="text-sm text-gray-700">
                 <?php if (isset($pagination) && $pagination): ?>
                     총 <?= number_format($pagination['total_count']) ?>건 중 
@@ -426,19 +426,10 @@
                     <th style="min-width: 200px;">주문번호</th>
                     <th>주문자회사명</th>
                     <th>주문자연락처</th>
-                    <th>주문자주소</th>
                     <th>출발지상호</th>
                     <th>출발지연락처</th>
-                    <th>출발지부서</th>
-                    <th>출발지담당</th>
-                    <th>출발지주소</th>
-                    <th>출발지상세주소</th>
                     <th>도착지상호</th>
                     <th>도착지연락처</th>
-                    <th>도착지부서</th>
-                    <th>도착지담당</th>
-                    <th>도착지주소</th>
-                    <th>도착지상세주소</th>
                     <th>물품종류</th>
                     <th>수량</th>
                     <th>주문일자</th>
@@ -497,19 +488,10 @@
                     </td>
                     <td><?= esc($order['company_name'] ?? '-') ?></td>
                     <td><?= esc($order['contact'] ?? '-') ?></td>
-                    <td><?= esc($order['address'] ?? '-') ?></td>
                     <td><?= esc($order['departure_company_name'] ?? '-') ?></td>
                     <td><?= esc($order['departure_contact'] ?? '-') ?></td>
-                    <td><?= esc($order['departure_department'] ?? '-') ?></td>
-                    <td><?= esc($order['departure_manager'] ?? '-') ?></td>
-                    <td><?= esc($order['departure_address'] ?? '-') ?></td>
-                    <td><?= esc($order['departure_detail'] ?? '-') ?></td>
                     <td><?= esc($order['destination_company_name'] ?? '-') ?></td>
                     <td><?= esc($order['destination_contact'] ?? '-') ?></td>
-                    <td><?= esc($order['destination_department'] ?? '-') ?></td>
-                    <td><?= esc($order['destination_manager'] ?? '-') ?></td>
-                    <td><?= esc($order['destination_address'] ?? '-') ?></td>
-                    <td><?= esc($order['detail_address'] ?? '-') ?></td>
                     <td><?= esc($order['item_type'] ?? '-') ?></td>
                     <td><?= esc($order['quantity'] ?? '-') ?></td>
                     <td><?= esc($order['order_date'] ?? '-') ?></td>
@@ -521,7 +503,8 @@
                             'processing' => '접수완료',
                             'completed' => '배송중',
                             'delivered' => '배송완료',
-                            'cancelled' => '취소'
+                            'cancelled' => '취소',
+                            'api_failed' => 'API실패'
                         ];
                         $statusLabel = $statusLabels[$order['status'] ?? ''] ?? ($order['status'] ?? '-');
                         ?>
@@ -548,6 +531,12 @@
     <div class="list-pagination">
         <div class="pagination">
             <?php if ($pagination['has_prev']): ?>
+                <a href="?<?= http_build_query(array_merge($_GET, ['page' => 1])) ?>" class="nav-button">처음</a>
+            <?php else: ?>
+                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">처음</span>
+            <?php endif; ?>
+            
+            <?php if ($pagination['has_prev']): ?>
                 <a href="?<?= http_build_query(array_merge($_GET, ['page' => $pagination['prev_page']])) ?>" class="nav-button">이전</a>
             <?php else: ?>
                 <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">이전</span>
@@ -569,99 +558,43 @@
             <?php else: ?>
                 <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">다음</span>
             <?php endif; ?>
+            
+            <?php if ($pagination['has_next']): ?>
+                <a href="?<?= http_build_query(array_merge($_GET, ['page' => $pagination['total_pages']])) ?>" class="nav-button">마지막</a>
+            <?php else: ?>
+                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">마지막</span>
+            <?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
 </div>
 
 <!-- 주문 상세 팝업 모달 -->
-<div id="orderDetailModal" class="modal-overlay" style="display: none; z-index: 9999 !important;">
-    <div class="modal-container">
-        <div class="modal-header">
-            <h3>주문 상세 정보</h3>
-            <button class="modal-close" onclick="closeOrderDetail()">&times;</button>
+<div id="orderDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" style="z-index: 10000 !important;" onclick="event.stopPropagation()">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-800">주문 상세 정보</h3>
+            <button type="button" onclick="closeOrderDetail()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
-        <div class="modal-content">
+        <div class="p-4">
             <!-- 내용은 restoreModalContent()에서 동적으로 생성됩니다 -->
+            <div class="modal-content">
+            </div>
         </div>
-        <div class="modal-footer">
+        <div class="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end gap-2">
             <button class="form-button form-button-secondary" onclick="closeOrderDetail()">닫기</button>
         </div>
     </div>
 </div>
 
 <style>
-/* 모달 오버레이 */
-.modal-overlay {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    background: rgba(0, 0, 0, 0.5) !important;
-    z-index: 1000 !important;
-    display: none !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-
-/* 모달 컨테이너 */
-.modal-container {
-    background: white !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 8px !important;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
-    max-width: 600px !important;
-    width: 90% !important;
-    max-height: 80vh !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-/* 모달 헤더 */
-.modal-header {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    padding: 16px 20px !important;
-    border-bottom: 1px solid #e5e7eb !important;
-    background: #f8fafc !important;
-}
-
-.modal-header h3 {
-    font-size: 16px !important;
-    font-weight: 600 !important;
-    color: #374151 !important;
-    margin: 0 !important;
-}
-
-.modal-close {
-    background: none !important;
-    border: none !important;
-    font-size: 24px !important;
-    color: #6b7280 !important;
-    cursor: pointer !important;
-    padding: 0 !important;
-    width: 24px !important;
-    height: 24px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    border-radius: 4px !important;
-    transition: all 0.2s ease !important;
-}
-
-.modal-close:hover {
-    background: #f3f4f6 !important;
-    color: #374151 !important;
-}
-
 /* 모달 콘텐츠 */
 .modal-content {
-    padding: 20px !important;
-    overflow-y: auto !important;
-    flex: 1 !important;
+    padding: 0 !important;
 }
 
 .detail-section {
@@ -714,23 +647,8 @@
     word-break: break-word !important;
 }
 
-/* 모달 푸터 */
-.modal-footer {
-    padding: 16px 20px !important;
-    border-top: 1px solid #e5e7eb !important;
-    background: #f8fafc !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    gap: 8px !important;
-}
-
 /* 반응형 */
 @media (max-width: 768px) {
-    .modal-container {
-        width: 95% !important;
-        max-height: 90vh !important;
-    }
-    
     .detail-grid {
         grid-template-columns: 1fr !important;
     }
@@ -768,14 +686,15 @@ function viewOrderDetail(encryptedOrderNumber) {
         if (data.success) {
             populateOrderDetail(data.data);
             // 모달 표시
-            document.getElementById('orderDetailModal').style.setProperty('display', 'flex', 'important');
+            document.getElementById('orderDetailModal').classList.remove('hidden');
+            document.getElementById('orderDetailModal').classList.add('flex');
             document.body.style.overflow = 'hidden';
         } else {
             showError(data.message || '주문 정보를 가져올 수 없습니다.');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         showError('주문 정보 조회 중 오류가 발생했습니다.');
     })
     .finally(() => {
@@ -1005,7 +924,8 @@ function showLoadingState() {
     modalContent.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">주문 정보를 불러오는 중...</div>';
     
     // 모달 표시
-    document.getElementById('orderDetailModal').style.setProperty('display', 'flex', 'important');
+    document.getElementById('orderDetailModal').classList.remove('hidden');
+    document.getElementById('orderDetailModal').classList.add('flex');
     document.body.style.overflow = 'hidden';
 }
 
@@ -1025,12 +945,14 @@ function showError(message) {
     `;
     
     // 모달 표시
-    document.getElementById('orderDetailModal').style.setProperty('display', 'flex', 'important');
+    document.getElementById('orderDetailModal').classList.remove('hidden');
+    document.getElementById('orderDetailModal').classList.add('flex');
     document.body.style.overflow = 'hidden';
 }
 
 function closeOrderDetail() {
-    document.getElementById('orderDetailModal').style.setProperty('display', 'none', 'important');
+    document.getElementById('orderDetailModal').classList.add('hidden');
+    document.getElementById('orderDetailModal').classList.remove('flex');
     document.body.style.overflow = 'auto';
     
     // 모달 콘텐츠를 원래 상태로 복원
@@ -1072,6 +994,7 @@ function restoreModalContent() {
                             <option value="processing">접수완료</option>
                             <option value="completed">배송중</option>
                             <option value="delivered">배송완료</option>
+                            <option value="api_failed">API실패</option>
                         </select>
                         <button onclick="updateOrderStatus()" class="form-button form-button-primary" style="padding: 4px 12px; white-space: nowrap;">변경</button>
                     </div>
@@ -1399,12 +1322,7 @@ document.addEventListener('keydown', function(event) {
     }
 });
 
-// 모달 외부 클릭시 닫기
-document.getElementById('orderDetailModal').addEventListener('click', function(event) {
-    if (event.target === this) {
-        closeOrderDetail();
-    }
-});
+// 모달 외부 클릭 시 닫기 기능 제거 (X 버튼만으로 닫기)
 
 // 주문 상태 변경 함수
 function updateOrderStatus() {
@@ -1445,7 +1363,7 @@ function updateOrderStatus() {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('상태 변경 중 오류가 발생했습니다.');
     });
 }
@@ -1483,7 +1401,7 @@ function cancelOrder(orderId) {
 }
 
 // 인성 API 주문 동기화 (리스트 페이지 접근 시에만 실행)
-<?php if (session()->get('login_type') === 'daumdata'): ?>
+<?php if (in_array(session()->get('login_type'), ['daumdata', 'stn'])): ?>
 // 동기화 중 플래그 (중복 실행 방지)
 let isSyncing = false;
 let syncIndicator = null;
@@ -1532,76 +1450,29 @@ function syncInsungOrders() {
         return response.json();
     })
     .then(data => {
-        // 동기화할 주문이 없으면 인디케이터 표시하지 않음
+        // 동기화할 주문이 없으면 종료
         if (data.success && data.total_count === 0) {
             isSyncing = false;
             return;
         }
         
-        // 동기화할 주문이 있으면 인디케이터 표시
-        const elapsedTime = Date.now() - startTime;
-        const minDisplayTime = 2000; // 최소 2초 표시
-        
-        // 동기화 중 표시
-        syncIndicator = document.createElement('div');
-        syncIndicator.id = 'sync-indicator';
-        syncIndicator.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #6366f1; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10000; font-size: 14px; display: flex; align-items: center; gap: 10px;';
-        syncIndicator.innerHTML = '<span>⏳</span><span>인성 API 동기화 중...</span>';
-        document.body.appendChild(syncIndicator);
-        
-        // 동기화 완료 표시
+        // 동기화 완료 처리 (UI 표시 없이 백그라운드에서 처리)
         if (data.success) {
-            syncIndicator.style.background = '#10b981';
-            syncIndicator.innerHTML = '<span>✅</span><span>' + (data.message || `${data.synced_count}개 주문 동기화 완료`) + '</span>';
-            
-            // 최소 표시 시간 보장
-            const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
-            
-            setTimeout(function() {
-                if (syncIndicator && syncIndicator.parentNode) {
-                    syncIndicator.parentNode.removeChild(syncIndicator);
-                    syncIndicator = null;
-                }
-                
-                // 동기화된 주문이 있으면 리스트 새로고침 (3초 후)
-                // synced=1 파라미터를 추가하여 자동 새로고침임을 표시
-                if (data.synced_count > 0) {
-                    setTimeout(function() {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.searchParams.set('synced', '1');
-                        window.location.href = currentUrl.toString();
-                    }, 3000);
-                }
-            }, remainingTime + 1000);
-        } else {
-            syncIndicator.style.background = '#ef4444';
-            syncIndicator.innerHTML = '<span>❌</span><span>동기화 실패: ' + (data.message || '알 수 없는 오류') + '</span>';
-            
-            const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
-            
-            setTimeout(function() {
-                if (syncIndicator && syncIndicator.parentNode) {
-                    syncIndicator.parentNode.removeChild(syncIndicator);
-                    syncIndicator = null;
-                }
-            }, remainingTime + 2000);
+            // 동기화된 주문이 있으면 리스트 새로고침 (3초 후)
+            // synced=1 파라미터를 추가하여 자동 새로고침임을 표시
+            if (data.synced_count > 0) {
+                setTimeout(function() {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('synced', '1');
+                    window.location.href = currentUrl.toString();
+                }, 3000);
+            }
         }
+        // 동기화 실패 시에도 UI 표시하지 않음 (백그라운드 처리)
     })
     .catch(error => {
-        console.error('Sync error:', error);
-        // 에러 발생 시에만 인디케이터 표시
-        syncIndicator = document.createElement('div');
-        syncIndicator.id = 'sync-indicator';
-        syncIndicator.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10000; font-size: 14px; display: flex; align-items: center; gap: 10px;';
-        syncIndicator.innerHTML = '<span>❌</span><span>동기화 중 오류 발생</span>';
-        document.body.appendChild(syncIndicator);
-        
-        setTimeout(function() {
-            if (syncIndicator && syncIndicator.parentNode) {
-                syncIndicator.parentNode.removeChild(syncIndicator);
-                syncIndicator = null;
-            }
-        }, 3000);
+        // console.error('Sync error:', error);
+        // 에러 발생 시에도 UI 표시하지 않음 (백그라운드 처리)
     })
     .finally(() => {
         isSyncing = false;

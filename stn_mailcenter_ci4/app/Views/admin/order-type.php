@@ -479,7 +479,7 @@ function createServiceType(event) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('서비스 타입 생성 중 오류가 발생했습니다.');
     });
 }
@@ -504,7 +504,7 @@ function updateServiceType(event) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('서비스 타입 수정 중 오류가 발생했습니다.');
     });
 }
@@ -514,7 +514,7 @@ function activateAll() {
     document.querySelectorAll('.service-status-toggle').forEach(toggle => {
         toggle.checked = true;
     });
-    console.log('모든 서비스가 활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
+    // console.log('모든 서비스가 활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
 }
 
 // 전체 비활성화 (UI만 변경)
@@ -522,7 +522,7 @@ function deactivateAll() {
     document.querySelectorAll('.service-status-toggle').forEach(toggle => {
         toggle.checked = false;
     });
-    console.log('모든 서비스가 비활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
+    // console.log('모든 서비스가 비활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
 }
 
 // 콜센터 선택 변경
@@ -557,7 +557,7 @@ function saveSettings() {
         return;
     }
     
-    console.log('저장할 데이터:', statusUpdates);
+    // console.log('저장할 데이터:', statusUpdates);
     
     const formData = new FormData();
     formData.append('status_updates', JSON.stringify(statusUpdates));
@@ -566,7 +566,7 @@ function saveSettings() {
     const ccCodeSelect = document.getElementById('cc_code_select');
     if (ccCodeSelect && ccCodeSelect.value) {
         formData.append('cc_code', ccCodeSelect.value);
-        console.log('콜센터 코드:', ccCodeSelect.value);
+        // console.log('콜센터 코드:', ccCodeSelect.value);
     }
     
     fetch('<?= base_url('admin/batchUpdateServiceStatus') ?>', {
@@ -574,14 +574,14 @@ function saveSettings() {
         body: formData
     })
     .then(response => {
-        console.log('응답 상태:', response.status);
+        // console.log('응답 상태:', response.status);
         if (!response.ok) {
             throw new Error('HTTP error! status: ' + response.status);
         }
         return response.json();
     })
     .then(data => {
-        console.log('서버 응답:', data);
+        // console.log('서버 응답:', data);
         if (data.success) {
             alert(data.message);
             location.reload();
@@ -590,7 +590,7 @@ function saveSettings() {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('설정 저장 중 오류가 발생했습니다: ' + error.message);
     });
 }
@@ -602,7 +602,7 @@ function saveSettings() {
 function initSortable() {
     // Sortable.js가 로드되었는지 확인
     if (typeof Sortable === 'undefined') {
-        console.error('Sortable.js가 로드되지 않았습니다.');
+        // console.error('Sortable.js가 로드되지 않았습니다.');
         setTimeout(initSortable, 100); // 재시도
         return;
     }
@@ -610,7 +610,7 @@ function initSortable() {
     const sortableLists = document.querySelectorAll('.sortable-service-list');
     
     if (sortableLists.length === 0) {
-        console.warn('정렬 가능한 목록을 찾을 수 없습니다.');
+        // console.warn('정렬 가능한 목록을 찾을 수 없습니다.');
         return;
     }
     
@@ -629,7 +629,7 @@ function initSortable() {
         });
     });
     
-    console.log('Sortable 초기화 완료:', sortableLists.length, '개 목록');
+    // console.log('Sortable 초기화 완료:', sortableLists.length, '개 목록');
 }
 
 // 페이지 로드 완료 후 초기화
@@ -675,14 +675,14 @@ function updateServiceOrder(listElement) {
     })
     .then(data => {
         if (data.success) {
-            console.log('순서가 저장되었습니다.', data);
+            // console.log('순서가 저장되었습니다.', data);
         } else {
-            console.error('순서 저장 실패:', data.message);
+            // console.error('순서 저장 실패:', data.message);
             alert('순서 저장에 실패했습니다: ' + (data.message || '알 수 없는 오류'));
         }
     })
     .catch(error => {
-        console.error('순서 저장 중 오류:', error);
+        // console.error('순서 저장 중 오류:', error);
         alert('순서 저장 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
     });
 }

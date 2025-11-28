@@ -18,10 +18,17 @@ class InsungUsersListModel extends Model
         'user_name',
         'user_dept',
         'user_tel1',
+        'user_tel2',
         'user_addr',
         'user_addr_detail',
         'user_company',
-        'user_type'
+        'user_type',
+        'user_ccode',
+        'user_sido',
+        'user_gungu',
+        'user_dong',
+        'user_lon',
+        'user_lat'
     ];
 
     protected $useTimestamps = false; // tbl_users_list에 created_at, updated_at 컬럼이 없음
@@ -117,33 +124,17 @@ class InsungUsersListModel extends Model
 
     /**
      * 콜센터와 고객사와 조인하여 모든 회원 목록 조회 (페이징 및 필터링 지원)
-     * INNER JOIN 사용으로 성능 최적화 (모든 회원은 고객사에 소속되어 있어야 함)
+     * 성능 최적화: WHERE 조건을 먼저 적용하고 JOIN
      */
     public function getAllUserListWithFilters($ccCode = null, $compCode = null, $searchName = null, $searchId = null, $page = 1, $perPage = 20)
     {
         $db = \Config\Database::connect();
         $builder = $db->table('tbl_users_list u');
         
-        $builder->select('
-            u.*,
-            c.comp_code,
-            c.comp_name,
-            c.comp_owner,
-            cc.cc_code,
-            cc.cc_name
-        ');
-        
-        // INNER JOIN 사용 (성능 최적화: 고객사에 소속되지 않은 회원은 제외)
-        $builder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'inner');
-        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
-        
-        // 필터 적용
-        if ($ccCode) {
-            $builder->where('cc.cc_code', $ccCode);
-        }
-        
+        // WHERE 조건을 먼저 적용 (인덱스 활용 최적화)
+        // compCode가 있으면 먼저 필터링 (인덱스 활용)
         if ($compCode) {
-            $builder->where('c.comp_code', $compCode);
+            $builder->where('u.user_company', $compCode);
         }
         
         // 회원명 검색
@@ -156,7 +147,27 @@ class InsungUsersListModel extends Model
             $builder->like('u.user_id', trim($searchId));
         }
         
+        // SELECT 및 JOIN
+        $builder->select('
+            u.*,
+            c.comp_code,
+            c.comp_name,
+            c.comp_owner,
+            cc.cc_code,
+            cc.cc_name
+        ');
+        
+        // INNER JOIN 사용
+        $builder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'inner');
+        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+        
+        // ccCode 필터 (JOIN 후에 적용)
+        if ($ccCode) {
+            $builder->where('cc.cc_code', $ccCode);
+        }
+        
         // 총 개수 조회 (페이징용)
+        // countAllResults()는 자동으로 COUNT(*)로 최적화됨
         $countBuilder = clone $builder;
         $totalCount = $countBuilder->countAllResults();
         
@@ -173,7 +184,8 @@ class InsungUsersListModel extends Model
             log_message('error', 'InsungUsersListModel: Failed to get user list with filters');
             return [
                 'users' => [],
-                'total_count' => 0
+                'total_count' => 0,
+                'pagination' => []
             ];
         }
         

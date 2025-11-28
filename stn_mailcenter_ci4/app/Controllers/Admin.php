@@ -725,4 +725,112 @@ class Admin extends BaseController
 
         return view('admin/notification', $data);
     }
+
+    /**
+     * 요금 설정 관리
+     */
+    public function pricing()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+
+        $payInfoModel = new \App\Models\PayInfoModel();
+        
+        // 기존 요금 정보 조회 (p_comp_gbn = 'K')
+        $payInfoList = $payInfoModel->getPayInfoByCompGbn('K');
+        
+        // 거리 기준점 추출 (슬라이더용)
+        $distancePoints = [0]; // 시작점
+        foreach ($payInfoList as $info) {
+            if (!in_array($info['p_start_km'], $distancePoints)) {
+                $distancePoints[] = $info['p_start_km'];
+            }
+            if (!in_array($info['p_dest_km'], $distancePoints)) {
+                $distancePoints[] = $info['p_dest_km'];
+            }
+        }
+        sort($distancePoints);
+        
+        $data = [
+            'title' => '요금설정',
+            'content_header' => [
+                'title' => '요금설정',
+                'description' => '거리별 차량 요금을 설정하고 관리할 수 있습니다.'
+            ],
+            'pay_info_list' => $payInfoList,
+            'distance_points' => $distancePoints
+        ];
+
+        return view('admin/pricing', $data);
+    }
+
+    /**
+     * 요금 설정 저장 (AJAX)
+     */
+    public function savePricing()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+        
+        // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userRole = session()->get('user_role');
+        $userType = session()->get('user_type');
+        
+        $hasPermission = false;
+        if ($loginType === 'daumdata' && $userType == '1') {
+            $hasPermission = true;
+        } elseif (!$loginType || $loginType === 'stn') {
+            if ($userRole === 'super_admin') {
+                $hasPermission = true;
+            }
+        }
+        
+        if (!$hasPermission) {
+            return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
+        }
+
+        $compGbn = $this->request->getPost('comp_gbn') ?? 'K';
+        $segments = $this->request->getPost('segments');
+        
+        // JSON 문자열인 경우 파싱
+        if (is_string($segments)) {
+            $segments = json_decode($segments, true);
+        }
+        
+        if (empty($segments) || !is_array($segments)) {
+            return $this->response->setJSON(['success' => false, 'message' => '저장할 데이터가 없습니다.']);
+        }
+
+        $payInfoModel = new \App\Models\PayInfoModel();
+        $result = $payInfoModel->savePayInfoSegments($compGbn, $segments);
+        
+        if ($result) {
+            return $this->response->setJSON(['success' => true, 'message' => '요금 설정이 저장되었습니다.']);
+        } else {
+            return $this->response->setJSON(['success' => false, 'message' => '요금 설정 저장에 실패했습니다.']);
+        }
+    }
 }

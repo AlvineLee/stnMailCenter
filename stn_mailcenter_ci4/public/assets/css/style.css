@@ -35,6 +35,7 @@ body {
     transition: transform 0.3s ease-in-out;
     scrollbar-width: thin;
     scrollbar-color: #cbd5e0 #f7fafc;
+    border-radius: 0 12px 12px 0; /* 오른쪽 귀퉁이 라운드 효과 */
 }
 
 /* 사이드바 스크롤바 스타일 */
@@ -60,28 +61,34 @@ body {
     .sidebar {
         transform: translateX(-100%);
         background: #ffffff !important;
+        z-index: 9998 !important;
+        box-shadow: none !important; /* 닫혀있을 때는 그림자 없음 */
+        border-radius: 0 12px 12px 0 !important; /* 오른쪽 귀퉁이 라운드 효과 */
     }
     
     .sidebar.open {
         transform: translateX(0);
         background: #ffffff !important;
+        z-index: 9998 !important;
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15), 0 0 40px rgba(0, 0, 0, 0.1) !important; /* 열려있을 때 강한 그림자 */
+        border-radius: 0 12px 12px 0 !important; /* 오른쪽 귀퉁이 라운드 효과 */
     }
     
     /* 사이드바 내부 요소들 배경 설정 */
     .sidebar-header {
-        background-color: transparent !important;
+        background-color: #ffffff !important;
     }
     
     .user-info {
-        background-color: transparent !important;
+        background-color: #ffffff !important;
     }
     
     .sidebar-nav {
-        background-color: transparent !important;
+        background-color: #ffffff !important;
     }
     
     .nav-list {
-        background-color: transparent !important;
+        background-color: #ffffff !important;
     }
     
     .nav-item {
@@ -117,51 +124,63 @@ body {
         background: #f8fafc !important;
     }
     
-    /* 모바일에서 사이드바 오버레이 */
-    .sidebar::before {
-        content: '';
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: -1;
-        opacity: 0;
-        transition: opacity 0.3s ease-in-out;
-    }
-    
-    .sidebar.open::before {
-        opacity: 1;
-    }
+    /* 모바일에서 사이드바 오버레이 제거 - 그림자 효과로 대체 */
 }
 
-/* 햄버거 메뉴 버튼 스타일 */
-#mobileMenuToggle {
-    transition: all 0.3s ease;
+/* 햄버거 메뉴 버튼 - 1023px 이하에서만 표시 (PC 모드에서 브라우저를 줄였을 때 메뉴 활성화용) */
+.mobile-menu-toggle {
+    display: none !important; /* 기본값: 숨김 (1024px 이상) */
+    position: fixed !important;
+    top: 12px !important;
+    left: 12px !important;
+    z-index: 1001 !important; /* 사이드바(z-index: 9998)보다 위에 표시 */
+    width: 44px !important;
+    height: 22px !important; /* 높이 절반으로 축소 */
+    background: rgba(0, 0, 0, 0.6) !important; /* 약간 검은색 반투명 */
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    padding: 4px 8px !important; /* 높이에 맞게 패딩 조정 */
+    box-sizing: border-box !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-direction: row !important;
+    backdrop-filter: blur(8px) !important; /* 블러 효과로 반투명감 강화 */
+    -webkit-backdrop-filter: blur(8px) !important;
 }
 
-#mobileMenuToggle:hover {
-    background-color: #f8fafc;
-    transform: scale(1.05);
+.mobile-menu-toggle:hover {
+    background: rgba(0, 0, 0, 0.75) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
 }
 
-#mobileMenuToggle.active {
-    background-color: #667eea;
-    color: white;
+.mobile-menu-toggle:active {
+    background: rgba(0, 0, 0, 0.8) !important;
+    transform: scale(0.95) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
-#mobileMenuToggle.active svg {
-    color: white;
+.mobile-menu-toggle .hamburger-icon {
+    width: 18px !important; /* 높이에 맞게 아이콘 크기 조정 */
+    height: 18px !important;
+    color: #ffffff !important; /* 흰색으로 변경 (어두운 배경에 맞춤) */
+    stroke-width: 2.5 !important;
+    transition: transform 0.3s ease !important;
 }
 
 /* 햄버거 메뉴 아이콘 애니메이션 */
-#mobileMenuToggle svg {
-    transition: transform 0.3s ease;
+#mobileMenuToggle.active .hamburger-icon {
+    transform: rotate(90deg) !important;
 }
 
-#mobileMenuToggle.active svg {
-    transform: rotate(90deg);
+/* 1023px 이하에서만 햄버거 메뉴 버튼 표시 */
+@media (max-width: 1023px) {
+    .mobile-menu-toggle {
+        display: flex !important;
+    }
 }
 
 .sidebar-header {
@@ -470,6 +489,9 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    max-width: calc(100vw - 280px);
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 /* 기본 테이블 스타일 - 모든 리스트를 그리드 형식으로 */
@@ -493,7 +515,7 @@ th {
     padding: 3px 8px;
     text-align: center;
     font-weight: 600;
-    color: #374151;
+    color: #111827;
     border-right: 1px solid #e5e7eb;
     white-space: nowrap;
     font-size: 11px;
@@ -526,7 +548,7 @@ tbody tr:nth-child(even):hover {
 td {
     padding: 2px 8px;
     border-right: 1px solid #e5e7eb;
-    color: #374151;
+    color: #111827;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -616,13 +638,13 @@ button {
     justify-content: center !important;
     min-width: 50px !important;
     background: #f1f5f9 !important; /* 연한 파스텔 그레이 */
-    color: #475569 !important; /* 진한 그레이 텍스트 */
+    color: #111827 !important; /* 검은색 텍스트 */
     border: 1px solid #e2e8f0 !important; /* 연한 테두리 */
 }
 
 button:hover {
     background: #e2e8f0 !important; /* 호버 시 조금 더 진한 그레이 */
-    color: #334155 !important;
+    color: #111827 !important;
 }
 
 /* 액션 버튼들 스타일 */
@@ -633,7 +655,7 @@ button:hover {
     border: 1px solid #e2e8f0 !important; /* 연한 파스텔 테두리 */
     border-radius: 2px !important;
     background: #f8fafc !important; /* 연한 파스텔 그레이 */
-    color: #475569 !important; /* 진한 그레이 텍스트 */
+    color: #111827 !important; /* 검은색 텍스트 */
     height: 20px !important;
     min-width: 40px !important;
     display: inline-block !important; /* 테이블 내 버튼은 inline-block */
@@ -641,7 +663,7 @@ button:hover {
 
 .action-buttons button:hover {
     background: #f1f5f9 !important; /* 호버 시 조금 더 진한 파스텔 그레이 */
-    color: #334155 !important;
+    color: #111827 !important;
 }
 
 /* 페이징 숫자 버튼 스타일 (동그란 원) */
@@ -658,7 +680,7 @@ button:hover {
     align-items: center !important;
     justify-content: center !important;
     background: #f8fafc !important; /* 연한 파스텔 그레이 */
-    color: #64748b !important; /* 중간 톤 그레이 */
+    color: #111827 !important; /* 검은색 텍스트 */
     border: 1px solid #e2e8f0 !important; /* 연한 테두리 */
     margin: 0 2px !important; /* 버튼 간격 더 좁게 */
     line-height: 1 !important; /* 텍스트 높이 정규화 */
@@ -681,7 +703,7 @@ button:hover {
     justify-content: center !important;
     min-width: 50px !important; /* 네비게이션은 최소 너비 */
     background: #f8fafc !important; /* 연한 파스텔 그레이 */
-    color: #64748b !important; /* 중간 톤 그레이 */
+    color: #111827 !important; /* 검은색 텍스트 */
     border: 1px solid #e2e8f0 !important; /* 연한 테두리 */
     margin: 0 3px !important; /* 버튼 간격 */
 }
@@ -703,7 +725,7 @@ button:hover {
 /* 현재 페이지 (숫자 버튼만) */
 .pagination .page-number.active {
     background: #e2e8f0 !important; /* 현재 페이지는 조금 더 진하게 */
-    color: #334155 !important;
+    color: #111827 !important;
     border-color: #94a3b8 !important;
     font-weight: 600 !important;
 }
@@ -712,7 +734,7 @@ button:hover {
 .search-compact {
     width: 100% !important;
     max-width: 100% !important;
-    overflow-x: visible !important;
+    overflow: hidden !important; /* 스크롤 방지 */
     box-sizing: border-box !important;
     background: #f8fafc !important;
     padding: 20px !important;
@@ -722,43 +744,53 @@ button:hover {
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
+/* 검색 영역 내부 요소들도 너비 제한 */
+.search-compact > * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
 /* 검색 필터 컨테이너 */
 .search-filter-container {
     display: flex !important;
-    gap: 16px !important;
-    align-items: flex-end !important;
-    flex-wrap: wrap !important;
+    gap: 12px !important;
+    align-items: center !important; /* 수직 중앙 정렬 */
+    flex-wrap: nowrap !important;
 }
 
 /* 검색 필터 아이템 */
 .search-filter-item {
-    flex: 0 0 auto !important;
+    flex: 1 1 auto !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     gap: 8px !important;
+    min-width: 0 !important;
 }
 
 /* 검색 버튼 래퍼 */
 .search-filter-button-wrapper {
     display: flex !important;
-    align-items: flex-end !important;
+    align-items: center !important; /* 수직 중앙 정렬 */
     flex-shrink: 0 !important;
+    gap: 8px !important;
+    white-space: nowrap !important;
 }
 
 /* 검색 필터 라벨 */
 .search-filter-label {
     font-size: 13px !important;
     font-weight: 600 !important;
-    color: #475569 !important;
+    color: #111827 !important;
     letter-spacing: 0.2px !important;
 }
 
 /* 검색 필터 입력 필드 */
 .search-filter-input,
 .search-filter-select {
-    width: auto !important;
-    min-width: 150px !important;
+    /* width: auto !important; - 인라인 스타일의 width를 허용하기 위해 주석 처리 */
+    min-width: 120px !important;
+    max-width: 100% !important;
     padding: 10px 14px !important;
     font-size: 14px !important;
     border: 1px solid #cbd5e1 !important;
@@ -766,18 +798,21 @@ button:hover {
     background: #ffffff !important;
     color: #1e293b !important;
     transition: all 0.2s ease !important;
+    box-sizing: border-box !important;
+    flex: 1 1 auto !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
 .search-filter-input:focus,
 .search-filter-select:focus {
     outline: none !important;
     border-color: #6366f1 !important;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
     background: #ffffff !important;
 }
 
 .search-filter-input::placeholder {
-    color: #94a3b8 !important;
+    color: #111827 !important;
 }
 
 /* 검색 버튼 */
@@ -804,16 +839,7 @@ button:hover {
     background: #4338ca !important;
 }
 
-/* 모바일 반응형 */
-@media (max-width: 768px) {
-    .search-filter-container {
-        flex-direction: column !important;
-    }
-    
-    .search-filter-item {
-        min-width: 100% !important;
-    }
-}
+/* 모바일 반응형 - 제거됨 (767px 미만 규칙으로 대체) */
 
 /* 기존 호환성 유지 */
 .search-compact .flex {
@@ -858,6 +884,9 @@ button:hover {
     display: flex !important;
     flex-direction: column !important;
     flex: 1 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
 }
 
 .list-table-container {
@@ -940,6 +969,11 @@ td.text-center {
     color: #dc2626 !important;
 }
 
+.status-api_failed {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+}
+
 .action-buttons button {
     padding: 2px 6px !important;
     font-size: 11px !important;
@@ -1007,14 +1041,41 @@ td.text-center {
 
 .pagination .active {
     background: #e2e8f0 !important;
-    color: #334155 !important;
+    color: #111827 !important;
 }
 
 /* 모바일에서 메인 콘텐츠 전체 너비 사용 */
 @media (max-width: 1023px) {
     .main-content {
         margin-left: 0;
-        padding-top: 60px; /* 햄버거 메뉴 버튼 공간 확보 */
+        padding-top: 0; /* 햄버거 메뉴 버튼 제거로 상단 여백 제거 */
+        max-width: 100vw;
+        overflow-x: hidden;
+        box-sizing: border-box;
+    }
+}
+
+/* 상단 헤더 패널 위쪽 공간 통일 - 모든 화면 크기에서 패널 간 간격과 동일하게 */
+.main-content > div.bg-white.rounded-lg.shadow-sm {
+    margin-top: 4px !important; /* 패널 간 간격과 동일 (4px) */
+}
+
+/* 모든 미디어쿼리에서 일관된 여백 유지 */
+@media (min-width: 1024px) {
+    .main-content > div.bg-white.rounded-lg.shadow-sm {
+        margin-top: 0px !important; /* 패널 간 간격과 동일 (4px) */
+    }
+}
+
+@media (max-width: 1023px) {
+    .main-content > div.bg-white.rounded-lg.shadow-sm {
+        margin-top: 10px !important; /* 패널 간 간격과 동일 (4px) */
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content > div.bg-white.rounded-lg.shadow-sm {
+        margin-top: 0px !important; /* 패널 간 간격과 동일 (4px) */
     }
 }
 
@@ -1025,12 +1086,12 @@ td.text-center {
 .content-header h1 {
     font-size: 28px;
     font-weight: 700;
-    color: #2d3748;
+    color: #111827;
     margin-bottom: 8px;
 }
 
 .content-header p {
-    color: #718096;
+    color: #111827;
     font-size: 16px;
 }
 
@@ -1049,7 +1110,12 @@ td.text-center {
     
     .main-content {
         margin-left: 0;
-        padding: 20px;
+        padding: 10px;
+    }
+    
+    /* 상단 헤더 패널 여백은 위의 미디어쿼리에서 이미 처리됨 */
+    .main-content > div.bg-white.rounded-lg.shadow-sm {
+        margin-top: 0px !important; /* 패널 간 간격과 동일 (4px) */
     }
     
     .content-header h1 {
@@ -1083,7 +1149,7 @@ td.text-center {
     display: block !important;
     font-size: 12px !important;
     font-weight: 600 !important;
-    color: #374151 !important;
+    color: #111827 !important;
     margin-bottom: 4px !important;
 }
 
@@ -1096,13 +1162,19 @@ td.text-center {
     background: white !important;
     transition: all 0.2s ease !important;
     box-sizing: border-box !important;
-    color: #374151 !important;
+    color: #111827 !important;
+}
+
+/* select 요소에 그림자 효과 추가 */
+.form-select,
+select {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
 .form-input:focus, .form-select:focus {
     outline: none !important;
     border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
 }
 
 .form-input:hover, .form-select:hover {
@@ -1121,7 +1193,7 @@ td.text-center {
     transition: all 0.2s ease !important;
     box-sizing: border-box !important;
     font-family: inherit !important;
-    color: #374151 !important;
+    color: #111827 !important;
 }
 
 .form-textarea:focus {
@@ -1157,24 +1229,24 @@ td.text-center {
 
 .form-button-primary {
     background: #f1f5f9 !important;
-    color: #475569 !important;
+    color: #111827 !important;
     border: 1px solid #e2e8f0 !important;
 }
 
 .form-button-primary:hover {
     background: #e2e8f0 !important;
-    color: #334155 !important;
+    color: #111827 !important;
 }
 
 .form-button-secondary {
     background: #f1f5f9 !important;
-    color: #475569 !important;
+    color: #111827 !important;
     border: 1px solid #e2e8f0 !important;
 }
 
 .form-button-secondary:hover {
     background: #e2e8f0 !important;
-    color: #334155 !important;
+    color: #111827 !important;
 }
 
 /* 폼 섹션 스타일 - 퀵접수와 동일한 카드 스타일 */
@@ -1196,7 +1268,7 @@ td.text-center {
 .form-section-title {
     font-size: 16px !important;
     font-weight: 600 !important;
-    color: #374151 !important;
+    color: #111827 !important;
     margin-bottom: 16px !important;
     padding-bottom: 8px !important;
     border-bottom: 1px solid #e5e7eb !important;
@@ -1223,7 +1295,7 @@ td.text-center {
 
 .input-group .input-suffix {
     font-size: 12px !important;
-    color: #6b7280 !important;
+    color: #111827 !important;
     font-weight: 400 !important;
     background: transparent !important;
     padding: 0 !important;
@@ -1234,7 +1306,7 @@ td.text-center {
 
 /* 플레이스홀더 스타일 */
 .form-input::placeholder, .form-select::placeholder, .form-textarea::placeholder {
-    color: #9ca3af !important;
+    color: #111827 !important;
     font-weight: 400 !important;
 }
 
@@ -1242,7 +1314,7 @@ td.text-center {
 .form-select option {
     padding: 8px !important;
     background: white !important;
-    color: #1f2937 !important;
+    color: #111827 !important;
 }
 
 /* 드래그 가능한 테이블 헤더 */
@@ -1263,7 +1335,7 @@ td.text-center {
     top: 50% !important;
     transform: translateY(-50%) !important;
     font-size: 10px !important;
-    color: #94a3b8 !important;
+    color: #111827 !important;
 }
 
 /* 계층 구조 스타일 */
@@ -1312,35 +1384,35 @@ td.text-center {
 .toggle-icon {
     margin-right: 8px !important;
     font-size: 12px !important;
-    color: #64748b !important;
+    color: #111827 !important;
 }
 
 .toggle-icon[data-level="2"] {
-    color: #d1d5db !important;
+    color: #111827 !important;
 }
 
 .hierarchy-title {
     font-weight: 600 !important;
-    color: #1f2937 !important;
+    color: #111827 !important;
 }
 
 .hierarchy-title[data-level="1"] {
     font-weight: 500 !important;
-    color: #374151 !important;
+    color: #111827 !important;
 }
 
 .hierarchy-title[data-level="2"] {
-    color: #6b7280 !important;
+    color: #111827 !important;
 }
 
 .hierarchy-code {
     margin-left: auto !important;
     font-size: 11px !important;
-    color: #64748b !important;
+    color: #111827 !important;
 }
 
 .hierarchy-code[data-level="2"] {
-    color: #9ca3af !important;
+    color: #111827 !important;
 }
 
 .hierarchy-children {
@@ -1399,7 +1471,7 @@ td.text-center {
     margin-right: 8px !important;
     border-radius: 4px !important;
     background: #f1f5f9 !important;
-    color: #64748b !important;
+    color: #111827 !important;
     font-size: 12px !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
@@ -1407,7 +1479,7 @@ td.text-center {
 
 .tree-toggle:hover {
     background: #e2e8f0 !important;
-    color: #475569 !important;
+    color: #111827 !important;
 }
 
 .tree-toggle.expanded {
@@ -1444,7 +1516,7 @@ td.text-center {
 .tree-label {
     flex: 1 !important;
     font-weight: 500 !important;
-    color: #1f2937 !important;
+    color: #111827 !important;
 }
 
 .tree-label.level-0 {
@@ -1460,12 +1532,12 @@ td.text-center {
 .tree-label.level-2 {
     font-weight: 400 !important;
     font-size: 12px !important;
-    color: #4b5563 !important;
+    color: #111827 !important;
 }
 
 .tree-code {
     background: #f3f4f6 !important;
-    color: #6b7280 !important;
+    color: #111827 !important;
     padding: 2px 8px !important;
     border-radius: 4px !important;
     font-size: 11px !important;
@@ -1587,7 +1659,7 @@ td.text-center {
 .section-title {
     font-size: 1.125rem;
     font-weight: 600;
-    color: #374151;
+    color: #111827;
     margin: 0;
 }
 
@@ -1603,7 +1675,7 @@ td.text-center {
     border-radius: 4px;
     border: 1px solid #d1d5db;
     background: #f9fafb;
-    color: #374151;
+    color: #111827;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -1651,7 +1723,7 @@ td.text-center {
 
 .fee-checkbox .item-label {
     font-size: 0.7rem;
-    color: #374151;
+    color: #111827;
     white-space: nowrap;
 }
 
@@ -1679,9 +1751,18 @@ td.text-center {
 
 .currency-suffix {
     font-size: 0.7rem;
-    color: #6b7280;
+    color: #111827;
     font-weight: 500;
     min-width: 15px;
+}
+
+/* 금액 입력 필드 공통 스타일 */
+.currency-input {
+    text-align: right !important;
+}
+
+.currency-input::placeholder {
+    text-align: right !important;
 }
 
 .fee-dropdown {
@@ -1731,7 +1812,7 @@ td.text-center {
 
 .billing-checkbox .item-label {
     font-size: 0.7rem;
-    color: #374151;
+    color: #111827;
     white-space: nowrap;
 }
 
@@ -1747,7 +1828,7 @@ td.text-center {
     align-items: center;
     padding: 0.5rem 1rem;
     background: #f1f5f9;
-    color: #475569;
+    color: #111827;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -1778,4 +1859,447 @@ td.text-center {
 
 .vehicle-option input[type="radio"]:checked + .vehicle-card img {
     transform: scale(1.05);
+}
+
+/* 레이어팝업 공통 스타일 - 상단 위치 고정 */
+.modal-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 9999 !important;
+    display: none !important; /* 기본값은 숨김 */
+    align-items: flex-start !important; /* 상단 정렬 */
+    justify-content: center !important;
+    padding-top: 50px !important; /* 상단에서 50px 고정 */
+    overflow-y: auto !important;
+}
+
+/* 레이어팝업이 열릴 때 (JavaScript에서 클래스 추가 또는 display: flex !important 사용) */
+.modal-overlay.show,
+.modal-overlay[style*="display: flex"],
+.modal-overlay[style*="display:flex"] {
+    display: flex !important;
+}
+
+/* Tailwind 클래스로 만든 레이어팝업도 동일하게 적용 */
+.fixed.inset-0.bg-black.bg-opacity-50,
+div[id$="Modal"].fixed.inset-0,
+div[class*="fixed"][class*="inset-0"][class*="items-center"][class*="justify-center"] {
+    align-items: flex-start !important;
+    padding-top: 50px !important;
+    padding-bottom: 20px !important; /* 하단 여백 추가 */
+    backdrop-filter: blur(4px) !important; /* 사이드바 및 배경 blur 처리 */
+    -webkit-backdrop-filter: blur(4px) !important; /* Safari 지원 */
+}
+
+/* ============================================
+   반응형 디자인 - 전역 스타일
+   ============================================ */
+
+/* 주문접수 페이지 반응형 */
+@media (max-width: 1023px) {
+    /* 주문접수 페이지 레이아웃 */
+    .bg-gradient-to-br.from-blue-50.to-indigo-100 .w-full.flex {
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    
+    .bg-gradient-to-br.from-blue-50.to-indigo-100 .w-64 {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    .bg-gradient-to-br.from-blue-50.to-indigo-100 .sticky {
+        position: relative !important;
+        top: 0 !important;
+    }
+}
+
+/* 폼 그리드 반응형 */
+@media (max-width: 768px) {
+    /* 공통 폼의 그리드 레이아웃 */
+    .grid.grid-cols-2,
+    .grid.grid-cols-3,
+    .grid.md\\:grid-cols-3 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* 폼 섹션 패딩 조정 */
+    .form-section {
+        padding: 16px !important;
+    }
+    
+    /* 폼 그리드 간격 조정 */
+    .form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+}
+
+/* 테이블 반응형 */
+@media (max-width: 1023px) {
+    /* 모든 테이블 컨테이너 */
+    .list-table-container,
+    .overflow-x-auto {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* 테이블 최소 너비 설정 */
+    .list-table-container table,
+    .overflow-x-auto table {
+        min-width: 800px !important;
+    }
+    
+    /* 테이블 셀 패딩 조정 */
+    .list-table-container th,
+    .list-table-container td,
+    .overflow-x-auto th,
+    .overflow-x-auto td {
+        padding: 8px 12px !important;
+        font-size: 11px !important;
+        white-space: nowrap !important;
+    }
+}
+
+/* 검색 필터 반응형 - 768px 미만: 모든 요소 한 줄에 배치, 라벨 제거 */
+@media (max-width: 767px) {
+    /* 검색 필터 컨테이너 - 한 줄에 모든 요소 배치 */
+    .search-filter-container {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        align-items: center !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* 검색 필터 라벨 제거 */
+    .search-filter-label {
+        display: none !important;
+    }
+    
+    /* 검색 필터 아이템 - 한 줄에 배치 */
+    .search-filter-item {
+        display: flex !important;
+        flex-direction: row !important;
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        align-items: center !important;
+        gap: 0 !important;
+    }
+    
+    /* 검색 필터 입력 필드 - 라벨 제거 후 크기 조정 */
+    .search-filter-item .search-filter-select,
+    .search-filter-item .search-filter-input,
+    .search-filter-select,
+    .search-filter-input {
+        min-width: 70px !important;
+        max-width: 120px !important;
+        width: auto !important;
+        padding: 6px 8px !important;
+        font-size: 11px !important;
+        flex: 0 0 auto !important;
+    }
+    
+    /* 검색 버튼 래퍼 - 같은 줄에 배치 */
+    .search-filter-button-wrapper {
+        flex-shrink: 0 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+    }
+    
+    /* 검색 버튼 - 같은 줄에 배치 */
+    .search-filter-button-wrapper .search-button {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+        padding: 6px 10px !important;
+        font-size: 11px !important;
+        min-width: auto !important;
+        width: auto !important;
+    }
+    
+    /* 검색 영역 패딩 조정 */
+    .search-compact {
+        padding: 12px !important;
+        overflow: hidden !important; /* 스크롤 방지 */
+    }
+}
+
+/* 리스트 페이지 컨테이너 반응형 */
+@media (max-width: 1023px) {
+    .list-page-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 10px !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* 검색 필터 컨테이너 반응형 - 768px 이상은 한 줄 유지 */
+    .search-filter-container {
+        flex-wrap: nowrap !important;
+        gap: 12px !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    .search-filter-item {
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    .search-filter-select,
+    .search-filter-input {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        min-width: 100px !important;
+    }
+    
+    /* 검색 버튼 그룹 - 같은 줄에 배치 */
+    .search-filter-button-wrapper {
+        flex-shrink: 0 !important;
+        display: flex !important;
+        gap: 8px !important;
+        flex-wrap: nowrap !important;
+        white-space: nowrap !important;
+    }
+    
+    .search-filter-button-wrapper .search-button {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+        min-width: fit-content !important;
+    }
+    
+    /* 검색 결과 정보 영역 */
+    .list-page-container .mb-4.px-4 {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+    
+    /* 검색 결과 정보 내부 flex 레이아웃 */
+    .list-page-container .flex.items-center.justify-between {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+    
+    /* 버튼 그룹 */
+    .list-page-container .flex.gap-2 {
+        width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+    
+    .list-page-container .flex.gap-2 button {
+        flex: 1 1 auto !important;
+        min-width: 120px !important;
+    }
+}
+
+/* 주문접수 폼 - 패널 간 간격 및 상단 여백 */
+/* 모든 화면 크기에서 패널 간 간격 통일 */
+.order-form .mb-1,
+form .mb-1,
+.order-form > div.mb-1,
+form > div.mb-1 {
+    margin-bottom: 4px !important; /* mb-1 = 4px */
+}
+
+/* 상단 패널 위쪽 여백 - 패널 간 간격과 동일하게 */
+.order-form .mb-1:first-child,
+form .mb-1:first-child,
+.order-form > div.mb-1:first-child,
+form > div.mb-1:first-child {
+    margin-top: 4px !important; /* 패널 간 간격과 동일 */
+}
+
+@media (min-width: 760px) {
+    /* 760px 이상: 추가 스타일 없음 (위의 기본 스타일 적용) */
+}
+
+/* 주문접수 폼 섹션 반응형 */
+@media (max-width: 759px) {
+    /* 패널 간 간격은 기본 스타일에서 이미 처리됨 */
+    
+    /* 주문자 정보 섹션 */
+    section.bg-blue-50,
+    section.bg-gray-50 {
+        padding: 12px !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* 패널 내부 요소들이 패널 밖으로 나가지 않도록 */
+    section.bg-blue-50 > *,
+    section.bg-gray-50 > * {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* 섹션 제목 */
+    section h2 {
+        font-size: 13px !important;
+        margin-bottom: 12px !important;
+    }
+    
+    /* 입력 필드 그룹 */
+    section .grid.grid-cols-2 {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    
+    /* 상단 버튼 그룹 (최근접수내역, 즐겨찾기) */
+    section .flex.items-center.justify-between {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+    
+    section .flex.items-center.justify-between > div:last-child {
+        flex: 1 1 100% !important;
+        display: flex !important;
+        gap: 8px !important;
+        margin-top: 4px !important;
+    }
+    
+    section .flex.items-center.justify-between > div:last-child button {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        white-space: nowrap !important;
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+    
+    /* 주소 검색 버튼과 입력 필드 */
+    section .flex.space-x-2:has(button) {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 8px !important;
+        min-width: 0 !important;
+    }
+    
+    section .flex.space-x-2:has(button) input {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    
+    section .flex.space-x-2:has(button) button {
+        flex-shrink: 0 !important;
+        min-width: fit-content !important;
+        white-space: nowrap !important;
+        font-size: 12px !important;
+        padding: 8px 12px !important;
+    }
+}
+
+/* 작은 모바일 (480px 이하) */
+@media (max-width: 480px) {
+    /* 폰트 크기 조정 */
+    .list-page-container,
+    .form-section,
+    section {
+        font-size: 12px !important;
+    }
+    
+    /* 입력 필드 */
+    input[type="text"],
+    input[type="tel"],
+    input[type="email"],
+    textarea,
+    select {
+        font-size: 14px !important;
+        padding: 8px 10px !important;
+    }
+    
+    /* 버튼 */
+    button {
+        font-size: 13px !important;
+        padding: 8px 12px !important;
+    }
+    
+    /* 상단 버튼 그룹 (최근접수내역, 즐겨찾기) - 작은 화면 */
+    section .flex.items-center.justify-between > div:last-child button {
+        font-size: 10px !important;
+        padding: 5px 6px !important;
+    }
+    
+    /* 주소 검색 버튼 - 작은 화면 */
+    section .flex.space-x-2:has(button) button {
+        font-size: 11px !important;
+        padding: 6px 10px !important;
+    }
+    
+    /* 테이블 */
+    table {
+        font-size: 11px !important;
+    }
+    
+    th, td {
+        padding: 6px 8px !important;
+    }
+}
+
+/* 페이지네이션 반응형 */
+@media (max-width: 768px) {
+    .list-pagination,
+    .pagination {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        justify-content: center !important;
+    }
+    
+    .page-number,
+    .nav-button {
+        min-width: 32px !important;
+        height: 32px !important;
+        font-size: 12px !important;
+        padding: 4px 8px !important;
+    }
+}
+
+/* 메일룸 운송장 바코드 입력 필드 - 패널 범위 초과 방지 */
+.bg-yellow-50 section,
+section.bg-yellow-50 {
+    overflow: hidden !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.bg-yellow-50 section > div,
+section.bg-yellow-50 > div {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+#tracking_barcode {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+/* 작은 화면에서 바코드 입력 필드 레이아웃 조정 */
+@media (max-width: 640px) {
+    .bg-yellow-50 section > div.flex,
+    section.bg-yellow-50 > div.flex {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    #tracking_barcode {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }

@@ -264,7 +264,7 @@ function viewRegistration(id) {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
             alert('오류가 발생했습니다.');
         });
 }
@@ -395,7 +395,7 @@ document.getElementById('actionForm').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('오류가 발생했습니다.');
     })
     .finally(() => {

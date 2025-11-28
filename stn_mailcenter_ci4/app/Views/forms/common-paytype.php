@@ -10,7 +10,7 @@
             <!-- 지급방법 선택 -->
             <div class="space-y-2 mb-4">
                 <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment_type" value="cash_on_delivery" <?= old('payment_type', 'cash_on_delivery') === 'cash_on_delivery' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                    <input type="radio" name="payment_type" value="cash_on_delivery" <?= old('payment_type') === 'cash_on_delivery' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
                     <span class="text-sm font-medium text-gray-700">착불(현금)</span>
                 </label>
                 <label class="flex items-center space-x-2 cursor-pointer">
@@ -22,7 +22,7 @@
                     <span class="text-sm font-medium text-gray-700">송금</span>
                 </label>
                 <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment_type" value="credit_transaction" <?= old('payment_type') === 'credit_transaction' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                    <input type="radio" name="payment_type" value="credit_transaction" <?= old('payment_type', 'credit_transaction') === 'credit_transaction' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
                     <span class="text-sm font-medium text-gray-700">신용거래</span>
                 </label>
             </div>

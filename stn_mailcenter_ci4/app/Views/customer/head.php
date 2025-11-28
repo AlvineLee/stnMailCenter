@@ -522,12 +522,12 @@ function createCustomer(event) {
         } else {
             alert(data.message || '본점 등록에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('본점 등록 중 오류가 발생했습니다.');
     });
 }
@@ -590,12 +590,12 @@ function addUserAccount(event) {
         } else {
             alert(data.message || '사용자 계정 추가에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('사용자 계정 추가 중 오류가 발생했습니다.');
     });
 }
@@ -672,7 +672,7 @@ function loadUserAccountInfo(userId) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('사용자 정보 조회 중 오류가 발생했습니다.');
     });
 }
@@ -741,7 +741,7 @@ function loadHeadOfficeInfo(customerId) {
                 document.getElementById('editHeadOfficeModal').classList.remove('hidden');
             })
             .catch(error => {
-                console.error('Error loading users:', error);
+                // console.error('Error loading users:', error);
                 document.getElementById('editHeadOfficeModal').classList.remove('hidden');
             });
         } else {
@@ -749,7 +749,7 @@ function loadHeadOfficeInfo(customerId) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('본점 정보 조회 중 오류가 발생했습니다.');
     });
 }
@@ -796,12 +796,12 @@ function updateHeadOffice(event) {
         } else {
             alert(data.message || '본점 정보 수정에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('본점 정보 수정 중 오류가 발생했습니다.');
     });
 }
@@ -848,12 +848,12 @@ function updateUserAccount(event) {
         } else {
             alert(data.message || '사용자 정보 수정에 실패했습니다.');
             if (data.errors) {
-                console.error('Validation errors:', data.errors);
+                // console.error('Validation errors:', data.errors);
             }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        // console.error('Error:', error);
         alert('사용자 정보 수정 중 오류가 발생했습니다.');
     });
 }

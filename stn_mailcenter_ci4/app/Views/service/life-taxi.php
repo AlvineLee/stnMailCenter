@@ -143,14 +143,14 @@ let driverBlinkInterval = null; // 기사 마커 깜빡임 인터벌
 function initMap() {
     // 카카오맵 API가 로드되었는지 확인
     if (typeof kakao === 'undefined' || typeof kakao.maps === 'undefined') {
-        console.error('카카오맵 API가 로드되지 않았습니다.');
+        // console.error('카카오맵 API가 로드되지 않았습니다.');
         setTimeout(initMap, 100); // 100ms 후 재시도
         return;
     }
     
     const container = document.getElementById('map');
     if (!container) {
-        console.error('지도 컨테이너를 찾을 수 없습니다.');
+        // console.error('지도 컨테이너를 찾을 수 없습니다.');
         return;
     }
     
@@ -162,7 +162,7 @@ function initMap() {
     map = new kakao.maps.Map(container, options);
     geocoder = new kakao.maps.services.Geocoder();
     
-    console.log('지도 초기화 완료');
+    // console.log('지도 초기화 완료');
     
     // 지도 초기화 성공 후 위치 가져오기 (200ms 지연)
     setTimeout(function() {
@@ -174,7 +174,7 @@ function initMap() {
 function getCurrentLocation() {
     // geocoder가 준비되지 않았으면 기본 위치만 설정
     if (!geocoder) {
-        console.warn('Geocoder가 아직 준비되지 않았습니다. 기본 위치를 사용합니다.');
+        // console.warn('Geocoder가 아직 준비되지 않았습니다. 기본 위치를 사용합니다.');
         setDefaultLocation(37.5665, 126.9780);
         return;
     }
@@ -203,7 +203,7 @@ function getCurrentLocation() {
                 const lng = position.coords.longitude;
                 currentLocation = { lat, lng };
                 
-                console.log('위치 정보 획득:', lat, lng);
+                // console.log('위치 정보 획득:', lat, lng);
                 
                 // 좌표를 주소로 변환
                 if (geocoder) {
@@ -245,7 +245,7 @@ function getCurrentLocation() {
             },
             function(error) {
                 clearTimeout(timeout);
-                console.error('위치 정보를 가져올 수 없습니다:', error);
+                // console.error('위치 정보를 가져올 수 없습니다:', error);
                 
                 let errorMsg = '위치 정보를 가져올 수 없습니다.';
                 if (error.code === error.TIMEOUT) {
@@ -308,7 +308,7 @@ function setDefaultLocation(lat, lng) {
 // 출발지 마커 설정
 function setDepartureMarker(lat, lng) {
     if (!map) {
-        console.warn('지도가 초기화되지 않았습니다. 마커를 설정할 수 없습니다.');
+        // console.warn('지도가 초기화되지 않았습니다. 마커를 설정할 수 없습니다.');
         return;
     }
     
@@ -427,7 +427,7 @@ function openDestinationAddressSearch() {
 // 도착지 마커 설정
 function setDestinationMarker(lat, lng) {
     if (!map) {
-        console.warn('지도가 초기화되지 않았습니다. 마커를 설정할 수 없습니다.');
+        // console.warn('지도가 초기화되지 않았습니다. 마커를 설정할 수 없습니다.');
         return;
     }
     
@@ -467,22 +467,22 @@ function setDestinationMarker(lat, lng) {
 // 경로 계산
 function calculateRoute(startLat, startLng, endLat, endLng) {
     if (!map) {
-        console.warn('지도가 초기화되지 않았습니다. 경로를 그릴 수 없습니다.');
+        // console.warn('지도가 초기화되지 않았습니다. 경로를 그릴 수 없습니다.');
         return;
     }
     
     const startPoint = new kakao.maps.LatLng(startLat, startLng);
     const endPoint = new kakao.maps.LatLng(endLat, endLng);
     
-    console.log('경로 그리기 시작:', { startLat, startLng, endLat, endLng });
+    // console.log('경로 그리기 시작:', { startLat, startLng, endLat, endLng });
     
     if (!startLat || !startLng || isNaN(startLat) || isNaN(startLng)) {
-        console.warn('출발지 좌표가 유효하지 않습니다.');
+        // console.warn('출발지 좌표가 유효하지 않습니다.');
         return;
     }
     
     if (!endLat || !endLng || isNaN(endLat) || isNaN(endLng)) {
-        console.warn('도착지 좌표가 유효하지 않습니다.');
+        // console.warn('도착지 좌표가 유효하지 않습니다.');
         return;
     }
 
@@ -502,7 +502,7 @@ function calculateRoute(startLat, startLng, endLat, endLng) {
                 destination: endPoint,
                 priority: kakao.maps.services.Directions.Priority.SHORTEST
             }, function(result, status) {
-                console.log('Directions API 응답:', { status, result });
+                // console.log('Directions API 응답:', { status, result });
                 
                 if (status === kakao.maps.services.Status.OK) {
                     try {
@@ -532,7 +532,7 @@ function calculateRoute(startLat, startLng, endLat, endLng) {
                         }
                         
                         if (linePath.length > 0) {
-                            console.log('경로선 그리기:', linePath.length, '개 포인트');
+                            // console.log('경로선 그리기:', linePath.length, '개 포인트');
                             routePolyline = new kakao.maps.Polyline({
                                 path: linePath,
                                 strokeWeight: 5,
@@ -563,24 +563,24 @@ function calculateRoute(startLat, startLng, endLat, endLng) {
                             // 호출하기 버튼 활성화
                             document.getElementById('callButton').disabled = false;
                         } else {
-                            console.warn('경로 포인트가 없습니다. 직선으로 표시합니다.');
+                            // console.warn('경로 포인트가 없습니다. 직선으로 표시합니다.');
                             drawStraightLine(startPoint, endPoint);
                         }
                     } catch (error) {
-                        console.error('경로 그리기 중 오류:', error);
+                        // console.error('경로 그리기 중 오류:', error);
                         drawStraightLine(startPoint, endPoint);
                     }
                 } else {
-                    console.warn('Directions API 실패:', status);
+                    // console.warn('Directions API 실패:', status);
                     drawStraightLine(startPoint, endPoint);
                 }
             });
         } else {
-            console.warn('Directions 서비스를 사용할 수 없습니다. 직선으로 표시합니다.');
+            // console.warn('Directions 서비스를 사용할 수 없습니다. 직선으로 표시합니다.');
             drawStraightLine(startPoint, endPoint);
         }
     } catch (error) {
-        console.error('Directions API 초기화 실패:', error);
+        // console.error('Directions API 초기화 실패:', error);
         drawStraightLine(startPoint, endPoint);
     }
 }
@@ -702,7 +702,7 @@ function virtualDispatch(event) {
 // 기사 마커 설정
 function setDriverMarker(lat, lng) {
     if (!map) {
-        console.warn('지도가 초기화되지 않았습니다.');
+        // console.warn('지도가 초기화되지 않았습니다.');
         return;
     }
 
@@ -780,7 +780,7 @@ function setDriverMarker(lat, lng) {
 // 기사 위치 → 출발지 경로 그리기
 function drawDriverToStartRoute() {
     if (!map) {
-        console.warn('지도가 초기화되지 않았습니다.');
+        // console.warn('지도가 초기화되지 않았습니다.');
         return;
     }
     
@@ -788,7 +788,7 @@ function drawDriverToStartRoute() {
     const startLng = parseFloat(document.getElementById('departure_lng').value);
     
     if (!driverMarker) {
-        console.warn('기사 마커가 설정되지 않았습니다.');
+        // console.warn('기사 마커가 설정되지 않았습니다.');
         return;
     }
     

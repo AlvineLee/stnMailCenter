@@ -143,7 +143,7 @@ document.getElementById('customerSelect').addEventListener('change', function() 
     const customerId = this.value;
     if (customerId) {
         // 프로토타입에서는 실제 AJAX 호출하지 않음
-        console.log('고객사 선택:', customerId);
+        // console.log('고객사 선택:', customerId);
     }
 });
 </script>

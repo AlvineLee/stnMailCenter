@@ -280,34 +280,30 @@ class DeliveryModel extends Model
             u.user_id as insung_user_id
         ');
         
-        // 인성 시스템 주문만 조회
-        $builder->where('o.order_system', 'insung');
-        
-        // 인성 주문번호가 있는 주문만 조회
+        // 인성 주문번호가 있는 주문만 조회 (order_system과 무관하게)
+        // STN 로그인 주문도 인성 API 연동 시 insung_order_number가 있으므로 포함
         $builder->where('o.insung_order_number IS NOT NULL');
         $builder->where('o.insung_order_number !=', '');
         
-        // 취소/완료된 주문은 제외 (동기화 불필요)
-        $builder->whereNotIn('o.status', ['cancelled', 'delivered']);
+        // 완료된 주문만 제외 (취소된 주문은 포함하여 인성 CS에서 취소 처리된 경우 상태 업데이트)
+        // 취소 상태는 인성 API에서 확인하여 업데이트해야 하므로 동기화 대상에 포함
+        $builder->where('o.status !=', 'delivered');
         
-        // API 정보를 위한 JOIN
+        // API 정보를 위한 JOIN (LEFT JOIN으로 변경하여 STN 로그인 주문도 포함)
         // tbl_orders.user_id -> tbl_users_list.idx
-        $builder->join('tbl_users_list u', 'o.user_id = u.idx', 'inner');
+        $builder->join('tbl_users_list u', 'o.user_id = u.idx', 'left');
         
         // tbl_users_list.user_company -> tbl_company_list.comp_code
-        $builder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'inner');
+        $builder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
         
         // tbl_company_list.cc_idx -> tbl_cc_list.idx
-        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
         
         // tbl_cc_list.cc_code -> tbl_api_list.api_code (collation 충돌 해결)
-        $builder->join('tbl_api_list api', 'CONVERT(cc.cc_code USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(api.api_code USING utf8mb4) COLLATE utf8mb4_general_ci', 'inner', false);
+        $builder->join('tbl_api_list api', 'CONVERT(cc.cc_code USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(api.api_code USING utf8mb4) COLLATE utf8mb4_general_ci', 'left', false);
         
-        // API 정보가 있는 주문만 조회 (NULL 체크)
-        $builder->where('api.mcode IS NOT NULL');
-        $builder->where('api.cccode IS NOT NULL');
-        $builder->where('api.token IS NOT NULL');
-        $builder->where('api.token !=', '');
+        // API 정보가 있는 주문만 조회 (NULL 체크는 제거하여 STN 로그인 주문도 포함)
+        // STN 로그인 주문의 경우 API 정보가 NULL이어도 동기화 가능 (기본값 사용)
         
         // daumdata 로그인 필터링 (선택적)
         if (isset($filters['cc_code']) && $filters['cc_code']) {

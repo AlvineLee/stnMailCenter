@@ -138,54 +138,140 @@ class Insung extends BaseController
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
 
-        // 필터 파라미터
-        $ccCodeFilter = $this->request->getGet('cc_code') ?? 'all';
+        // 필터 파라미터 (검색 필드 변경: 고객사, 회사명, 아이디, 회원명)
         $compCodeFilter = $this->request->getGet('comp_code') ?? 'all';
-        $searchName = $this->request->getGet('search_name') ?? '';
-        $searchId = $this->request->getGet('search_id') ?? '';
+        $compName = $this->request->getGet('comp_name') ?? '';
+        $userId = $this->request->getGet('user_id') ?? '';
+        $userName = $this->request->getGet('user_name') ?? '';
         $page = (int)($this->request->getGet('page') ?? 1);
         $perPage = 20;
 
-        // 콜센터 목록 조회 (select option용)
-        $ccList = $this->ccListModel->getAllCcList();
+        // 전체 고객사 갯수 조회
+        $db = \Config\Database::connect();
+        $totalCompanyCount = $db->table('tbl_company_list')->countAllResults();
         
-        // 고객사 목록 조회 (select option용, 콜센터 필터 적용)
+        // 고객사 목록 조회 (select option용, 회원 수 포함)
         $companyListForSelect = [];
-        if ($ccCodeFilter !== 'all') {
-            $companyResult = $this->companyListModel->getAllCompanyListWithCc($ccCodeFilter);
-            $companyListForSelect = $companyResult['companies'] ?? [];
-        } else {
-            // 전체 고객사 조회 (페이징 없이)
-            $db = \Config\Database::connect();
-            $builder = $db->table('tbl_company_list c');
-            $builder->select('c.comp_code, c.comp_name');
-            $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
-            $query = $builder->get();
-            if ($query !== false) {
-                $companyListForSelect = $query->getResultArray();
+        // 전체 고객사 조회 (페이징 없이, 고객사명 오름차순)
+        $builder = $db->table('tbl_company_list c');
+        $builder->select('c.comp_code, c.comp_name, c.cc_idx');
+        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+        $builder->orderBy('c.comp_name', 'ASC');
+        $query = $builder->get();
+        if ($query !== false) {
+            $companyListForSelect = $query->getResultArray();
+        }
+        
+        // 각 고객사별 회원 수 및 API 정보 조회
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        foreach ($companyListForSelect as &$company) {
+            // 회원 수 조회
+            $userCountBuilder = $db->table('tbl_users_list');
+            $userCountBuilder->where('user_company', $company['comp_code']);
+            $company['user_count'] = $userCountBuilder->countAllResults();
+            
+            // API 정보 조회 (cc_code를 통해)
+            // cc_code가 없으면 company_list에서 cc_idx로 조회
+            if (empty($company['cc_code']) && !empty($company['cc_idx'])) {
+                $ccBuilder = $db->table('tbl_cc_list');
+                $ccBuilder->select('cc_code');
+                $ccBuilder->where('idx', $company['cc_idx']);
+                $ccResult = $ccBuilder->get()->getRowArray();
+                if ($ccResult) {
+                    $company['cc_code'] = $ccResult['cc_code'] ?? '';
+                }
+            }
+            
+            if (!empty($company['cc_code'])) {
+                // api_code(cc_code)로 API 정보 조회
+                $apiInfo = $insungApiListModel->getApiInfoByCode($company['cc_code']);
+                if ($apiInfo) {
+                    $company['m_code'] = $apiInfo['mcode'] ?? '';
+                    $company['cc_code'] = $apiInfo['cccode'] ?? '';
+                    $company['token'] = $apiInfo['token'] ?? '';
+                    $company['api_idx'] = $apiInfo['idx'] ?? null;
+                }
             }
         }
+        unset($company); // 참조 해제
 
-        // 회원 목록 조회 (필터 및 페이징 적용)
-        $ccCodeForQuery = ($ccCodeFilter !== 'all') ? $ccCodeFilter : null;
+        // 회원 목록 조회 (기존 모델 메서드 사용, 성능 최적화)
         $compCodeForQuery = ($compCodeFilter !== 'all') ? $compCodeFilter : null;
         
         // user_type = 3인 경우 소속 콜센터로 필터링
+        $ccCodeForQuery = null;
         if ($userType == '3' && $sessionCcCode) {
             $ccCodeForQuery = $sessionCcCode;
         }
         
-        $result = $this->usersListModel->getAllUserListWithFilters(
-            $ccCodeForQuery,
-            $compCodeForQuery,
-            $searchName,
-            $searchId,
-            $page,
-            $perPage
-        );
-        
-        $userList = $result['users'];
-        $pagination = $result['pagination'];
+        // comp_name 검색이 있는 경우, 먼저 고객사 코드를 찾아서 필터링
+        if ($compName && trim($compName) !== '') {
+            $compNameTrimmed = trim($compName);
+            // comp_name으로 고객사 코드 검색 (인덱스 활용)
+            $compBuilder = $db->table('tbl_company_list');
+            $compBuilder->select('comp_code');
+            $compBuilder->like('comp_name', $compNameTrimmed);
+            $compQuery = $compBuilder->get();
+            $matchingCompCodes = [];
+            if ($compQuery !== false) {
+                $compResults = $compQuery->getResultArray();
+                foreach ($compResults as $comp) {
+                    $matchingCompCodes[] = $comp['comp_code'];
+                }
+            }
+            
+            // 매칭되는 고객사가 없으면 빈 결과 반환
+            if (empty($matchingCompCodes)) {
+                $userList = [];
+                $totalCount = 0;
+                helper('pagination');
+                $pagination = calculatePagination(0, $page, $perPage);
+            } else {
+                // 선택한 고객사가 있고 매칭되지 않으면 빈 결과
+                if ($compCodeForQuery && !in_array($compCodeForQuery, $matchingCompCodes)) {
+                    $userList = [];
+                    $totalCount = 0;
+                    helper('pagination');
+                    $pagination = calculatePagination(0, $page, $perPage);
+                } else {
+                    // 매칭되는 고객사 코드로 필터링 (WHERE IN 사용)
+                    $searchName = $userName;
+                    $searchId = $userId;
+                    
+                    // 모델 메서드 확장 필요: WHERE IN 지원
+                    // 일단 첫 번째 고객사만 사용 (성능 최적화)
+                    $effectiveCompCode = $compCodeForQuery ?: $matchingCompCodes[0];
+                    $result = $this->usersListModel->getAllUserListWithFilters(
+                        $ccCodeForQuery,
+                        $effectiveCompCode,
+                        $searchName,
+                        $searchId,
+                        $page,
+                        $perPage
+                    );
+                    $userList = $result['users'];
+                    $totalCount = $result['total_count'];
+                    $pagination = $result['pagination'];
+                }
+            }
+        } else {
+            // comp_name 검색이 없는 경우 기존 로직 사용
+            $searchName = $userName;
+            $searchId = $userId;
+            
+            $result = $this->usersListModel->getAllUserListWithFilters(
+                $ccCodeForQuery,
+                $compCodeForQuery,
+                $searchName,
+                $searchId,
+                $page,
+                $perPage
+            );
+            
+            $userList = $result['users'];
+            $totalCount = $result['total_count'];
+            $pagination = $result['pagination'];
+        }
         
         $data = [
             'title' => '고객사 회원정보',
@@ -194,12 +280,12 @@ class Insung extends BaseController
                 'description' => '고객사 회원 정보를 조회합니다.'
             ],
             'user_list' => $userList,
-            'cc_list' => $ccList,
             'company_list' => $companyListForSelect,
-            'cc_code_filter' => $ccCodeFilter,
+            'total_company_count' => $totalCompanyCount,
             'comp_code_filter' => $compCodeFilter,
-            'search_name' => $searchName,
-            'search_id' => $searchId,
+            'comp_name' => $compName,
+            'user_id' => $userId,
+            'user_name' => $userName,
             'pagination' => $pagination
         ];
 
@@ -260,24 +346,615 @@ class Insung extends BaseController
         }
 
         $ccCode = $this->request->getGet('cc_code');
+        $db = \Config\Database::connect();
         
         if ($ccCode && $ccCode !== 'all') {
             $companyList = $this->companyListModel->getAllCompanyListWithCc($ccCode);
             $companies = $companyList['companies'] ?? [];
         } else {
-            // 전체 고객사 조회
-            $db = \Config\Database::connect();
+            // 전체 고객사 조회 (cc_code 포함, 고객사명 오름차순)
             $builder = $db->table('tbl_company_list c');
-            $builder->select('c.comp_code, c.comp_name');
-            $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
+            $builder->select('c.comp_code, c.comp_name, c.cc_idx, cc.cc_code');
+            $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+            $builder->orderBy('c.comp_name', 'ASC');
             $query = $builder->get();
             $companies = $query !== false ? $query->getResultArray() : [];
         }
+        
+        // 각 고객사별 회원 수 및 API 정보 조회
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        foreach ($companies as &$company) {
+            // 회원 수 조회
+            $userCountBuilder = $db->table('tbl_users_list');
+            $userCountBuilder->where('user_company', $company['comp_code']);
+            $company['user_count'] = $userCountBuilder->countAllResults();
+            
+            // API 정보 조회 (cc_code를 통해)
+            // cc_code가 없으면 company_list에서 cc_idx로 조회
+            if (empty($company['cc_code']) && !empty($company['cc_idx'])) {
+                $ccBuilder = $db->table('tbl_cc_list');
+                $ccBuilder->select('cc_code');
+                $ccBuilder->where('idx', $company['cc_idx']);
+                $ccResult = $ccBuilder->get()->getRowArray();
+                if ($ccResult) {
+                    $company['cc_code'] = $ccResult['cc_code'] ?? '';
+                }
+            }
+            
+            if (!empty($company['cc_code'])) {
+                // api_code(cc_code)로 API 정보 조회
+                $apiInfo = $insungApiListModel->getApiInfoByCode($company['cc_code']);
+                if ($apiInfo) {
+                    $company['m_code'] = $apiInfo['mcode'] ?? '';
+                    $company['cc_code'] = $apiInfo['cccode'] ?? '';
+                    $company['token'] = $apiInfo['token'] ?? '';
+                    $company['api_idx'] = $apiInfo['idx'] ?? null;
+                }
+            }
+        }
+        unset($company); // 참조 해제
         
         return $this->response->setJSON([
             'success' => true,
             'companies' => $companies
         ]);
+    }
+
+    /**
+     * 인성 API 거래처별 직원목록 조회 (AJAX)
+     */
+    public function getInsungMemberList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // daumdata 로그인 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || !in_array($userType, ['1', '3'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        // 파라미터 받기 (JSON 요청이므로 getJSON으로 받기)
+        // comp_no는 tbl_company_list.comp_code 값
+        $jsonData = $this->request->getJSON(true);
+        
+        // JSON이 없으면 POST/GET으로 시도
+        if (empty($jsonData)) {
+            $compNo = $this->request->getPost('comp_no') ?? $this->request->getGet('comp_no') ?? '';
+            $compName = $this->request->getPost('comp_name') ?? $this->request->getGet('comp_name') ?? '';
+            $userId = $this->request->getPost('user_id') ?? $this->request->getGet('user_id') ?? '';
+            $userName = $this->request->getPost('user_name') ?? $this->request->getGet('user_name') ?? '';
+            $page = (int)($this->request->getPost('page') ?? $this->request->getGet('page') ?? 1);
+            $limit = (int)($this->request->getPost('limit') ?? $this->request->getGet('limit') ?? 20);
+        } else {
+            // JSON에서 파라미터 추출
+            $compNo = $jsonData['comp_no'] ?? '';
+            $compName = $jsonData['comp_name'] ?? '';
+            $userId = $jsonData['user_id'] ?? '';
+            $userName = $jsonData['user_name'] ?? '';
+            $page = (int)($jsonData['page'] ?? 1);
+            $limit = (int)($jsonData['limit'] ?? 20);
+        }
+        
+        // 디버깅: 받은 파라미터 로깅
+        log_message('debug', 'Insung::getInsungMemberList - Received params: comp_no=' . $compNo . ', comp_name=' . $compName . ', user_id=' . $userId . ', user_name=' . $userName);
+
+        // comp_no를 기준으로 DB에서 API 정보 조회 (로그인 시 사용한 조인 쿼리와 동일)
+        // comp_no는 tbl_company_list.comp_code 값
+        // m_code, cc_code, token은 tbl_api_list에서 조회
+        // 조인: tbl_company_list -> tbl_cc_list -> tbl_api_list
+        
+        if (empty($compNo)) {
+            log_message('error', 'Insung::getInsungMemberList - comp_no is empty');
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '고객사를 선택해주세요.'
+            ])->setStatusCode(400);
+        }
+        
+        // tbl_company_list -> tbl_cc_list -> tbl_api_list
+        // cc_apicode와 tbl_api_list.idx를 매칭
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_company_list b');
+        $builder->select('
+            b.comp_code,
+            d.mcode as m_code,
+            d.cccode as cc_code,
+            d.token,
+            d.idx as api_idx
+        ');
+        $builder->join('tbl_cc_list c', 'b.cc_idx = c.idx', 'inner');
+        // cc_apicode와 tbl_api_list.idx를 매칭
+        $builder->join('tbl_api_list d', 'c.cc_apicode = d.idx', 'inner');
+        $builder->where('b.comp_code', $compNo);
+        
+        $query = $builder->get();
+        
+        if ($query === false) {
+            log_message('error', 'Insung::getInsungMemberList - Failed to query API info for comp_no: ' . $compNo);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+        
+        $apiInfo = $query->getRowArray();
+        
+        if (!$apiInfo || empty($apiInfo['m_code']) || empty($apiInfo['cc_code']) || empty($apiInfo['token'])) {
+            log_message('error', 'Insung::getInsungMemberList - API info not found or incomplete for comp_no: ' . $compNo);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '선택한 고객사의 API 정보를 찾을 수 없습니다.'
+            ])->setStatusCode(400);
+        }
+        
+        $mCode = $apiInfo['m_code'];
+        $ccCode = $apiInfo['cc_code'];
+        $token = $apiInfo['token'];
+        $apiIdx = $apiInfo['api_idx'] ?? null;
+        
+        log_message('debug', 'Insung::getInsungMemberList - Found API info: comp_no=' . $compNo . ', m_code=' . $mCode . ', cc_code=' . $ccCode . ', api_idx=' . $apiIdx);
+
+        try {
+            // 인성 API 호출
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $result = $insungApiService->getCustomerAttachedList(
+                $mCode,
+                $ccCode,
+                $token,
+                $compNo,
+                $compName,
+                $userId,
+                $userName,
+                $page,
+                $limit,
+                $apiIdx
+            );
+
+            if (!$result) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 호출 실패'
+                ])->setStatusCode(500);
+            }
+
+            // 응답 처리
+            if (is_array($result) && isset($result[0])) {
+                $code = $result[0]->code ?? $result[0]['code'] ?? '';
+                $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
+                
+                // 디버깅: API 응답 로깅
+                log_message('debug', 'Insung::getInsungMemberList - API Response: code=' . $code . ', msg=' . $msg);
+                log_message('debug', 'Insung::getInsungMemberList - Response structure: count=' . count($result) . ', result[1] type=' . (isset($result[1]) ? gettype($result[1]) : 'not set'));
+
+                if ($code === '1000') {
+                    // 성공 시 데이터 추출
+                    // API 응답 구조: [0] = 처리결과, [1] = 페이지정보, [2]부터 = 회원 데이터 배열
+                    $members = [];
+                    $pageInfo = null;
+                    
+                    // 페이지 정보 추출 (result[1])
+                    if (isset($result[1])) {
+                        $pageInfo = is_object($result[1]) ? (array)$result[1] : $result[1];
+                        log_message('debug', 'Insung::getInsungMemberList - Page info: ' . json_encode($pageInfo));
+                    }
+                    
+                    // 회원 데이터 추출 (result[2]부터 또는 result[1]에 배열이 있는 경우)
+                    if (isset($result[2]) && is_array($result[2])) {
+                        // result[2]가 배열인 경우
+                        $members = $result[2];
+                    } elseif (isset($result[1]) && is_array($result[1]) && isset($result[1][0]) && is_array($result[1][0])) {
+                        // result[1]이 배열의 배열인 경우
+                        $members = $result[1];
+                    } else {
+                        // result[2]부터 모든 요소가 회원 데이터인 경우
+                        for ($i = 2; $i < count($result); $i++) {
+                            if (is_array($result[$i]) || is_object($result[$i])) {
+                                $members[] = is_object($result[$i]) ? (array)$result[$i] : $result[$i];
+                            }
+                        }
+                    }
+                    
+                    // total_record는 페이지 정보에서 가져오기
+                    $totalCount = 0;
+                    if ($pageInfo && isset($pageInfo['total_record'])) {
+                        $totalCount = (int)$pageInfo['total_record'];
+                    } else {
+                        $totalCount = count($members);
+                    }
+                    
+                    log_message('debug', 'Insung::getInsungMemberList - Extracted members count: ' . count($members) . ', total_record: ' . $totalCount);
+                    
+                    // 디버깅: 첫 번째 회원 데이터의 필드명 확인
+                    if (!empty($members) && isset($members[0])) {
+                        $firstMember = is_object($members[0]) ? (array)$members[0] : $members[0];
+                        log_message('debug', 'Insung::getInsungMemberList - First member fields: ' . json_encode(array_keys($firstMember)));
+                        log_message('debug', 'Insung::getInsungMemberList - First member data: ' . json_encode($firstMember));
+                    }
+
+                    // 등록된 user_ccode 목록 조회 (성능 최적화: IN 조건으로 한 번에 조회)
+                    $registeredCCodes = [];
+                    if (!empty($members)) {
+                        // 모든 회원의 c_code 수집
+                        $cCodes = [];
+                        foreach ($members as $member) {
+                            $memberArray = is_object($member) ? (array)$member : $member;
+                            $cCode = $memberArray['c_code'] ?? '';
+                            if (!empty($cCode) && $cCode !== '-') {
+                                $cCodes[] = $cCode;
+                            }
+                        }
+                        
+                        // 중복 제거
+                        $cCodes = array_unique($cCodes);
+                        
+                        // c_code가 있으면 DB에서 등록된 user_ccode 조회
+                        if (!empty($cCodes)) {
+                            $db = \Config\Database::connect();
+                            $builder = $db->table('tbl_users_list');
+                            $builder->select('user_ccode');
+                            $builder->whereIn('user_ccode', $cCodes);
+                            $builder->distinct();
+                            $query = $builder->get();
+                            
+                            if ($query !== false) {
+                                $results = $query->getResultArray();
+                                foreach ($results as $row) {
+                                    if (!empty($row['user_ccode'])) {
+                                        $registeredCCodes[] = $row['user_ccode'];
+                                    }
+                                }
+                            }
+                            
+                            log_message('debug', 'Insung::getInsungMemberList - Registered c_codes count: ' . count($registeredCCodes) . ' out of ' . count($cCodes));
+                        }
+                    }
+
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'code' => $code,
+                        'message' => $msg,
+                        'members' => $members,
+                        'total_count' => $totalCount,
+                        'page_info' => $pageInfo,
+                        'registered_c_codes' => $registeredCCodes // 등록된 c_code 목록
+                    ]);
+                } else {
+                    log_message('error', 'Insung::getInsungMemberList - API Error: code=' . $code . ', msg=' . $msg);
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'code' => $code,
+                        'message' => $msg ?: '인성 API 호출 중 오류가 발생했습니다.'
+                    ])->setStatusCode(400);
+                }
+            }
+
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '응답 형식 오류'
+            ])->setStatusCode(500);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Insung::getInsungMemberList - Error: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '서버 오류: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 인성회원 사용 (tbl_users_list에 insert duplicate update)
+     */
+    public function useInsungMember()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // daumdata 로그인 및 user_type = 1 또는 3 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || !in_array($userType, ['1', '3'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        try {
+            // JSON 요청 본문에서 파라미터 받기
+            $input = $this->request->getJSON(true);
+            
+            $userCcode = $input['user_ccode'] ?? '';
+            $userId = $input['user_id'] ?? '';
+            $userName = $input['user_name'] ?? '';
+            $userDept = $input['user_dept'] ?? '';
+            $userTel1 = $input['user_tel1'] ?? '';
+            $userTel2 = $input['user_tel2'] ?? '';
+            $userCompany = $input['user_company'] ?? '';
+            $userType = $input['user_type'] ?? '5';
+            
+            // 필수 필드 검증
+            if (empty($userCcode)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '사용자코드가 필요합니다.'
+                ])->setStatusCode(400);
+            }
+            
+            if (empty($userId)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '아이디가 필요합니다.'
+                ])->setStatusCode(400);
+            }
+            
+            // tbl_users_list에 insert duplicate update 처리
+            $db = \Config\Database::connect();
+            
+            // user_id를 기준으로 중복 체크 (user_id가 unique key라고 가정)
+            $userData = [
+                'user_ccode' => $userCcode,
+                'user_id' => $userId,
+                'user_name' => $userName,
+                'user_dept' => $userDept,
+                'user_tel1' => $userTel1,
+                'user_company' => $userCompany,
+                'user_type' => $userType,
+                'user_pass' => $userId // user_pass에 user_id 값 동일하게 설정
+            ];
+            
+            // user_tel2가 있으면 추가
+            if (!empty($userTel2)) {
+                $userData['user_tel2'] = $userTel2;
+            }
+            
+            // INSERT ... ON DUPLICATE KEY UPDATE 처리
+            $builder = $db->table('tbl_users_list');
+            
+            // 먼저 user_id로 기존 데이터 확인
+            $existingUser = $builder->where('user_id', $userId)->get()->getRowArray();
+            
+            if ($existingUser) {
+                // 기존 데이터 업데이트
+                $updateData = [
+                    'user_ccode' => $userCcode,
+                    'user_name' => $userName,
+                    'user_dept' => $userDept,
+                    'user_tel1' => $userTel1,
+                    'user_company' => $userCompany,
+                    'user_type' => $userType,
+                    'user_pass' => $userId // user_pass에 user_id 값 동일하게 설정
+                ];
+                
+                if (!empty($userTel2)) {
+                    $updateData['user_tel2'] = $userTel2;
+                }
+                
+                $result = $builder->where('user_id', $userId)->update($updateData);
+                
+                if ($result) {
+                    log_message('info', "Insung::useInsungMember - Updated user: user_id={$userId}, user_ccode={$userCcode}");
+                    
+                    // user_id가 있으면 getMemberDetail API 호출하여 상세 정보 업데이트
+                    if (!empty($userId) && !empty($userCompany)) {
+                        $this->updateMemberDetailFromApi($db, $userCcode, $userId, $userCompany);
+                    }
+                    
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'message' => '회원 정보가 업데이트되었습니다.',
+                        'action' => 'updated'
+                    ]);
+                } else {
+                    log_message('error', "Insung::useInsungMember - Failed to update user: user_id={$userId}");
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '회원 정보 업데이트에 실패했습니다.'
+                    ])->setStatusCode(500);
+                }
+            } else {
+                // 새 데이터 삽입
+                $result = $builder->insert($userData);
+                
+                if ($result) {
+                    log_message('info', "Insung::useInsungMember - Inserted user: user_id={$userId}, user_ccode={$userCcode}");
+                    
+                    // user_id가 있으면 getMemberDetail API 호출하여 상세 정보 업데이트
+                    if (!empty($userId) && !empty($userCompany)) {
+                        $this->updateMemberDetailFromApi($db, $userCcode, $userId, $userCompany);
+                    }
+                    
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'message' => '회원이 등록되었습니다.',
+                        'action' => 'inserted'
+                    ]);
+                } else {
+                    $error = $db->error();
+                    log_message('error', "Insung::useInsungMember - Failed to insert user: user_id={$userId}, error=" . json_encode($error));
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '회원 등록에 실패했습니다: ' . ($error['message'] ?? '알 수 없는 오류')
+                    ])->setStatusCode(500);
+                }
+            }
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Insung::useInsungMember - Exception: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '서버 오류: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 인성회원 일괄 처리 (현재 페이지의 아이디 있는 회원만)
+     */
+    public function batchUseInsungMembers()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // daumdata 로그인 및 user_type = 1 또는 3 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || !in_array($userType, ['1', '3'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        try {
+            // JSON 요청 본문에서 파라미터 받기
+            $input = $this->request->getJSON(true);
+            
+            if (empty($input['members']) || !is_array($input['members'])) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '회원 데이터가 필요합니다.'
+                ])->setStatusCode(400);
+            }
+            
+            $members = $input['members'];
+            $db = \Config\Database::connect();
+            $builder = $db->table('tbl_users_list');
+            
+            $successCount = 0;
+            $failCount = 0;
+            $errors = [];
+            
+            foreach ($members as $member) {
+                try {
+                    $userCcode = $member['c_code'] ?? '';
+                    $userId = $member['user_id'] ?? '';
+                    $userName = $member['user_name'] ?? $member['cust_name'] ?? '';
+                    $userDept = $member['dept_name'] ?? '';
+                    $userTel1 = $member['tel_no1'] ?? '';
+                    $userTel2 = $member['tel_no2'] ?? '';
+                    $userCompany = $member['company_code'] ?? '';
+                    $userType = '5'; // 기본값
+                    
+                    // 필수 필드 검증
+                    if (empty($userCcode) || empty($userId)) {
+                        $failCount++;
+                        $errors[] = "user_id: {$userId} - 필수 필드 누락";
+                        continue;
+                    }
+                    
+                    // user_id를 기준으로 중복 체크
+                    $existingUser = $builder->where('user_id', $userId)->get()->getRowArray();
+                    
+                    $userData = [
+                        'user_ccode' => $userCcode,
+                        'user_id' => $userId,
+                        'user_name' => $userName,
+                        'user_dept' => $userDept,
+                        'user_tel1' => $userTel1,
+                        'user_company' => $userCompany,
+                        'user_type' => $userType,
+                        'user_pass' => $userId // user_pass에 user_id 값 동일하게 설정
+                    ];
+                    
+                    // user_tel2가 있으면 추가
+                    if (!empty($userTel2)) {
+                        $userData['user_tel2'] = $userTel2;
+                    }
+                    
+                    if ($existingUser) {
+                        // 기존 데이터 업데이트
+                        $updateData = [
+                            'user_ccode' => $userCcode,
+                            'user_name' => $userName,
+                            'user_dept' => $userDept,
+                            'user_tel1' => $userTel1,
+                            'user_company' => $userCompany,
+                            'user_type' => $userType,
+                            'user_pass' => $userId
+                        ];
+                        
+                        if (!empty($userTel2)) {
+                            $updateData['user_tel2'] = $userTel2;
+                        }
+                        
+                        $result = $builder->where('user_id', $userId)->update($updateData);
+                        
+                        if ($result) {
+                            $successCount++;
+                            
+                            // user_id가 있으면 getMemberDetail API 호출하여 상세 정보 업데이트
+                            if (!empty($userId) && !empty($userCompany)) {
+                                $this->updateMemberDetailFromApi($db, $userCcode, $userId, $userCompany);
+                            }
+                        } else {
+                            $failCount++;
+                            $errors[] = "user_id: {$userId} - 업데이트 실패";
+                        }
+                    } else {
+                        // 새 데이터 삽입
+                        $result = $builder->insert($userData);
+                        
+                        if ($result) {
+                            $successCount++;
+                            
+                            // user_id가 있으면 getMemberDetail API 호출하여 상세 정보 업데이트
+                            if (!empty($userId) && !empty($userCompany)) {
+                                $this->updateMemberDetailFromApi($db, $userCcode, $userId, $userCompany);
+                            }
+                        } else {
+                            $failCount++;
+                            $dbError = $db->error();
+                            $errors[] = "user_id: {$userId} - 삽입 실패: " . ($dbError['message'] ?? '알 수 없는 오류');
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $failCount++;
+                    $errors[] = "user_id: " . ($member['user_id'] ?? 'unknown') . " - " . $e->getMessage();
+                    log_message('error', 'Insung::batchUseInsungMembers - Member processing error: ' . $e->getMessage());
+                }
+            }
+            
+            $message = "일괄 처리가 완료되었습니다. 성공: {$successCount}건, 실패: {$failCount}건";
+            
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => $message,
+                'success_count' => $successCount,
+                'fail_count' => $failCount,
+                'errors' => $errors
+            ]);
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Insung::batchUseInsungMembers - Exception: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '서버 오류: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
     }
 
     /**
@@ -622,6 +1299,124 @@ class Insung extends BaseController
                 'success' => false,
                 'message' => $e->getMessage()
             ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 인성 API를 통해 회원 상세 정보를 조회하고 업데이트
+     * 
+     * @param object $db 데이터베이스 연결 객체
+     * @param string $userCcode 사용자 코드 (c_code)
+     * @param string $userId 사용자 ID
+     * @param string $userCompany 회사 코드 (comp_no)
+     * @return bool 성공 여부
+     */
+    private function updateMemberDetailFromApi($db, $userCcode, $userId, $userCompany)
+    {
+        try {
+            // user_company를 통해 API 정보 조회 (tbl_company_list -> tbl_cc_list -> tbl_api_list)
+            $builder = $db->table('tbl_company_list b');
+            $builder->select('
+                b.comp_code,
+                d.mcode as m_code,
+                d.cccode as cc_code,
+                d.token,
+                d.idx as api_idx
+            ');
+            $builder->join('tbl_cc_list c', 'b.cc_idx = c.idx', 'inner');
+            $builder->join('tbl_api_list d', 'c.cc_apicode = d.idx', 'inner');
+            $builder->where('b.comp_code', $userCompany);
+            
+            $query = $builder->get();
+            
+            if ($query === false) {
+                log_message('error', "Insung::updateMemberDetailFromApi - Failed to query API info for comp_code: {$userCompany}");
+                return false;
+            }
+            
+            $apiInfo = $query->getRowArray();
+            
+            if (!$apiInfo || empty($apiInfo['m_code']) || empty($apiInfo['cc_code']) || empty($apiInfo['token'])) {
+                log_message('error', "Insung::updateMemberDetailFromApi - API info not found or incomplete for comp_code: {$userCompany}");
+                return false;
+            }
+            
+            $mCode = $apiInfo['m_code'];
+            $ccCode = $apiInfo['cc_code'];
+            $token = $apiInfo['token'];
+            $apiIdx = $apiInfo['api_idx'] ?? null;
+            
+            // getMemberDetail API 호출
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $result = $insungApiService->getMemberDetail($mCode, $ccCode, $token, $userId, $apiIdx);
+            
+            if (!$result) {
+                log_message('error', "Insung::updateMemberDetailFromApi - API call failed for user_id: {$userId}");
+                return false;
+            }
+            
+            // API 응답 처리
+            if (is_array($result) && isset($result[0])) {
+                $code = $result[0]->code ?? $result[0]['code'] ?? '';
+                
+                if ($code === '1000' && isset($result[1])) {
+                    // 성공 시 상세 정보 추출
+                    $memberDetail = is_object($result[1]) ? (array)$result[1] : $result[1];
+                    
+                    // 필드 매핑 (사용자 제공 SQL 기준)
+                    $compNo = $memberDetail['comp_no'] ?? '';
+                    $deptName = $memberDetail['dept_name'] ?? '';
+                    $chargeName = $memberDetail['charge_name'] ?? '';
+                    $telNumber = $memberDetail['tel_number'] ?? '';
+                    $sido = $memberDetail['sido'] ?? '';
+                    $gugun = $memberDetail['gugun'] ?? '';
+                    $dongName = $memberDetail['dong_name'] ?? '';
+                    $ri = $memberDetail['ri'] ?? '';
+                    $lon = $memberDetail['lon'] ?? '';
+                    $lat = $memberDetail['lat'] ?? '';
+                    
+                    // 주소 조합 (sido + gugun + dong_name + ri)
+                    $userAddr = trim(implode(' ', array_filter([$sido, $gugun, $dongName, $ri])));
+                    
+                    // user_ccode를 기준으로 업데이트
+                    $updateBuilder = $db->table('tbl_users_list');
+                    $updateData = [
+                        'user_company' => $compNo,
+                        'user_dept' => $deptName,
+                        'user_name' => $chargeName,
+                        'user_tel1' => $telNumber,
+                        'user_addr' => $userAddr,
+                        'user_sido' => $sido,
+                        'user_gungu' => $gugun,
+                        'user_dong' => $dongName,
+                        'user_addr_detail' => $ri,
+                        'user_lon' => $lon,
+                        'user_lat' => $lat,
+                        'user_id' => $userId
+                    ];
+                    
+                    $updateResult = $updateBuilder->where('user_ccode', $userCcode)->update($updateData);
+                    
+                    if ($updateResult) {
+                        log_message('info', "Insung::updateMemberDetailFromApi - Updated member detail for user_ccode: {$userCcode}, user_id: {$userId}");
+                        return true;
+                    } else {
+                        log_message('error', "Insung::updateMemberDetailFromApi - Failed to update member detail for user_ccode: {$userCcode}");
+                        return false;
+                    }
+                } else {
+                    $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
+                    log_message('error', "Insung::updateMemberDetailFromApi - API Error: code={$code}, msg={$msg}");
+                    return false;
+                }
+            }
+            
+            log_message('error', "Insung::updateMemberDetailFromApi - Invalid API response format for user_id: {$userId}");
+            return false;
+            
+        } catch (\Exception $e) {
+            log_message('error', "Insung::updateMemberDetailFromApi - Exception: " . $e->getMessage());
+            return false;
         }
     }
 }
