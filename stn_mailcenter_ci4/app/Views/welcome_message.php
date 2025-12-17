@@ -1,9 +1,14 @@
+<?php
+// 즉시 /auth/login으로 리다이렉트
+header('Location: /auth/login');
+exit();
+?>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STN Network - 로그인</title>
+    <title>DaumData - 로그인</title>
     <style>
         .login-container {
             display: flex;
@@ -103,8 +108,8 @@
     <div class="login-container">
         <div class="login-box">
             <div class="login-logo">
-                <div class="logo-icon">STN</div>
-                <h1>STN Network</h1>
+                <div class="logo-icon">DaumData</div>
+                <h1>DaumData</h1>
                 <p style="color: #718096; margin-top: 5px;">ONE'CALL</p>
             </div>
             

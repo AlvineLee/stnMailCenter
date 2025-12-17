@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?? 'STN Network' ?></title>
+    <?php
+    // 서브도메인 설정 가져오기
+    $subdomainConfig = config('Subdomain');
+    $subdomainInfo = $subdomainConfig->getCurrentConfig();
+    $isUnregisteredSubdomain = $subdomainConfig->isUnregisteredSubdomain();
+    $detectedSubdomain = $subdomainConfig->getDetectedSubdomain();
+    $pageTitle = $title ?? $subdomainInfo['name'] ?? 'DaumData';
+    ?>
+    <title><?= esc($pageTitle) ?></title>
+    <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -290,17 +299,27 @@
                 // 배송조회 페이지인 경우
                 if (currentPath.includes('/delivery/')) {
                     const $deliveryMenu = $('.nav-item:not(.has-submenu)').filter(function() {
-                        return $(this).find('.nav-text').text() === '배송조회(리스트)';
+                        return $(this).find('.nav-text').text() === '배송조회';
                     });
                     
                     if ($deliveryMenu.length) {
                         $deliveryMenu.addClass('active');
                     }
                 }
+                // 이용내역상세조회 페이지인 경우
+                else if (currentPath.includes('/history/')) {
+                    const $historyMenu = $('.nav-item:not(.has-submenu)').filter(function() {
+                        return $(this).find('.nav-text').text() === '이용내역상세조회';
+                    });
+                    
+                    if ($historyMenu.length) {
+                        $historyMenu.addClass('active');
+                    }
+                }
                 // 회원정보 페이지인 경우
                 else if (currentPath.includes('/member/')) {
                     const $memberMenu = $('.nav-item:not(.has-submenu)').filter(function() {
-                        return $(this).find('.nav-text').text() === '회원정보(리스트)';
+                        return $(this).find('.nav-text').text() === '회원정보';
                     });
                     
                     if ($memberMenu.length) {
@@ -602,3 +621,72 @@
             <?= $this->renderSection('content') ?>
         </main>
     </div>
+    
+    <?php if ($isUnregisteredSubdomain): ?>
+    <!-- 등록되지 않은 서브도메인 경고 레이어 팝업 -->
+    <div id="unregisteredSubdomainModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden" onclick="closeUnregisteredSubdomainModal()">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4" onclick="event.stopPropagation()">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-gray-900">서비스 안내</h3>
+                    <button onclick="closeUnregisteredSubdomainModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mb-6">
+                    <div class="flex items-center mb-4">
+                        <svg class="w-8 h-8 text-yellow-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <p class="text-lg font-semibold text-gray-900">등록되지 않은 서비스입니다</p>
+                    </div>
+                    <p class="text-gray-700 mb-2">
+                        접속하신 서브도메인 <strong class="text-gray-900"><?= esc($detectedSubdomain ?? '') ?>.daumdata.com</strong>은(는) 등록되지 않은 서비스입니다.
+                    </p>
+                    <p class="text-gray-700">
+                        서비스 이용을 원하시면 관리자에게 문의해 주세요.
+                    </p>
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="closeUnregisteredSubdomainModal()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        확인
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 등록되지 않은 서브도메인 경고 레이어 팝업 열기
+        function showUnregisteredSubdomainModal() {
+            // 레이어 팝업이 열릴 때 사이드바 처리
+            if (typeof window.hideSidebarForModal === 'function') {
+                window.hideSidebarForModal();
+            }
+            if (typeof window.lowerSidebarZIndex === 'function') {
+                window.lowerSidebarZIndex();
+            }
+            
+            document.getElementById('unregisteredSubdomainModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // 등록되지 않은 서브도메인 경고 레이어 팝업 닫기
+        function closeUnregisteredSubdomainModal() {
+            document.getElementById('unregisteredSubdomainModal').classList.add('hidden');
+            document.body.style.overflow = '';
+            
+            if (typeof window.restoreSidebarZIndex === 'function') {
+                window.restoreSidebarZIndex();
+            }
+        }
+        
+        // 페이지 로드 시 자동으로 팝업 표시
+        document.addEventListener('DOMContentLoaded', function() {
+            <?php if ($isUnregisteredSubdomain): ?>
+            showUnregisteredSubdomainModal();
+            <?php endif; ?>
+        });
+    </script>
+    <?php endif; ?>

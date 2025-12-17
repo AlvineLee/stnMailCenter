@@ -3,21 +3,43 @@
 <?= $this->section('content') ?>
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
 
-    <!-- 콜센터 선택 (daumdata 로그인 user_type=1인 경우만 표시) -->
+    <!-- 콜센터 및 거래처 선택 (daumdata 로그인 user_type=1인 경우만 표시) -->
     <?php if (isset($login_type) && $login_type === 'daumdata' && isset($user_type) && $user_type == '1' && !empty($cc_list)): ?>
     <div class="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <div class="flex items-center gap-4">
-            <label class="text-sm font-medium text-gray-700">콜센터 선택:</label>
-            <select id="cc_code_select" class="search-filter-select" onchange="changeCcCode()">
-                <option value="">전체 (마스터 설정)</option>
-                <?php foreach ($cc_list as $cc): ?>
-                <option value="<?= htmlspecialchars($cc['cc_code']) ?>" <?= (isset($selected_cc_code) && $selected_cc_code === $cc['cc_code']) ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($cc['cc_name']) ?> (<?= htmlspecialchars($cc['cc_code']) ?>)
-                </option>
-                <?php endforeach; ?>
-            </select>
+        <div class="flex items-center gap-4 flex-wrap">
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-gray-700">콜센터 선택:</label>
+                <select id="cc_code_select" class="search-filter-select" onchange="changeCcCode()">
+                    <option value="">전체 (마스터 설정)</option>
+                    <?php foreach ($cc_list as $cc): ?>
+                    <option value="<?= htmlspecialchars($cc['cc_code']) ?>" <?= (isset($selected_cc_code) && $selected_cc_code === $cc['cc_code']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($cc['cc_name']) ?> (<?= htmlspecialchars($cc['cc_code']) ?>)
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="flex items-center gap-2" id="company_select_container" style="display: <?= !empty($selected_cc_code) ? 'flex' : 'none' ?>;">
+                <label class="text-sm font-medium text-gray-700">거래처 선택:</label>
+                <select id="comp_code_select" class="search-filter-select" onchange="changeCompCode()">
+                    <option value="">전체 (콜센터 설정)</option>
+                    <?php if (!empty($company_list)): ?>
+                        <?php foreach ($company_list as $company): ?>
+                        <option value="<?= htmlspecialchars($company['comp_code']) ?>" <?= (isset($selected_comp_code) && $selected_comp_code === $company['comp_code']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($company['comp_name'] ?? $company['comp_code']) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </select>
+            </div>
             <?php if (isset($selected_cc_code) && $selected_cc_code): ?>
-            <span class="text-sm text-gray-600">현재 선택: <?= htmlspecialchars($selected_cc_code) ?></span>
+            <span class="text-sm text-gray-600">
+                현재 선택: 
+                <?php if (isset($selected_comp_code) && $selected_comp_code): ?>
+                    거래처 (<?= htmlspecialchars($selected_comp_code) ?>)
+                <?php else: ?>
+                    콜센터 (<?= htmlspecialchars($selected_cc_code) ?>)
+                <?php endif; ?>
+            </span>
             <?php endif; ?>
         </div>
     </div>
@@ -530,13 +552,75 @@ function changeCcCode() {
     const ccCode = document.getElementById('cc_code_select').value;
     const url = new URL(window.location.href);
     
+    // 거래처 선택 초기화
+    document.getElementById('comp_code_select').innerHTML = '<option value="">전체 (콜센터 설정)</option>';
+    document.getElementById('company_select_container').style.display = 'none';
+    
     if (ccCode) {
         url.searchParams.set('cc_code', ccCode);
+        url.searchParams.delete('comp_code'); // 거래처 파라미터 제거
+        
+        // 콜센터 선택 시 거래처 목록 로드
+        loadCompaniesByCc(ccCode);
     } else {
         url.searchParams.delete('cc_code');
+        url.searchParams.delete('comp_code');
     }
     
     window.location.href = url.toString();
+}
+
+// 거래처 선택 변경
+function changeCompCode() {
+    const ccCode = document.getElementById('cc_code_select').value;
+    const compCode = document.getElementById('comp_code_select').value;
+    const url = new URL(window.location.href);
+    
+    if (ccCode) {
+        url.searchParams.set('cc_code', ccCode);
+    }
+    
+    if (compCode) {
+        url.searchParams.set('comp_code', compCode);
+    } else {
+        url.searchParams.delete('comp_code');
+    }
+    
+    window.location.href = url.toString();
+}
+
+// 콜센터별 거래처 목록 로드 (AJAX)
+function loadCompaniesByCc(ccCode) {
+    if (!ccCode) {
+        return;
+    }
+    
+    fetch(`<?= base_url('admin/getCompaniesByCcForOrderType') ?>?cc_code=${encodeURIComponent(ccCode)}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.companies) {
+            const compSelect = document.getElementById('comp_code_select');
+            compSelect.innerHTML = '<option value="">전체 (콜센터 설정)</option>';
+            
+            data.companies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.comp_code;
+                option.textContent = company.comp_name || company.comp_code;
+                compSelect.appendChild(option);
+            });
+            
+            // 거래처 선택 영역 표시
+            document.getElementById('company_select_container').style.display = 'flex';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading companies:', error);
+    });
 }
 
 // 설정 저장 (일괄 상태 업데이트)
@@ -567,6 +651,13 @@ function saveSettings() {
     if (ccCodeSelect && ccCodeSelect.value) {
         formData.append('cc_code', ccCodeSelect.value);
         // console.log('콜센터 코드:', ccCodeSelect.value);
+    }
+    
+    // 거래처 코드가 선택되어 있으면 함께 전송
+    const compCodeSelect = document.getElementById('comp_code_select');
+    if (compCodeSelect && compCodeSelect.value) {
+        formData.append('comp_code', compCodeSelect.value);
+        // console.log('거래처 코드:', compCodeSelect.value);
     }
     
     fetch('<?= base_url('admin/batchUpdateServiceStatus') ?>', {
@@ -634,10 +725,22 @@ function initSortable() {
 
 // 페이지 로드 완료 후 초기화
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSortable);
+    document.addEventListener('DOMContentLoaded', function() {
+        initSortable();
+        // 콜센터가 선택되어 있으면 거래처 목록 로드
+        const ccCodeSelect = document.getElementById('cc_code_select');
+        if (ccCodeSelect && ccCodeSelect.value) {
+            loadCompaniesByCc(ccCodeSelect.value);
+        }
+    });
 } else {
     // 이미 로드 완료된 경우 즉시 실행
     initSortable();
+    // 콜센터가 선택되어 있으면 거래처 목록 로드
+    const ccCodeSelect = document.getElementById('cc_code_select');
+    if (ccCodeSelect && ccCodeSelect.value) {
+        loadCompaniesByCc(ccCodeSelect.value);
+    }
 }
 
 // 서비스 순서 업데이트

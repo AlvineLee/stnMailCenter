@@ -129,27 +129,72 @@ class InsungUsersListModel extends Model
     public function getAllUserListWithFilters($ccCode = null, $compCode = null, $searchName = null, $searchId = null, $page = 1, $perPage = 20)
     {
         $db = \Config\Database::connect();
+        
+        // 성능 최적화: COUNT 쿼리 최적화
+        $countBuilder = $db->table('tbl_users_list u');
+        
+        // WHERE 조건 적용
+        if ($compCode) {
+            $countBuilder->where('u.user_company', $compCode);
+        }
+        
+        if ($searchName && trim($searchName) !== '') {
+            $countBuilder->like('u.user_name', trim($searchName));
+        }
+        
+        if ($searchId && trim($searchId) !== '') {
+            $countBuilder->like('u.user_id', trim($searchId));
+        }
+        
+        // ccCode 필터링을 위해 JOIN 필요
+        if ($ccCode) {
+            $countBuilder->join('tbl_company_list c_count', 'u.user_company = c_count.comp_code', 'inner');
+            $countBuilder->join('tbl_cc_list cc_count', 'c_count.cc_idx = cc_count.idx', 'inner');
+            $countBuilder->where('cc_count.cc_code', $ccCode);
+            // 중복 제거를 위해 DISTINCT COUNT 사용
+            $countBuilder->distinct();
+            $countBuilder->select('u.idx');
+            $totalCount = $countBuilder->countAllResults(false);
+        } else {
+            // JOIN 없이 COUNT (더 빠름)
+            $totalCount = $countBuilder->countAllResults();
+        }
+        
+        // 실제 데이터 조회 쿼리
         $builder = $db->table('tbl_users_list u');
         
-        // WHERE 조건을 먼저 적용 (인덱스 활용 최적화)
-        // compCode가 있으면 먼저 필터링 (인덱스 활용)
+        // WHERE 조건 적용
         if ($compCode) {
             $builder->where('u.user_company', $compCode);
         }
         
-        // 회원명 검색
         if ($searchName && trim($searchName) !== '') {
             $builder->like('u.user_name', trim($searchName));
         }
         
-        // 아이디 검색
         if ($searchId && trim($searchId) !== '') {
             $builder->like('u.user_id', trim($searchId));
         }
         
-        // SELECT 및 JOIN
+        // 필요한 컬럼만 SELECT (성능 최적화)
+        // 중복 제거를 위해 DISTINCT 사용
         $builder->select('
-            u.*,
+            u.idx,
+            u.user_id,
+            u.user_name,
+            u.user_dept,
+            u.user_tel1,
+            u.user_tel2,
+            u.user_addr,
+            u.user_addr_detail,
+            u.user_company,
+            u.user_type,
+            u.user_ccode,
+            u.user_sido,
+            u.user_gungu,
+            u.user_dong,
+            u.user_lon,
+            u.user_lat,
             c.comp_code,
             c.comp_name,
             c.comp_owner,
@@ -157,19 +202,17 @@ class InsungUsersListModel extends Model
             cc.cc_name
         ');
         
+        // DISTINCT 추가 (중복 제거)
+        $builder->distinct();
+        
         // INNER JOIN 사용
         $builder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'inner');
         $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
         
-        // ccCode 필터 (JOIN 후에 적용)
+        // ccCode 필터
         if ($ccCode) {
             $builder->where('cc.cc_code', $ccCode);
         }
-        
-        // 총 개수 조회 (페이징용)
-        // countAllResults()는 자동으로 COUNT(*)로 최적화됨
-        $countBuilder = clone $builder;
-        $totalCount = $countBuilder->countAllResults();
         
         // 정렬 및 페이징
         $builder->orderBy('cc.cc_code', 'ASC');

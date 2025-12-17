@@ -27,9 +27,9 @@ class Database extends Config
     // STN MailCenter 데이터베이스 연결 설정
     public array $default = [
         'DSN'          => '',
-        'hostname'     => 'localhost',
-        'username'     => 'root',
-        'password'     => 'rbghkd75!@#$',
+        'hostname'     => '192.168.0.130',
+        'username'     => 'coder',
+        'password'     => 'dptmxldps1!',
         'database'     => 'mailcenter',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
@@ -196,8 +196,8 @@ class Database extends Config
 
         // 환경변수에서 DB 설정 읽기
         $this->default['hostname'] = getenv('DB_HOSTNAME') ?: 'localhost';
-        $this->default['username'] = getenv('DB_USERNAME') ?: 'root';
-        $this->default['password'] = getenv('DB_PASSWORD') ?: 'rbghkd75!@#$';
+        $this->default['username'] = getenv('DB_USERNAME') ?: 'coder';
+        $this->default['password'] = getenv('DB_PASSWORD') ?: 'dptmxldps1!';
         $this->default['database'] = getenv('DB_DATABASE') ?: 'mailcenter';
 
         // Ensure that we always set the database group to 'tests' if

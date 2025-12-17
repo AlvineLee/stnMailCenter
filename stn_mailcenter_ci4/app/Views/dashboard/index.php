@@ -3,6 +3,7 @@
 <?= $this->section('content') ?>
 <?php
 // 임시 디버그: m_code, cc_code 확인
+/*
 $loginType = session()->get('login_type');
 if ($loginType === 'daumdata') {
     $mCode = session()->get('m_code');
@@ -39,9 +40,19 @@ if ($loginType === 'daumdata') {
     </div>
 </div>
 <?php } ?>
-<div class="space-y-6">
+*/
+$loginType = session()->get('login_type');
+$today = date('Y-m-d');
+$todayFormatted = date('Y년 m월 d일');
+?>
+<div class="space-y-4">
+    <!-- 날짜 기준 안내 -->
+    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 px-4 py-2 rounded">
+        <p class="text-sm font-medium">📅 오늘 날짜 기준: <strong><?= $todayFormatted ?></strong></p>
+    </div>
+    
     <!-- 통계 카드 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-7 gap-4">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div class="flex items-center">
                 <div class="p-3 bg-gray-100 rounded-lg">
@@ -58,42 +69,84 @@ if ($loginType === 'daumdata') {
 
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div class="flex items-center">
-                <div class="p-3 bg-gray-100 rounded-lg">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <div class="p-3 rounded-lg" style="background-color: #d1ecf1;">
+                    <svg class="w-6 h-6" style="color: #0c5460;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
                 </div>
                 <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">대기중</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['pending_orders'] ?></p>
+                    <p class="text-sm font-medium text-gray-600">예약</p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['reservation_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div class="flex items-center">
-                <div class="p-3 bg-gray-100 rounded-lg">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3 rounded-lg" style="background-color: #fffacd;">
+                    <svg class="w-6 h-6" style="color: #856404;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">접수</p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['reception_orders'] ?? 0 ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg" style="background-color: #f5deb3;">
+                    <svg class="w-6 h-6" style="color: #8b4513;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">배차</p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['dispatch_orders'] ?? 0 ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg" style="background-color: #d4edda;">
+                    <svg class="w-6 h-6" style="color: #155724;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">운행</p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['driving_orders'] ?? 0 ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg" style="background-color: #ffffff; border: 1px solid #e0e0e0;">
+                    <svg class="w-6 h-6" style="color: #333333;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-600">완료</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['completed_orders'] ?></p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['completed_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div class="flex items-center">
-                <div class="p-3 bg-gray-100 rounded-lg">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                <div class="p-3 rounded-lg" style="background-color: #f5deb3;">
+                    <svg class="w-6 h-6" style="color: #8b4513;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
                 <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">오늘</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['today_orders'] ?></p>
+                    <p class="text-sm font-medium text-gray-600">대기</p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['waiting_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
@@ -104,39 +157,118 @@ if ($loginType === 'daumdata') {
         <!-- 최근 주문 -->
         <div class="lg:col-span-2">
             <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div class="p-6 border-b border-gray-200">
+                <div class="px-4 py-2 border-b border-gray-200">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900">오늘의 주문</h3>
-                        <a href="<?= base_url('delivery/list') ?>" class="text-sm text-blue-600 hover:text-blue-800">전체보기</a>
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">오늘의 주문</h3>
+                        </div>
+                        <a href="<?= base_url('delivery/list') ?>" class="text-xs text-blue-600 hover:text-blue-800">전체보기</a>
                     </div>
                 </div>
                 <div class="p-4">
-                    <div class="space-y-2">
-                        <?php foreach ($recent_orders as $order): ?>
-                        <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg" style="height: 24px;">
-                            <div class="flex-1">
-                                <div class="flex items-center space-x-2">
-                                    <div class="flex-shrink-0">
-                                        <span class="text-xs font-medium text-gray-900"><?= $order['id'] ?></span>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <span class="text-xs font-medium text-gray-900"><?= $order['service'] ?? '-' ?> - <?= $order['customer'] ?? '-' ?></span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <span class="px-1 py-0.5 text-xs font-semibold rounded-full <?php 
-                                    switch($order['status']) {
-                                        case '배송완료': echo 'bg-gray-100 text-gray-700'; break;
-                                        case '배송중': echo 'bg-gray-200 text-gray-800'; break;
-                                        case '접수대기': echo 'bg-gray-50 text-gray-600'; break;
-                                        default: echo 'bg-gray-100 text-gray-800';
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white border border-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">인성주문번호</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">접수일자</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">예약일</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">상태</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">담당자명</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">출발지고객명</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">도착지고객명</th>
+                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">배송수단</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                <?php foreach ($recent_orders as $order): ?>
+                                <?php
+                                // 상태값 처리 (배송조회와 동일한 로직)
+                                $statusLabel = '-';
+                                $statusClass = '';
+                                
+                                if (($order['order_system'] ?? '') === 'insung') {
+                                    // 인성 API 주문: state 값 처리
+                                    $stateValue = $order['state'] ?? '';
+                                    $stateLabels = [
+                                        '10' => '접수',
+                                        '11' => '배차',
+                                        '12' => '운행',
+                                        '20' => '대기',
+                                        '30' => '완료',
+                                        '40' => '취소',
+                                        '50' => '문의',
+                                        '90' => '예약'
+                                    ];
+                                    
+                                    // 한글 상태값도 처리
+                                    if (in_array($stateValue, ['예약', '접수', '배차', '운행', '완료', '대기', '취소', '문의'])) {
+                                        $statusLabel = $stateValue;
+                                        $labelToCode = array_flip($stateLabels);
+                                        $stateCode = $labelToCode[$stateValue] ?? $stateValue;
+                                        $statusClass = 'state-' . $stateCode;
+                                    } elseif (isset($stateLabels[$stateValue])) {
+                                        $statusLabel = $stateLabels[$stateValue];
+                                        $statusClass = 'state-' . $stateValue;
+                                    } else {
+                                        $statusLabel = $stateValue ?: '-';
+                                        $statusClass = 'state-' . preg_replace('/\s+/', '', $statusLabel);
                                     }
-                                ?>"><?= $order['status'] ?></span>
-                                <span class="text-xs text-gray-500"><?= $order['date'] ?></span>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
+                                } else {
+                                    // 일반 주문: status 값 처리
+                                    $statusLabels = [
+                                        'pending' => '대기중',
+                                        'processing' => '접수완료',
+                                        'completed' => '배송중',
+                                        'delivered' => '배송완료',
+                                        'cancelled' => '취소',
+                                        'api_failed' => 'API실패'
+                                    ];
+                                    $statusValue = $order['status'] ?? '';
+                                    $statusLabel = $statusLabels[$statusValue] ?? ($statusValue ?: '-');
+                                    $statusClass = 'status-' . $statusValue;
+                                }
+                                
+                                // 주문번호 표시 (인성 주문번호 우선)
+                                $displayOrderNumber = '-';
+                                if (($order['order_system'] ?? '') === 'insung' && !empty($order['insung_order_number'])) {
+                                    $displayOrderNumber = $order['insung_order_number'];
+                                } elseif (!empty($order['insung_order_number'])) {
+                                    $displayOrderNumber = $order['insung_order_number'];
+                                } elseif (!empty($order['order_number'])) {
+                                    $displayOrderNumber = $order['order_number'];
+                                }
+                                
+                                // 접수일자
+                                $orderDate = $order['order_date'] ?? '';
+                                $orderTime = $order['order_time'] ?? '';
+                                $receptionDate = '';
+                                if ($orderDate && $orderTime) {
+                                    $receptionDate = $orderDate . ' ' . $orderTime;
+                                } elseif ($orderDate) {
+                                    $receptionDate = $orderDate;
+                                } else {
+                                    $receptionDate = '-';
+                                }
+                                
+                                // 배송수단
+                                $deliveryMethod = $order['car_type'] ?? $order['delivery_method'] ?? '-';
+                                ?>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($displayOrderNumber) ?></td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($receptionDate) ?></td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['reserve_date'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-xs">
+                                        <span class="status-badge <?= esc($statusClass) ?>"><?= esc($statusLabel) ?></span>
+                                    </td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['user_name'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['departure_company_name'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['destination_company_name'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($deliveryMethod) ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -182,6 +314,7 @@ if ($loginType === 'daumdata') {
             </div>
 
             <!-- 시스템 상태 -->
+            <!--
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">시스템 상태</h3>
                 <div class="space-y-3">
@@ -236,11 +369,13 @@ if ($loginType === 'daumdata') {
                     </div>
                 </div>
             </div>
+            -->
         </div>
     </div>
 </div>
 
 <?php if ($loginType === 'daumdata'): ?>
+<!--
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // API 인증 테스트
@@ -340,6 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+-->
 <?php endif; ?>
 
 <?= $this->endSection() ?>

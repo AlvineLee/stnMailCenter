@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Controllers\BaseController;
 use App\Models\DeliveryModel;
+use App\Models\UserPreferencesModel;
 
 class Delivery extends BaseController
 {
@@ -21,40 +22,86 @@ class Delivery extends BaseController
             return redirect()->to('/auth/login');
         }
         
+        // 서브도메인 접근 권한 체크
+        $subdomainCheck = $this->checkSubdomainAccess();
+        if ($subdomainCheck !== true) {
+            return $subdomainCheck;
+        }
+        
         $loginType = session()->get('login_type');
         $userRole = session()->get('user_role');
         $customerId = session()->get('customer_id');
         $userType = session()->get('user_type');
         $ccCode = session()->get('cc_code');
         $compName = session()->get('comp_name');
+        $userCompany = session()->get('user_company'); // tbl_users_list.user_company
+        $userIdx = session()->get('user_idx'); // tbl_users_list.idx (인성 API 주문용)
+        $userId = session()->get('user_id'); // 일반 주문용 user_id
         
         // 검색 조건 처리
         $searchType = $this->request->getGet('search_type') ?? 'all';
         $searchKeyword = $this->request->getGet('search_keyword') ?? '';
         $statusFilter = $this->request->getGet('status') ?? 'all';
         $serviceFilter = $this->request->getGet('service') ?? 'all';
+        // 날짜 필터 (기본값: 오늘 날짜)
+        $today = date('Y-m-d');
+        $startDate = $this->request->getGet('start_date') ?? $today;
+        $endDate = $this->request->getGet('end_date') ?? $today;
         $page = (int)($this->request->getGet('page') ?? 1);
         $perPage = 20;
+        
+        // 정렬 파라미터
+        $orderBy = $this->request->getGet('order_by') ?? null;
+        $orderDir = $this->request->getGet('order_dir') ?? 'desc';
         
         // 필터 조건 구성
         $filters = [
             'search_type' => $searchType,
             'search_keyword' => $searchKeyword,
             'status' => $statusFilter,
-            'service' => $serviceFilter
+            'service' => $serviceFilter,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'order_by' => $orderBy,
+            'order_dir' => $orderDir
         ];
         
-        // daumdata 로그인인 경우 user_type별 필터링
+        // 서브도메인 기반 필터링 (우선순위 1)
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $subdomainCompCode = null;
+        
+        if ($currentSubdomain !== 'default') {
+            // 서브도메인으로 접근한 경우 해당 고객사만 조회
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+            if ($subdomainCompCode) {
+                // 서브도메인 기반 필터링 (m_code, cc_code로 필터링)
+                $apiCodes = $subdomainConfig->getCurrentApiCodes();
+                if ($apiCodes && !empty($apiCodes['m_code']) && !empty($apiCodes['cc_code'])) {
+                    $filters['subdomain_m_code'] = $apiCodes['m_code'];
+                    $filters['subdomain_cc_code'] = $apiCodes['cc_code'];
+                    $filters['subdomain_comp_code'] = $subdomainCompCode;
+                    // log_message('info', "Delivery list - Subdomain filter applied: {$currentSubdomain}, comp_code={$subdomainCompCode}, m_code={$apiCodes['m_code']}, cc_code={$apiCodes['cc_code']}");
+                }
+            }
+        }
+        
+        // user_type별 필터링 (서브도메인 필터와 함께 적용)
         if ($loginType === 'daumdata') {
             if ($userType == '1') {
-                // user_type = 1: 전체 고객사의 주문접수 리스트
+                // user_type = 1: 전체 주문 리스트
+                // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
+                $filters['user_type'] = '1';
                 $filters['customer_id'] = null; // 전체 조회
             } elseif ($userType == '3') {
-                // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
-                $filters['cc_code'] = $ccCode;
+                // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
+                $filters['user_type'] = '3';
+                $filters['user_company'] = $userCompany; // 본인의 user_company
             } elseif ($userType == '5') {
-                // user_type = 5: 본인 고객사의 주문접수 리스트만
-                $filters['comp_name'] = $compName;
+                // user_type = 5: user_id 본인 것만
+                $filters['user_type'] = '5';
+                $filters['user_idx'] = $userIdx; // 인성 API 주문용 (tbl_users_list.idx)
+                $filters['user_id'] = $userId; // 일반 주문용
             }
         } else {
             // STN 로그인인 경우 기존 로직
@@ -71,8 +118,215 @@ class Delivery extends BaseController
             $userRole !== 'super_admin' ? $customerId : null
         );
         
-        // 페이징 정보 계산
-        $pagination = $this->deliveryModel->calculatePagination($totalCount, $page, $perPage);
+        // 페이징 정보 계산 (PaginationHelper 사용)
+        $queryParams = [
+            'search_type' => $searchType,
+            'search_keyword' => $searchKeyword,
+            'status' => $statusFilter,
+            'service' => $serviceFilter,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'order_by' => $orderBy,
+            'order_dir' => $orderDir
+        ];
+        
+        $paginationHelper = new \App\Libraries\PaginationHelper(
+            $totalCount,
+            $perPage,
+            $page,
+            base_url('delivery/list'),
+            $queryParams
+        );
+        
+        // 리스트 페이지 진입 시 인성 API 주문 목록 및 상세 동기화 (1페이지에서만 실행)
+        // 종료기간이 오늘보다 크거나 같을 때 API 연동 실행
+        $today = date('Y-m-d');
+        $shouldSyncAPI = ($page == 1 && in_array($loginType, ['daumdata', 'stn']) && strtotime($endDate) >= strtotime($today));
+        
+        if ($shouldSyncAPI) {
+            try {
+                // 인성 API 주문 목록 동기화
+                $mCode = session()->get('m_code');
+                $ccCode = session()->get('cc_code');
+                $userId = session()->get('user_id');
+                
+                // m_code, cc_code가 없는 경우 서브도메인 기반으로 조회
+                if (empty($mCode) || empty($ccCode)) {
+                    $subdomainConfig = config('Subdomain');
+                    $apiCodes = $subdomainConfig->getCurrentApiCodes();
+                    
+                    if ($apiCodes && !empty($apiCodes['m_code']) && !empty($apiCodes['cc_code'])) {
+                        $mCode = $apiCodes['m_code'];
+                        $ccCode = $apiCodes['cc_code'];
+                        $subdomain = $subdomainConfig->getCurrentSubdomain();
+                        log_message('info', "Delivery list - Subdomain access ({$subdomain}) - Using mcode={$mCode}, cccode={$ccCode}");
+                    }
+                }
+                
+                if (!empty($mCode) && !empty($ccCode) && !empty($userId)) {
+                    $this->syncInsungOrdersViaCLI($mCode, $ccCode, $userId, $startDate, $endDate);
+                }
+                
+                // 인성 API 주문 상세 동기화
+                $this->syncInsungOrderDetailsViaCLI();
+            } catch (\Exception $e) {
+                // 동기화 실패해도 리스트는 표시
+                log_message('error', "Failed to trigger Insung sync on list page: " . $e->getMessage());
+            }
+        }
+        
+        // 사용자별 컬럼 순서 조회
+        $userPreferencesModel = new UserPreferencesModel();
+        $userId = session()->get('user_idx') ?? session()->get('user_id');
+        $columnOrder = null;
+        if ($userId && $loginType) {
+            $columnOrder = $userPreferencesModel->getColumnOrder($loginType, (string)$userId, 'delivery');
+        }
+        
+        // 주문 데이터 포맷팅 (뷰 로직을 컨트롤러로 이동)
+        $formattedOrders = [];
+        foreach ($orders as $order) {
+            $formattedOrder = $order;
+            
+            // 상태 라벨 및 맵 표시 조건 처리
+            $statusLabel = '';
+            $statusClass = '';
+            $showMapOnClick = false;
+            $isRiding = false;
+            $insungOrderNumberForMap = '';
+            
+            if (($order['order_system'] ?? '') === 'insung') {
+                // 인성 API 주문: state 값 처리
+                $stateValue = $order['state'] ?? '';
+                $stateLabels = [
+                    '10' => '접수',
+                    '11' => '배차',
+                    '12' => '운행',
+                    '20' => '대기',
+                    '30' => '완료',
+                    '40' => '취소',
+                    '50' => '문의',
+                    '90' => '예약'
+                ];
+                
+                if (isset($stateLabels[$stateValue])) {
+                    $statusLabel = $stateLabels[$stateValue];
+                    $statusClass = 'state-' . $stateValue;
+                    $stateCode = $stateValue;
+                } else {
+                    $statusLabel = $stateValue ?: '-';
+                    $statusClass = 'state-' . preg_replace('/\s+/', '', $statusLabel);
+                    $labelToCode = array_flip($stateLabels);
+                    $stateCode = $labelToCode[$stateValue] ?? '';
+                }
+                
+                // 운행 상태 확인 (기사 위치 표시용)
+                if ($stateCode === '12' || $statusLabel === '운행') {
+                    $isRiding = true;
+                }
+                
+                // 인성 주문번호 확인
+                if (!empty($order['insung_order_number'])) {
+                    $insungOrderNumberForMap = $order['insung_order_number'];
+                } elseif (!empty($order['order_number'])) {
+                    $insungOrderNumberForMap = $order['order_number'];
+                }
+                
+                // 주문번호가 있으면 맵 표시
+                if (!empty($insungOrderNumberForMap)) {
+                    $showMapOnClick = true;
+                }
+            } else {
+                // 일반 주문: status 값 처리
+                $statusLabels = [
+                    'pending' => '대기중',
+                    'processing' => '접수완료',
+                    'completed' => '배송중',
+                    'delivered' => '배송완료',
+                    'cancelled' => '취소',
+                    'api_failed' => 'API실패'
+                ];
+                $statusValue = $order['status'] ?? '';
+                $statusLabel = $statusLabels[$statusValue] ?? ($statusValue ?: '-');
+                $statusClass = 'status-' . $statusValue;
+                
+                // 배송중 상태 확인 (기사 위치 표시용)
+                if ($statusValue === 'completed') {
+                    $isRiding = true;
+                }
+                
+                // 주문번호 확인
+                if (!empty($order['order_number'])) {
+                    $insungOrderNumberForMap = $order['order_number'];
+                }
+                
+                // 주문번호가 있으면 맵 표시
+                if (!empty($insungOrderNumberForMap)) {
+                    $showMapOnClick = true;
+                }
+            }
+            
+            $formattedOrder['status_label'] = $statusLabel;
+            $formattedOrder['status_class'] = $statusClass;
+            $formattedOrder['show_map_on_click'] = $showMapOnClick && !empty($insungOrderNumberForMap);
+            $formattedOrder['is_riding'] = $isRiding;
+            $formattedOrder['insung_order_number_for_map'] = $insungOrderNumberForMap;
+            
+            // 주문번호 표시용 (인성 API 주문의 경우 insung_order_number 우선)
+            if (($order['order_system'] ?? '') === 'insung' && !empty($order['insung_order_number'])) {
+                $formattedOrder['display_order_number'] = $order['insung_order_number'];
+            } else {
+                $formattedOrder['display_order_number'] = $order['order_number'] ?? '-';
+            }
+            
+            // 송장출력 버튼 표시 조건
+            $serviceName = $order['service_name'] ?? '';
+            $serviceCategory = $order['service_category'] ?? '';
+            $serviceCode = $order['service_code'] ?? '';
+            $trackingNumber = $order['shipping_tracking_number'] ?? '';
+            
+            $isShippingService = (
+                $serviceCategory === 'international' || 
+                $serviceCategory === 'parcel' ||
+                $serviceCategory === 'special' ||
+                $serviceCode === 'international' ||
+                $serviceCode === 'parcel-visit' ||
+                $serviceCode === 'parcel-same-day' ||
+                $serviceCode === 'parcel-convenience' ||
+                $serviceCode === 'parcel-night' ||
+                $serviceCode === 'parcel-bag' ||
+                strpos($serviceName, '해외특송') !== false ||
+                strpos($serviceName, '택배') !== false
+            );
+            
+            $formattedOrder['show_waybill_button'] = (
+                ($order['status'] ?? '') === 'processing' &&
+                !empty($trackingNumber) &&
+                $isShippingService
+            );
+            
+            // 결제 타입 라벨
+            $paymentLabels = [
+                'cash_on_delivery' => '착불',
+                'cash_in_advance' => '선불',
+                'bank_transfer' => '계좌이체',
+                'credit_transaction' => '신용거래'
+            ];
+            $formattedOrder['payment_type_label'] = $paymentLabels[$order['payment_type'] ?? ''] ?? ($order['payment_type'] ?? '-');
+            
+            // 상태 라벨 (일반 주문용 - data-column-index="19"용)
+            $generalStatusLabels = [
+                'pending' => '대기중',
+                'processing' => '접수완료',
+                'completed' => '배송중',
+                'delivered' => '배송완료',
+                'cancelled' => '취소',
+                'api_failed' => 'API실패'
+            ];
+            $formattedOrder['general_status_label'] = $generalStatusLabels[$order['status'] ?? ''] ?? ($order['status'] ?? '-');
+            
+            $formattedOrders[] = $formattedOrder;
+        }
         
         $data = [
             'title' => '배송조회(리스트)',
@@ -80,13 +334,17 @@ class Delivery extends BaseController
                 'title' => '배송조회(리스트)',
                 'description' => '전체 배송 현황을 조회할 수 있습니다.'
             ],
-            'orders' => $orders,
-            'pagination' => $pagination,
+            'orders' => $formattedOrders,
+            'pagination' => $paginationHelper,
             'service_types' => $serviceTypes,
             'search_type' => $searchType,
             'search_keyword' => $searchKeyword,
             'status_filter' => $statusFilter,
             'service_filter' => $serviceFilter,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'order_by' => $orderBy,
+            'order_dir' => $orderDir,
             'status_options' => [
                 'all' => '전체',
                 'pending' => '대기중',
@@ -104,7 +362,8 @@ class Delivery extends BaseController
                 'destination_address' => '도착지'
             ],
             'user_role' => $userRole,
-            'customer_id' => $customerId
+            'customer_id' => $customerId,
+            'column_order' => $columnOrder
         ];
         
         return view('delivery/list', $data);
@@ -454,7 +713,7 @@ class Delivery extends BaseController
     /**
      * 인성 API 주문 동기화 (AJAX)
      * 배송조회 리스트 진입 시 인성 주문번호가 있는 주문들의 최신 상태를 동기화
-     * 세션 의존 제거: 각 주문의 user_id를 통해 DB에서 API 정보를 조회
+     * CLI 명령어로 백그라운드 실행
      */
     public function syncInsungOrders()
     {
@@ -476,6 +735,70 @@ class Delivery extends BaseController
             ])->setStatusCode(403);
         }
         
+        try {
+            // 사용자 권한에 따른 필터 조건 구성
+            $userType = session()->get('user_type');
+            $ccCode = session()->get('cc_code');
+            $compName = session()->get('comp_name');
+            
+            // CLI 명령어로 백그라운드 실행
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'CLI 명령어를 실행할 수 없습니다.'
+                ])->setStatusCode(500);
+            }
+            
+            // 파라미터 구성
+            $params = [
+                escapeshellarg($userType ?? '1')
+            ];
+            
+            if ($userType == '3' && !empty($ccCode)) {
+                $params[] = escapeshellarg($ccCode);
+                $params[] = escapeshellarg('');
+            } elseif ($userType == '5' && !empty($compName)) {
+                $params[] = escapeshellarg('');
+                $params[] = escapeshellarg($compName);
+            } else {
+                $params[] = escapeshellarg('');
+                $params[] = escapeshellarg('');
+            }
+            
+            $command = sprintf(
+                'php %s insung:sync-order-details %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                implode(' ', $params)
+            );
+            
+            exec($command);
+            // log_message('info', "Insung order details sync CLI command triggered: {$command}");
+            
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '동기화가 백그라운드에서 실행 중입니다.'
+            ]);
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Delivery::syncInsungOrders - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '동기화 시작 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 인성 API 주문 동기화 (기존 로직 - 참고용, 사용 안 함)
+     * CLI로 변경됨
+     */
+    private function syncInsungOrdersOld()
+    {
+        // 이 메서드는 더 이상 사용하지 않음 (CLI로 변경됨)
+        // 참고용으로만 남겨둠
         try {
             // 사용자 권한에 따른 필터 조건 구성 (선택적)
             $userType = session()->get('user_type');
@@ -548,7 +871,8 @@ class Delivery extends BaseController
                         continue;
                     }
                     
-                    // 인성 API로 주문 상세 조회 (주문별 API 정보 사용)
+                    // 인성 API로 주문 상세 조회 (CLI에서 리스트 형태로 처리하므로 주석처리)
+                    /*
                     $apiResult = $insungApiService->getOrderDetail($mCode, $ccCode, $token, $userId, $serialNumber, $apiIdx);
                     
                     if (!$apiResult['success'] || !isset($apiResult['data'])) {
@@ -560,70 +884,426 @@ class Delivery extends BaseController
                     
                     $apiData = $apiResult['data'];
                     
-                    // API 응답 파싱 (레거시 코드 구조 참고)
+                    // API 응답 파싱 (인성 API Response 구조)
                     // $apiData[0]: 응답 코드
-                    // $apiData[1]: 고객 정보
-                    // $apiData[2]: 기사 정보
-                    // $apiData[3]: 주문 시간 정보
-                    // $apiData[4]: 주소 정보
-                    // $apiData[5]: 금액 정보
+                    // $apiData[1]: 고객 정보 (customer_name, customer_tel_number, customer_department, customer_duty)
+                    // $apiData[2]: 기사 정보 (rider_code_no, rider_name, rider_tel_number, rider_lon, rider_lat)
+                    // $apiData[3]: 주문 시간 정보 (order_time, allocation_time, pickup_time, resolve_time, complete_time)
+                    // $apiData[4]: 주소 정보 (departure_dong_name, departure_address, departure_company_name, destination_dong_name, destination_address, destination_tel_number, destination_company_name, start_lon, start_lat, dest_lon, dest_lat, start_c_code, dest_c_code, start_department, start_duty, dest_department, dest_duty, happy_call, distince)
+                    // $apiData[5]: 금액 정보 (car_type, cargo_type, cargo_name, payment, state, save_state, total_cost, basic_cost, addition_cost, discount_cost, delivery_cost)
                     // $apiData[7]: 완료 시간
-                    // $apiData[9]: 기타 정보
+                    // $apiData[9]: 기타 정보 (reason, order_regist_type, doc, item_type, sfast, summary)
                     
                     $updateData = [];
+                    */
                     
-                    // 상태 매핑 (save_state -> status)
-                    // 인성 API 응답 구조: $apiData[5]에 금액 및 상태 정보 포함
-                    $saveState = null;
-                    if (isset($apiData[5])) {
-                        // 객체 형태인 경우
-                        if (is_object($apiData[5]) && isset($apiData[5]->save_state)) {
-                            $saveState = $apiData[5]->save_state ?? '';
-                        } 
-                        // 배열 형태인 경우
-                        elseif (is_array($apiData[5]) && isset($apiData[5]['save_state'])) {
-                            $saveState = $apiData[5]['save_state'] ?? '';
+                    // CLI에서 리스트 형태로 처리하므로 개별 주문상세 API 호출 및 처리 로직은 주석처리됨
+                    /*
+                    
+                    // 헬퍼 함수: 객체/배열에서 값 추출
+                    $getValue = function($data, $key, $default = null) {
+                        if (is_object($data)) {
+                            return $data->$key ?? $default;
+                        } elseif (is_array($data)) {
+                            return $data[$key] ?? $default;
                         }
-                        // 다른 위치에 있을 수도 있음 (응답 구조 확인 필요)
-                        // $apiData[9]에 기타 정보가 있을 수 있음
-                    }
+                        return $default;
+                    };
                     
-                    // $apiData[9]에도 상태 정보가 있을 수 있음
-                    if (empty($saveState) && isset($apiData[9])) {
-                        if (is_object($apiData[9]) && isset($apiData[9]->save_state)) {
-                            $saveState = $apiData[9]->save_state ?? '';
-                        } elseif (is_array($apiData[9]) && isset($apiData[9]['save_state'])) {
-                            $saveState = $apiData[9]['save_state'] ?? '';
-                        }
-                    }
+                    // 헬퍼 함수: 숫자 변환 (원, 쉼표 제거)
+                    $parseAmount = function($value) {
+                        if (empty($value)) return null;
+                        $cleaned = str_replace(['원', ',', ' '], '', $value);
+                        return is_numeric($cleaned) ? (float)$cleaned : null;
+                    };
                     
-                    // 상태가 있으면 매핑하여 업데이트
-                    if (!empty($saveState)) {
-                        $status = $this->mapInsungStatusToLocal($saveState);
-                        if ($status && $status !== $order['status']) {
-                            $updateData['status'] = $status;
-                            log_message('info', "Insung order status change detected: Order ID {$order['id']}, Serial {$serialNumber}, Old: {$order['status']}, New: {$status}, Insung State: {$saveState}");
-                        }
-                    }
+                    // 헬퍼 함수: 날짜/시간 파싱
+                    $parseDateTime = function($value) {
+                        if (empty($value)) return null;
+                        // YYYY-MM-DD HH:MM:SS 형식 또는 다른 형식 처리
+                        $timestamp = strtotime($value);
+                        return $timestamp ? date('Y-m-d H:i:s', $timestamp) : null;
+                    };
                     
-                    // 금액 업데이트
-                    if (isset($apiData[5])) {
-                        $totalCost = null;
-                        if (is_object($apiData[5]) && isset($apiData[5]->total_cost)) {
-                            $totalCost = $apiData[5]->total_cost ?? '';
-                        } elseif (is_array($apiData[5]) && isset($apiData[5]['total_cost'])) {
-                            $totalCost = $apiData[5]['total_cost'] ?? '';
+                    // ============================================
+                    // 1. 접수자 정보 ($apiData[1])
+                    // ============================================
+                    if (isset($apiData[1])) {
+                        $customerInfo = $apiData[1];
+                        
+                        $customerName = $getValue($customerInfo, 'customer_name');
+                        if ($customerName && $customerName !== ($order['customer_name'] ?? '')) {
+                            $updateData['customer_name'] = $customerName;
                         }
                         
-                        if (!empty($totalCost)) {
-                            // "원" 제거 및 쉼표 제거 후 숫자로 변환
-                            $totalCost = str_replace(['원', ','], '', $totalCost);
-                            if (is_numeric($totalCost)) {
-                                $newAmount = (float)$totalCost;
-                                if ($newAmount != $order['total_amount']) {
-                                    $updateData['total_amount'] = $newAmount;
+                        $customerTel = $getValue($customerInfo, 'customer_tel_number');
+                        if ($customerTel && $customerTel !== ($order['customer_tel_number'] ?? '')) {
+                            $updateData['customer_tel_number'] = $customerTel;
+                        }
+                        
+                        $customerDept = $getValue($customerInfo, 'customer_department');
+                        if ($customerDept && $customerDept !== ($order['customer_department'] ?? '')) {
+                            $updateData['customer_department'] = $customerDept;
+                        }
+                        
+                        $customerDuty = $getValue($customerInfo, 'customer_duty');
+                        if ($customerDuty && $customerDuty !== ($order['customer_duty'] ?? '')) {
+                            $updateData['customer_duty'] = $customerDuty;
+                        }
+                    }
+                    
+                    // ============================================
+                    // 2. 기사 정보 ($apiData[2]) - 중요: 기사 이름 및 연락처
+                    // ============================================
+                    if (isset($apiData[2])) {
+                        $riderInfo = $apiData[2];
+                        
+                        $riderCodeNo = $getValue($riderInfo, 'rider_code_no');
+                        if ($riderCodeNo && $riderCodeNo !== ($order['rider_code_no'] ?? '')) {
+                            $updateData['rider_code_no'] = $riderCodeNo;
+                        }
+                        
+                        $riderName = $getValue($riderInfo, 'rider_name');
+                        if ($riderName && $riderName !== ($order['rider_name'] ?? '')) {
+                            $updateData['rider_name'] = $riderName;
+                        }
+                        
+                        $riderTel = $getValue($riderInfo, 'rider_tel_number');
+                        if ($riderTel && $riderTel !== ($order['rider_tel_number'] ?? '')) {
+                            $updateData['rider_tel_number'] = $riderTel;
+                        }
+                        
+                        $riderLon = $getValue($riderInfo, 'rider_lon');
+                        if ($riderLon && $riderLon !== ($order['rider_lon'] ?? '')) {
+                            $updateData['rider_lon'] = $riderLon;
+                        }
+                        
+                        $riderLat = $getValue($riderInfo, 'rider_lat');
+                        if ($riderLat && $riderLat !== ($order['rider_lat'] ?? '')) {
+                            $updateData['rider_lat'] = $riderLat;
+                        }
+                    }
+                    
+                    // ============================================
+                    // 3. 주문 시간 정보 ($apiData[3])
+                    // ============================================
+                    if (isset($apiData[3])) {
+                        $timeInfo = $apiData[3];
+                        
+                        // order_time (접수시간)
+                        $orderTime = $getValue($timeInfo, 'order_time');
+                        if ($orderTime) {
+                            $parsedTime = $parseDateTime($orderTime);
+                            if ($parsedTime) {
+                                $updateData['order_time'] = date('H:i:s', strtotime($parsedTime));
+                                $updateData['order_date'] = date('Y-m-d', strtotime($parsedTime));
+                            }
+                        }
+                        
+                        // allocation_time (배차시간)
+                        $allocationTime = $getValue($timeInfo, 'allocation_time');
+                        if ($allocationTime) {
+                            $parsedAllocation = $parseDateTime($allocationTime);
+                            if ($parsedAllocation && $parsedAllocation !== ($order['allocation_time'] ?? null)) {
+                                $updateData['allocation_time'] = $parsedAllocation;
+                            }
+                        }
+                        
+                        // pickup_time (픽업시간)
+                        $pickupTime = $getValue($timeInfo, 'pickup_time');
+                        if ($pickupTime) {
+                            $parsedPickup = $parseDateTime($pickupTime);
+                            if ($parsedPickup && $parsedPickup !== ($order['pickup_time'] ?? null)) {
+                                $updateData['pickup_time'] = $parsedPickup;
+                            }
+                        }
+                        
+                        // resolve_time (예약시간)
+                        $resolveTime = $getValue($timeInfo, 'resolve_time');
+                        if ($resolveTime) {
+                            $parsedResolve = $parseDateTime($resolveTime);
+                            if ($parsedResolve && $parsedResolve !== ($order['resolve_time'] ?? null)) {
+                                $updateData['resolve_time'] = $parsedResolve;
+                            }
+                        }
+                        
+                        // complete_time (완료시간)
+                        $completeTime = $getValue($timeInfo, 'complete_time');
+                        if ($completeTime) {
+                            $parsedComplete = $parseDateTime($completeTime);
+                            if ($parsedComplete && $parsedComplete !== ($order['complete_time'] ?? null)) {
+                                $updateData['complete_time'] = $parsedComplete;
+                            }
+                        }
+                    }
+                    
+                    // ============================================
+                    // 4. 주소 정보 ($apiData[4])
+                    // ============================================
+                    if (isset($apiData[4])) {
+                        $addressInfo = $apiData[4];
+                        
+                        // 출발지 정보
+                        $departureDong = $getValue($addressInfo, 'departure_dong_name');
+                        if ($departureDong && $departureDong !== ($order['departure_dong'] ?? '')) {
+                            $updateData['departure_dong'] = $departureDong;
+                        }
+                        
+                        $departureAddress = $getValue($addressInfo, 'departure_address');
+                        if ($departureAddress && $departureAddress !== ($order['departure_address'] ?? '')) {
+                            $updateData['departure_address'] = $departureAddress;
+                        }
+                        
+                        $departureCompany = $getValue($addressInfo, 'departure_company_name');
+                        if ($departureCompany && $departureCompany !== ($order['departure_company_name'] ?? '')) {
+                            $updateData['departure_company_name'] = $departureCompany;
+                        }
+                        
+                        // 출발지 좌표
+                        $startLon = $getValue($addressInfo, 'start_lon');
+                        if ($startLon && $startLon !== ($order['departure_lon'] ?? '')) {
+                            $updateData['departure_lon'] = $startLon;
+                        }
+                        
+                        $startLat = $getValue($addressInfo, 'start_lat');
+                        if ($startLat && $startLat !== ($order['departure_lat'] ?? '')) {
+                            $updateData['departure_lat'] = $startLat;
+                        }
+                        
+                        // 출발지 고객코드
+                        $startCCode = $getValue($addressInfo, 'start_c_code');
+                        if ($startCCode && $startCCode !== ($order['s_c_code'] ?? '')) {
+                            $updateData['s_c_code'] = $startCCode;
+                        }
+                        
+                        // 출발지 부서/담당
+                        $startDept = $getValue($addressInfo, 'start_department');
+                        if ($startDept && $startDept !== ($order['departure_department'] ?? '')) {
+                            $updateData['departure_department'] = $startDept;
+                        }
+                        
+                        $startDuty = $getValue($addressInfo, 'start_duty');
+                        if ($startDuty && $startDuty !== ($order['departure_manager'] ?? '')) {
+                            $updateData['departure_manager'] = $startDuty;
+                        }
+                        
+                        // 도착지 정보
+                        $destDong = $getValue($addressInfo, 'destination_dong_name');
+                        if ($destDong && $destDong !== ($order['destination_dong'] ?? '')) {
+                            $updateData['destination_dong'] = $destDong;
+                        }
+                        
+                        $destAddress = $getValue($addressInfo, 'destination_address');
+                        if ($destAddress && $destAddress !== ($order['destination_address'] ?? '')) {
+                            $updateData['destination_address'] = $destAddress;
+                        }
+                        
+                        $destCompany = $getValue($addressInfo, 'destination_company_name');
+                        if ($destCompany && $destCompany !== ($order['destination_company_name'] ?? '')) {
+                            $updateData['destination_company_name'] = $destCompany;
+                        }
+                        
+                        $destTel = $getValue($addressInfo, 'destination_tel_number');
+                        if ($destTel && $destTel !== ($order['destination_contact'] ?? '')) {
+                            $updateData['destination_contact'] = $destTel;
+                        }
+                        
+                        // 도착지 좌표
+                        $destLon = $getValue($addressInfo, 'dest_lon');
+                        if ($destLon && $destLon !== ($order['destination_lon'] ?? '')) {
+                            $updateData['destination_lon'] = $destLon;
+                        }
+                        
+                        $destLat = $getValue($addressInfo, 'dest_lat');
+                        if ($destLat && $destLat !== ($order['destination_lat'] ?? '')) {
+                            $updateData['destination_lat'] = $destLat;
+                        }
+                        
+                        // 도착지 고객코드
+                        $destCCode = $getValue($addressInfo, 'dest_c_code');
+                        if ($destCCode && $destCCode !== ($order['d_c_code'] ?? '')) {
+                            $updateData['d_c_code'] = $destCCode;
+                        }
+                        
+                        // 도착지 부서/담당
+                        $destDept = $getValue($addressInfo, 'dest_department');
+                        if ($destDept && $destDept !== ($order['destination_department'] ?? '')) {
+                            $updateData['destination_department'] = $destDept;
+                        }
+                        
+                        $destDuty = $getValue($addressInfo, 'dest_duty');
+                        if ($destDuty && $destDuty !== ($order['destination_manager'] ?? '')) {
+                            $updateData['destination_manager'] = $destDuty;
+                        }
+                        
+                        // 거리 정보
+                        $distance = $getValue($addressInfo, 'distince');
+                        if ($distance) {
+                            $parsedDistance = $parseAmount($distance);
+                            if ($parsedDistance !== null && $parsedDistance != ($order['distance'] ?? 0)) {
+                                $updateData['distance'] = $parsedDistance;
+                            }
+                        }
+                        
+                        // 해피콜 회신번호
+                        $happyCall = $getValue($addressInfo, 'happy_call');
+                        if ($happyCall && $happyCall !== ($order['happy_call'] ?? '')) {
+                            $updateData['happy_call'] = $happyCall;
+                        }
+                    }
+                    
+                    // ============================================
+                    // 5. 금액 정보 ($apiData[5])
+                    // ============================================
+                    if (isset($apiData[5])) {
+                        $costInfo = $apiData[5];
+                        
+                        // 상태 매핑 (save_state -> status)
+                        $saveState = $getValue($costInfo, 'save_state');
+                        if (!empty($saveState)) {
+                            $status = $this->mapInsungStatusToLocal($saveState);
+                            if ($status && $status !== ($order['status'] ?? '')) {
+                                $updateData['status'] = $status;
+                                log_message('info', "Insung order status change detected: Order ID {$order['id']}, Serial {$serialNumber}, Old: " . ($order['status'] ?? 'N/A') . ", New: {$status}, Insung State: {$saveState}");
+                            }
+                        }
+                        
+                        // state (인성 API 처리상태)
+                        $state = $getValue($costInfo, 'state');
+                        if ($state && $state !== ($order['state'] ?? '')) {
+                            $updateData['state'] = $state;
+                        }
+                        
+                        // 총 금액 (total_cost)
+                        $totalCost = $getValue($costInfo, 'total_cost');
+                        if ($totalCost) {
+                            $parsedAmount = $parseAmount($totalCost);
+                            if ($parsedAmount !== null && $parsedAmount != ($order['total_amount'] ?? 0)) {
+                                $updateData['total_amount'] = $parsedAmount;
+                            }
+                        }
+                        
+                        // 기본요금 (basic_cost)
+                        $basicCost = $getValue($costInfo, 'basic_cost');
+                        if ($basicCost) {
+                            $parsedBasic = $parseAmount($basicCost);
+                            if ($parsedBasic !== null && $parsedBasic != ($order['total_fare'] ?? 0)) {
+                                $updateData['total_fare'] = $parsedBasic;
+                            }
+                        }
+                        
+                        // 추가요금 (addition_cost)
+                        $additionCost = $getValue($costInfo, 'addition_cost');
+                        if ($additionCost) {
+                            $parsedAddition = $parseAmount($additionCost);
+                            if ($parsedAddition !== null && $parsedAddition != ($order['add_cost'] ?? 0)) {
+                                $updateData['add_cost'] = $parsedAddition;
+                            }
+                        }
+                        
+                        // 할인요금 (discount_cost)
+                        $discountCost = $getValue($costInfo, 'discount_cost');
+                        if ($discountCost) {
+                            $parsedDiscount = $parseAmount($discountCost);
+                            if ($parsedDiscount !== null && $parsedDiscount != ($order['discount_cost'] ?? 0)) {
+                                $updateData['discount_cost'] = $parsedDiscount;
+                            }
+                        }
+                        
+                        // 탁송요금 (delivery_cost)
+                        $deliveryCost = $getValue($costInfo, 'delivery_cost');
+                        if ($deliveryCost) {
+                            $parsedDelivery = $parseAmount($deliveryCost);
+                            if ($parsedDelivery !== null && $parsedDelivery != ($order['delivery_cost'] ?? 0)) {
+                                $updateData['delivery_cost'] = $parsedDelivery;
+                            }
+                        }
+                        
+                        // 차종 정보 (car_type, cargo_type, cargo_name)
+                        $carType = $getValue($costInfo, 'car_type');
+                        $cargoType = $getValue($costInfo, 'cargo_type');
+                        $cargoName = $getValue($costInfo, 'cargo_name');
+                        
+                        if ($cargoType && $cargoType !== ($order['car_kind'] ?? '')) {
+                            $updateData['car_kind'] = $cargoType;
+                        }
+                        
+                        if ($carType && $carType !== ($order['car_type'] ?? '')) {
+                            $updateData['car_type'] = $carType;
+                        }
+                        
+                        if ($cargoName && $cargoName !== ($order['cargo_name'] ?? '')) {
+                            $updateData['cargo_name'] = $cargoName;
+                        }
+                        
+                        // 결제 수단 (payment)
+                        $payment = $getValue($costInfo, 'payment');
+                        if ($payment) {
+                            // payment 값을 payment_type ENUM으로 매핑
+                            $paymentTypeMap = [
+                                '착불' => 'cash_on_delivery',
+                                '선불' => 'cash_in_advance',
+                                '계좌이체' => 'bank_transfer',
+                                '신용거래' => 'credit_transaction'
+                            ];
+                            $mappedPaymentType = $paymentTypeMap[$payment] ?? null;
+                            if ($mappedPaymentType && $mappedPaymentType !== ($order['payment_type'] ?? '')) {
+                                $updateData['payment_type'] = $mappedPaymentType;
+                            }
+                        }
+                    }
+                    
+                    // ============================================
+                    // 6. 기타 정보 ($apiData[9])
+                    // ============================================
+                    if (isset($apiData[9])) {
+                        $extraInfo = $apiData[9];
+                        
+                        // save_state가 $apiData[9]에 있을 수도 있음
+                        if (empty($updateData['status'])) {
+                            $saveState = $getValue($extraInfo, 'save_state');
+                            if (!empty($saveState)) {
+                                $status = $this->mapInsungStatusToLocal($saveState);
+                                if ($status && $status !== ($order['status'] ?? '')) {
+                                    $updateData['status'] = $status;
                                 }
                             }
+                        }
+                        
+                        // 물품 종류 (item_type)
+                        $itemType = $getValue($extraInfo, 'item_type');
+                        if ($itemType && $itemType !== ($order['item_type'] ?? '')) {
+                            $updateData['item_type'] = $itemType;
+                        }
+                        
+                        // 전달내용 (summary)
+                        $summary = $getValue($extraInfo, 'summary');
+                        if ($summary && $summary !== ($order['delivery_content'] ?? '')) {
+                            $updateData['delivery_content'] = $summary;
+                        }
+                        
+                        // 배송사유 (reason)
+                        $reason = $getValue($extraInfo, 'reason');
+                        if ($reason && $reason !== ($order['reason'] ?? '')) {
+                            $updateData['reason'] = $reason;
+                        }
+                        
+                        // 접수타입 (order_regist_type) - A:API접수, I:인터넷접수, T:전화접수
+                        $orderRegistType = $getValue($extraInfo, 'order_regist_type');
+                        if ($orderRegistType && $orderRegistType !== ($order['order_regist_type'] ?? '')) {
+                            $updateData['order_regist_type'] = $orderRegistType;
+                        }
+                        
+                        // 배송방법 (doc)
+                        $doc = $getValue($extraInfo, 'doc');
+                        if ($doc && $doc !== ($order['doc'] ?? '')) {
+                            $updateData['doc'] = $doc;
+                        }
+                        
+                        // 배송선택 (sfast) - 1:일반, 3:급송, 5:조조, 7:야간, 8:할증, 9:과적, 0:택배, A:심야, B:휴일, C:납품, D:대기, F:눈비, 4:독차, 6:혼적, G:할인, M:마일, H:우편, I:행랑, J:해외, K:신문, Q:퀵, N:보관, O:혹한, P:상하차, R:명절
+                        $sfast = $getValue($extraInfo, 'sfast');
+                        if ($sfast && $sfast !== ($order['sfast'] ?? '')) {
+                            $updateData['sfast'] = $sfast;
                         }
                     }
                     
@@ -635,8 +1315,13 @@ class Delivery extends BaseController
                         log_message('info', "Insung order synced: Order ID {$order['id']}, Serial {$serialNumber}, Updated: " . json_encode($updateData));
                     } else {
                         // 상태가 변경되지 않았어도 동기화 시도는 기록
-                        log_message('debug', "Insung order sync checked: Order ID {$order['id']}, Serial {$serialNumber}, No changes detected. Current status: {$order['status']}, Insung state: " . ($saveState ?? 'N/A'));
+                        log_message('debug', "Insung order sync checked: Order ID {$order['id']}, Serial {$serialNumber}, No changes detected. Current status: " . ($order['status'] ?? 'N/A') . ", Insung state: " . ($saveState ?? 'N/A'));
                     }
+                    */
+                    
+                    // CLI에서 리스트 형태로 처리하므로 개별 주문상세 API 호출은 스킵
+                    $skippedCount++;
+                    log_message('info', "Insung order sync skipped (handled by CLI): Order ID {$order['id']}, Serial {$serialNumber}");
                     
                 } catch (\Exception $e) {
                     $errorCount++;
@@ -721,5 +1406,373 @@ class Delivery extends BaseController
         }
         
         return $mappedStatus;
+    }
+    
+    /**
+     * 리스트 페이지 진입 시 인성 API 주문 목록 동기화 (CLI 명령어로 백그라운드 실행)
+     * 
+     * @param string $mCode 마스터 코드
+     * @param string $ccCode 콜센터 코드
+     * @param string $userId 사용자 ID
+     * @param string $startDate 시작 날짜
+     * @param string $endDate 종료 날짜
+     */
+    private function syncInsungOrdersViaCLI($mCode, $ccCode, $userId, $startDate = null, $endDate = null)
+    {
+        try {
+            // 프로젝트 루트 경로 찾기
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+            
+            // spark 파일이 존재하는지 확인
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                return;
+            }
+            
+            // 날짜 설정 (기본값: 오늘 날짜)
+            $today = date('Y-m-d');
+            $syncStartDate = $startDate ?? $today;
+            $syncEndDate = $endDate ?? $today;
+            
+            // CLI 명령어 구성
+            $command = sprintf(
+                'php %s insung:sync-orders %s %s %s %s %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                escapeshellarg($mCode),
+                escapeshellarg($ccCode),
+                escapeshellarg($userId),
+                escapeshellarg($syncStartDate),
+                escapeshellarg($syncEndDate)
+            );
+            
+            // 명령어 실행
+            exec($command);
+            
+            // log_message('info', "Insung orders sync CLI command triggered on list page: {$command}");
+            
+        } catch (\Exception $e) {
+            log_message('error', "Exception in syncInsungOrdersViaCLI: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 리스트 페이지 진입 시 인성 API 주문 상세 동기화 (CLI 명령어로 백그라운드 실행)
+     */
+    private function syncInsungOrderDetailsViaCLI()
+    {
+        try {
+            // 사용자 권한에 따른 필터 조건 구성
+            $userType = session()->get('user_type');
+            $ccCode = session()->get('cc_code');
+            $compName = session()->get('comp_name');
+            
+            // CLI 명령어로 백그라운드 실행
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                return;
+            }
+            
+            // 파라미터 구성
+            $params = [
+                escapeshellarg($userType ?? '1')
+            ];
+            
+            if ($userType == '3' && !empty($ccCode)) {
+                $params[] = escapeshellarg($ccCode);
+                $params[] = escapeshellarg('');
+            } elseif ($userType == '5' && !empty($compName)) {
+                $params[] = escapeshellarg('');
+                $params[] = escapeshellarg($compName);
+            } else {
+                $params[] = escapeshellarg('');
+                $params[] = escapeshellarg('');
+            }
+            
+            $command = sprintf(
+                'php %s insung:sync-order-details %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                implode(' ', $params)
+            );
+            
+            exec($command);
+            // log_message('info', "Insung order details sync CLI command triggered on list page: {$command}");
+            
+        } catch (\Exception $e) {
+            log_message('error', "Exception in syncInsungOrderDetailsViaCLI: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 컬럼 순서 저장 API
+     */
+    public function saveColumnOrder()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+        
+        $loginType = session()->get('login_type');
+        $userId = session()->get('user_idx') ?? session()->get('user_id');
+        
+        if (!$userId || !$loginType) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '사용자 정보를 찾을 수 없습니다.'
+            ])->setStatusCode(400);
+        }
+        
+        $columnOrder = $this->request->getJSON(true)['column_order'] ?? null;
+        
+        if (!is_array($columnOrder) || empty($columnOrder)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '컬럼 순서가 올바르지 않습니다.'
+            ])->setStatusCode(400);
+        }
+        
+        $userPreferencesModel = new UserPreferencesModel();
+        $result = $userPreferencesModel->saveColumnOrder($loginType, (string)$userId, 'delivery', $columnOrder);
+        
+        if ($result) {
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '컬럼 순서가 저장되었습니다.'
+            ]);
+        } else {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '컬럼 순서 저장에 실패했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 맵 뷰 페이지 (인성 주문번호로 주문 상세 조회 후 맵 표시)
+     */
+    public function mapView()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        $serialNumber = $this->request->getGet('idx'); // 인성 주문번호
+        if (!$serialNumber) {
+            return redirect()->to('/delivery/list')->with('error', '주문번호가 필요합니다.');
+        }
+        
+        // API 정보 조회
+        $mCode = session()->get('m_code');
+        $ccCode = session()->get('cc_code');
+        $token = session()->get('token');
+        $apiIdx = session()->get('api_idx');
+        $userId = session()->get('user_id');
+        
+        // 세션에 없으면 DB에서 조회
+        if (empty($mCode) || empty($ccCode) || empty($token)) {
+            $insungApiListModel = new \App\Models\InsungApiListModel();
+            $loginType = session()->get('login_type');
+            $userType = session()->get('user_type');
+            
+            if ($loginType === 'daumdata' && $userType == '1') {
+                $ccCodeFromSession = session()->get('cc_code');
+                if ($ccCodeFromSession) {
+                    $apiInfo = $insungApiListModel->getApiInfoByCode($ccCodeFromSession);
+                    if ($apiInfo) {
+                        $mCode = $apiInfo['mcode'] ?? '';
+                        $ccCode = $apiInfo['cccode'] ?? '';
+                        $token = $apiInfo['token'] ?? '';
+                        $apiIdx = $apiInfo['idx'] ?? null;
+                    }
+                }
+            } else {
+                $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode('4540', '7829');
+                if ($apiInfo) {
+                    $mCode = $apiInfo['mcode'] ?? '4540';
+                    $ccCode = $apiInfo['cccode'] ?? '7829';
+                    $token = $apiInfo['token'] ?? '';
+                    $apiIdx = $apiInfo['idx'] ?? null;
+                }
+            }
+        }
+        
+        if (!$mCode || !$ccCode || !$token) {
+            return redirect()->to('/delivery/list')->with('error', 'API 정보가 설정되지 않았습니다.');
+        }
+        
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $orderDetailResult = $insungApiService->getOrderDetail($mCode, $ccCode, $token, $userId ?? '', $serialNumber, $apiIdx);
+            
+            if (!$orderDetailResult || !isset($orderDetailResult['success']) || !$orderDetailResult['success']) {
+                return redirect()->to('/delivery/list')->with('error', $orderDetailResult['message'] ?? '주문 상세 정보를 가져올 수 없습니다.');
+            }
+            
+            $orderData = $orderDetailResult['data'] ?? null;
+            if (!$orderData || !is_array($orderData)) {
+                log_message('error', 'Delivery::mapView - orderData is not array: ' . json_encode($orderData));
+                return redirect()->to('/delivery/list')->with('error', '주문 상세 데이터가 없습니다.');
+            }
+            
+            // 디버깅: API 응답 구조 로그
+            log_message('debug', 'Delivery::mapView - orderData structure: ' . json_encode($orderData, JSON_UNESCAPED_UNICODE));
+            
+            // 인성 API 응답 구조 파싱 (실제 응답 구조에 맞춤)
+            // $orderData[0]: 응답 코드
+            // $orderData[1]: 고객 정보
+            // $orderData[2]: 기사 정보 (rider_code_no, rider_name, rider_tel_number)
+            // $orderData[3]: 주문 시간 정보
+            // $orderData[4]: 주소 정보 (departure_address, destination_address 등)
+            // $orderData[5]: 기타 정보 (car_type, state, save_state 등)
+            // $orderData[6]: 기사 위치 정보 (rider_lon, rider_lat) - 실제 좌표는 여기!
+            // $orderData[9]: 주소 좌표 정보 (start_lon, start_lat, dest_lon, dest_lat) - 실제 좌표는 여기!
+            
+            // getValue 헬퍼 함수 (Admin::getOrderDetail와 동일)
+            $getValue = function($data, $key, $default = '') {
+                if (is_object($data)) {
+                    return $data->$key ?? $default;
+                } elseif (is_array($data)) {
+                    return $data[$key] ?? $default;
+                }
+                return $default;
+            };
+            
+            // 좌표 변환 함수 (stnlogis 프로젝트의 LonLat 함수와 정확히 동일)
+            // 인성 API 좌표를 실제 위도/경도로 변환
+            $parseCoordinate = function($value) {
+                if (empty($value) || $value === '0' || $value === '') {
+                    return null;
+                }
+                // stnlogis의 LonLat 함수와 정확히 동일한 변환 로직
+                $a = $value / 360000.0;  // 정수 나눗셈이 아닌 실수 나눗셈
+                $b = (($value / 360000.0) - $a) / 10.0 * 6;
+                $c = ($a + $b) * 100.0;
+                
+                $aa = $c / 100;  // stnlogis에서는 정수 변환이 없음
+                $d = ($c - ($aa * 100)) / 60.0;
+                $bb = $aa + $d;
+                
+                log_message('debug', "Delivery::mapView - 좌표 변환: {$value} -> {$bb}");
+                return $bb;
+            };
+            
+            $riderLon = null;
+            $riderLat = null;
+            $startLon = null;
+            $startLat = null;
+            $destLon = null;
+            $destLat = null;
+            $departureAddress = '';
+            $destinationAddress = '';
+            $departureCompanyName = '';
+            $destinationCompanyName = '';
+            $departureTel = '';
+            $destinationTel = '';
+            $riderName = '';
+            $riderCode = '';
+            $riderTel = '';
+            $orderState = '';
+            
+            // 기사 정보 (인덱스 2)
+            if (isset($orderData[2])) {
+                $riderInfo = $orderData[2];
+                $riderName = $getValue($riderInfo, 'rider_name');
+                $riderCode = $getValue($riderInfo, 'rider_code_no');
+                $riderTel = $getValue($riderInfo, 'rider_tel_number');
+            }
+            
+            // 기사 위치 정보 (인덱스 6) - 실제 좌표는 여기에 있음!
+            if (isset($orderData[6])) {
+                $riderLocationInfo = $orderData[6];
+                $riderLonRaw = $getValue($riderLocationInfo, 'rider_lon');
+                $riderLatRaw = $getValue($riderLocationInfo, 'rider_lat');
+                // stnlogis의 LonLat() 함수 사용
+                $riderLon = $parseCoordinate($riderLonRaw);
+                $riderLat = $parseCoordinate($riderLatRaw);
+            }
+            
+            // 주소 정보 (인덱스 4)
+            if (isset($orderData[4])) {
+                $addressInfo = $orderData[4];
+                $departureAddress = $getValue($addressInfo, 'departure_address');
+                $departureCompanyName = $getValue($addressInfo, 'departure_company_name');
+                $departureTel = $getValue($addressInfo, 'departure_tel_number');
+                $destinationAddress = $getValue($addressInfo, 'destination_address');
+                $destinationCompanyName = $getValue($addressInfo, 'destination_company_name');
+                $destinationTel = $getValue($addressInfo, 'destination_tel_number');
+            }
+            
+            // 주소 좌표 정보 (인덱스 9) - 실제 좌표는 여기에 있음!
+            if (isset($orderData[9])) {
+                $coordinateInfo = $orderData[9];
+                $startLonRaw = $getValue($coordinateInfo, 'start_lon');
+                $startLatRaw = $getValue($coordinateInfo, 'start_lat');
+                $destLonRaw = $getValue($coordinateInfo, 'dest_lon');
+                $destLatRaw = $getValue($coordinateInfo, 'dest_lat');
+                
+                log_message('debug', "Delivery::mapView - 원본 좌표 (raw): start_lon={$startLonRaw}, start_lat={$startLatRaw}, dest_lon={$destLonRaw}, dest_lat={$destLatRaw}");
+                
+                // stnlogis의 LonLat() 함수 사용 (확실히 변환을 하고 있음)
+                $startLon = $parseCoordinate($startLonRaw);
+                $startLat = $parseCoordinate($startLatRaw);
+                $destLon = $parseCoordinate($destLonRaw);
+                $destLat = $parseCoordinate($destLatRaw);
+                
+                log_message('debug', "Delivery::mapView - 변환 후 좌표: start_lat={$startLat}, start_lon={$startLon}, dest_lat={$destLat}, dest_lon={$destLon}");
+            }
+            
+            // 주문 상태 확인 (인덱스 5)
+            if (isset($orderData[5])) {
+                $extraInfo = $orderData[5];
+                $orderState = $getValue($extraInfo, 'save_state'); // save_state가 실제 상태
+                if (empty($orderState)) {
+                    $orderState = $getValue($extraInfo, 'state');
+                }
+            }
+            
+            // 운행 상태 확인 (기사 위치 표시 여부)
+            $isRiding = ($orderState === '12' || $orderState === '운행');
+            
+            log_message('debug', "Delivery::mapView - Parsed coordinates: start_lon={$startLon}, start_lat={$startLat}, dest_lon={$destLon}, dest_lat={$destLat}, rider_lon={$riderLon}, rider_lat={$riderLat}, orderState={$orderState}");
+            
+            // 좌표가 없으면 에러 메시지 표시
+            if (!$startLon || !$startLat || !$destLon || !$destLat) {
+                log_message('warning', "Delivery::mapView - Missing coordinates: start_lon={$startLon}, start_lat={$startLat}, dest_lon={$destLon}, dest_lat={$destLat}");
+            }
+            
+            $data = [
+                'title' => '위치 조회',
+                'serial_number' => $serialNumber,
+                'start_lon' => $startLon,
+                'start_lat' => $startLat,
+                'dest_lon' => $destLon,
+                'dest_lat' => $destLat,
+                'rider_lon' => $riderLon,
+                'rider_lat' => $riderLat,
+                'departure_address' => trim($departureAddress),
+                'departure_company_name' => trim($departureCompanyName),
+                'departure_tel' => trim($departureTel),
+                'destination_address' => trim($destinationAddress),
+                'destination_company_name' => trim($destinationCompanyName),
+                'destination_tel' => trim($destinationTel),
+                'rider_name' => $riderName,
+                'rider_code' => $riderCode,
+                'rider_tel' => $riderTel,
+                'is_riding' => $isRiding
+            ];
+            
+            return view('delivery/map-view', $data);
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Delivery::mapView - Error: ' . $e->getMessage());
+            return redirect()->to('/delivery/list')->with('error', '맵 조회 중 오류가 발생했습니다.');
+        }
     }
 }

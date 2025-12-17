@@ -8,6 +8,14 @@
         <?= form_open('/delivery/list', ['method' => 'GET']) ?>
         <div class="search-filter-container">
             <div class="search-filter-item">
+                <label class="search-filter-label">기간 시작</label>
+                <input type="date" name="start_date" value="<?= esc($start_date ?? date('Y-m-d')) ?>" class="search-filter-input">
+            </div>
+            <div class="search-filter-item">
+                <label class="search-filter-label">기간 종료</label>
+                <input type="date" name="end_date" value="<?= esc($end_date ?? date('Y-m-d')) ?>" class="search-filter-input">
+            </div>
+            <div class="search-filter-item">
                 <label class="search-filter-label">검색</label>
                 <select name="search_type" class="search-filter-select">
                     <?php foreach ($search_type_options as $value => $label): ?>
@@ -50,8 +58,11 @@
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div class="text-sm text-gray-700">
                 <?php if (isset($pagination) && $pagination): ?>
-                    총 <?= number_format($pagination['total_count']) ?>건 중 
-                    <?= number_format(($pagination['current_page'] - 1) * $pagination['per_page'] + 1) ?>-<?= number_format(min($pagination['current_page'] * $pagination['per_page'], $pagination['total_count'])) ?>건 표시
+                    <?php 
+                    $paginationInfo = $pagination->getPaginationInfo();
+                    ?>
+                    총 <?= number_format($paginationInfo['total_items']) ?>건 중 
+                    <?= number_format($paginationInfo['start_item']) ?>-<?= number_format($paginationInfo['end_item']) ?>건 표시
                 <?php else: ?>
                     검색 결과가 없습니다.
                 <?php endif; ?>
@@ -75,446 +86,104 @@
                 검색 결과가 없습니다.
             </div>
         <?php else: ?>
-        <style>
-        /* 브라우저 전체 스크롤 방지 - 하지만 테이블 스크롤은 허용 */
-        body {
-            overflow-x: hidden !important;
-        }
-        
-        html {
-            overflow-x: hidden !important;
-        }
-        
-        /* 페이지 전체 컨테이너 - 브라우저 스크롤 방지 */
-        .list-page-container {
-            width: 100%;
-            max-width: calc(100vw - 280px); /* sidebar 너비(약 280px) 제외 */
-            overflow-x: hidden;
-            box-sizing: border-box;
-            position: relative;
-        }
-        
-        /* 메인 컨텐츠 영역 */
-        .list-page-container > * {
-            max-width: 100%;
-            box-sizing: border-box;
-        }
-        
-        /* 모바일에서는 sidebar가 없으므로 100% */
-        @media (max-width: 1023px) {
-            .list-page-container {
-                max-width: 100vw;
-            }
-        }
-        
-        /* 검색 영역 - 항상 보이도록 */
-        .search-compact {
-            width: 100%;
-            max-width: 100%;
-            overflow-x: visible;
-            box-sizing: border-box;
-            background: #f8fafc;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-        }
-        
-        /* 검색 필터 컨테이너 */
-        .search-filter-container {
-            display: flex;
-            gap: 16px;
-            align-items: flex-end;
-            flex-wrap: wrap;
-        }
-        
-        /* 검색 필터 아이템 */
-        .search-filter-item {
-            flex: 1;
-            min-width: 150px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        /* 검색 버튼 래퍼 */
-        .search-filter-button-wrapper {
-            display: flex;
-            align-items: flex-end;
-            flex-shrink: 0;
-        }
-        
-        /* 검색 필터 라벨 */
-        .search-filter-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: #475569;
-            letter-spacing: 0.2px;
-        }
-        
-        /* 검색 필터 입력 필드 */
-        .search-filter-input,
-        .search-filter-select {
-            width: 100%;
-            padding: 10px 14px;
-            font-size: 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            background: #ffffff;
-            color: #1e293b;
-            transition: all 0.2s ease;
-        }
-        
-        .search-filter-input:focus,
-        .search-filter-select:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-            background: #ffffff;
-        }
-        
-        .search-filter-input::placeholder {
-            color: #94a3b8;
-        }
-        
-        /* 검색 버튼 */
-        .search-button {
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #ffffff;
-            background: #6366f1;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-            width: auto;
-            min-width: auto;
-        }
-        
-        .search-button:hover {
-            background: #4f46e5;
-        }
-        
-        .search-button:active {
-            background: #4338ca;
-        }
-        
-        /* 모바일 반응형 */
-        @media (max-width: 768px) {
-            .search-filter-container {
-                flex-direction: column;
-            }
-            
-            .search-filter-item {
-                width: 100%;
-                min-width: 100%;
-            }
-            
-            .search-button {
-                width: 100%;
-            }
-        }
-        
-        /* 검색 결과 정보 - 항상 보이도록 */
-        .mb-4 {
-            width: 100%;
-            max-width: 100%;
-            overflow-x: visible;
-            box-sizing: border-box;
-        }
-        
-        /* 테이블 컨테이너 - 스크롤 영역 */
-        .list-table-container {
-            width: 100%;
-            max-width: 100%;
-            overflow-x: hidden;
-            box-sizing: border-box;
-        }
-        
-        /* 테이블 래퍼 - 내부 스크롤만 */
-        .delivery-list-table-wrapper {
-            position: relative;
-            overflow-x: auto !important;
-            overflow-y: auto !important;
-            width: 100%;
-            max-width: calc(100vw - 280px); /* sidebar 너비(약 280px) 제외 */
-            max-height: calc(100vh - 300px);
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
-            box-sizing: border-box;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e0 #f7fafc;
-        }
-        
-        /* 모바일에서는 sidebar가 없으므로 100% */
-        @media (max-width: 1023px) {
-            .delivery-list-table-wrapper {
-                max-width: 100vw;
-            }
-        }
-        
-        /* 스크롤바 스타일링 */
-        .delivery-list-table-wrapper::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
-        }
-        
-        .delivery-list-table-wrapper::-webkit-scrollbar-track {
-            background: #f7fafc;
-        }
-        
-        .delivery-list-table-wrapper::-webkit-scrollbar-thumb {
-            background: #cbd5e0;
-            border-radius: 4px;
-        }
-        
-        .delivery-list-table-wrapper::-webkit-scrollbar-thumb:hover {
-            background: #a0aec0;
-        }
-        
-        /* 테이블 - 최소 너비 설정 */
-        .delivery-list-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            min-width: max-content;
-            table-layout: auto;
-            position: relative;
-        }
-        
-        /* 고정 컬럼: 주문번호 (왼쪽) */
-        .delivery-list-table th:first-child,
-        .delivery-list-table td:first-child {
-            position: -webkit-sticky;
-            position: sticky;
-            left: 0;
-            z-index: 10;
-            background: #fff;
-            border-right: 2px solid #e5e7eb;
-            min-width: 200px;
-            max-width: 200px;
-        }
-        
-        .delivery-list-table thead th:first-child {
-            z-index: 12;
-            background: #f8fafc;
-        }
-        
-        .delivery-list-table tbody tr:hover td:first-child {
-            background: #f9fafb;
-        }
-        
-        /* 고정 컬럼: 상태 (오른쪽) */
-        .delivery-list-table th.status-col,
-        .delivery-list-table td.status-col {
-            position: -webkit-sticky;
-            position: sticky;
-            right: 150px;
-            z-index: 20;
-            background: #fff !important;
-            border-left: 2px solid #e5e7eb;
-            min-width: 100px;
-            max-width: 100px;
-            box-shadow: -2px 0 4px rgba(0, 0, 0, 0.05);
-        }
-        
-        .delivery-list-table thead th.status-col {
-            z-index: 21;
-            background: #f8fafc !important;
-        }
-        
-        .delivery-list-table tbody tr:hover td.status-col {
-            background: #f9fafb !important;
-        }
-        
-        /* 고정 컬럼: 액션 (오른쪽 끝) */
-        .delivery-list-table th.action-col,
-        .delivery-list-table td.action-col {
-            position: -webkit-sticky;
-            position: sticky;
-            right: 0;
-            z-index: 20;
-            background: #fff !important;
-            border-left: 2px solid #e5e7eb;
-            min-width: 150px;
-            max-width: 150px;
-            white-space: nowrap;
-            box-shadow: -2px 0 4px rgba(0, 0, 0, 0.05);
-        }
-        
-        .delivery-list-table thead th.action-col {
-            z-index: 21;
-            background: #f8fafc !important;
-        }
-        
-        .delivery-list-table tbody tr:hover td.action-col {
-            background: #f9fafb !important;
-        }
-        
-        /* 액션 버튼 영역 - 개행 방지 */
-        .delivery-list-table td.action-col {
-            white-space: nowrap;
-        }
-        
-        .delivery-list-table td.action-col span {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-        }
-        
-        .delivery-list-table td.action-col button {
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-        
-        /* 테이블 헤더/셀 기본 스타일 */
-        .delivery-list-table th,
-        .delivery-list-table td {
-            padding: 8px 12px;
-            text-align: left;
-            white-space: nowrap;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        
-        .delivery-list-table th {
-            background: #f8fafc;
-            font-weight: 600;
-            font-size: 12px;
-            position: sticky;
-            top: 0;
-            z-index: 9;
-        }
-        
-        .delivery-list-table td {
-            font-size: 12px;
-        }
-        
-        .delivery-list-table tbody tr:hover {
-            background: #f9fafb;
-        }
-        
-        /* 페이징 영역 - 항상 보이도록, 중앙 정렬 */
-        .list-pagination {
-            width: 100%;
-            max-width: 100%;
-            overflow-x: visible;
-            box-sizing: border-box;
-            margin-top: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .list-pagination .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-        }
-        </style>
-        
-        <div class="delivery-list-table-wrapper">
-        <table class="delivery-list-table">
-            <thead>
-                <tr>
-                    <th style="min-width: 200px;">주문번호</th>
-                    <th>주문자회사명</th>
-                    <th>주문자연락처</th>
-                    <th>출발지상호</th>
-                    <th>출발지연락처</th>
-                    <th>도착지상호</th>
-                    <th>도착지연락처</th>
-                    <th>물품종류</th>
-                    <th>수량</th>
-                    <th>주문일자</th>
-                    <th>주문시간</th>
-                    <th class="status-col" style="min-width: 100px;">상태</th>
-                    <th class="action-col" style="min-width: 120px;">액션</th>
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-200">
+                <thead class="bg-gray-50">
+                    <tr id="table-header-row">
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b delivery-list-header" data-column-index="0">번호</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="1" draggable="true">접수일자</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="2" draggable="true">예약일</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="3" draggable="true">상태</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="4" draggable="true">회사명</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="5" draggable="true">완료시간</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="6" draggable="true">접수부서</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="7" draggable="true">접수담당</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="8" draggable="true">도착지담당명</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="9" draggable="true">전달내용</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="10" draggable="true">상품</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="11" draggable="true">라이더연락처</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="12" draggable="true">주문번호</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="13" draggable="true">출발지고객명</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">출발지담당명</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">출발지동</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착지고객명</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">도착지동</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">지불</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">배송</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">배송수단</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="21" draggable="true">기사번호</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="22" draggable="true">기사이름</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b delivery-list-header delivery-list-cell-action" data-column-index="23">액션</th>
                 </tr>
             </thead>
-            <tbody>
+                <tbody class="divide-y divide-gray-200">
                 <?php foreach ($orders as $order): ?>
-                <tr>
-                    <td style="white-space: nowrap;">
-                        <span style="display: inline-flex; align-items: center; gap: 8px;">
-                            <?= esc($order['order_number'] ?? '-') ?>
-                            <?php 
-                            // 접수완료 상태이고 송장번호가 있을 때 송장출력 버튼 표시
-                            // 해외특송 또는 택배 서비스인지 확인
-                            $serviceName = $order['service_name'] ?? '';
-                            $serviceCategory = $order['service_category'] ?? '';
-                            $serviceCode = $order['service_code'] ?? '';
-                            $trackingNumber = $order['shipping_tracking_number'] ?? '';
-                            
-                            $isShippingService = (
-                                $serviceCategory === 'international' || 
-                                $serviceCategory === 'parcel' ||
-                                $serviceCategory === 'special' ||
-                                $serviceCategory === '해외특송서비스' ||
-                                $serviceCode === 'international' ||
-                                $serviceCode === 'parcel-visit' ||
-                                $serviceCode === 'parcel-same-day' ||
-                                $serviceCode === 'parcel-convenience' ||
-                                $serviceCode === 'parcel-night' ||
-                                $serviceCode === 'parcel-bag' ||
-                                strpos($serviceName, '해외특송') !== false ||
-                                strpos($serviceName, '택배') !== false ||
-                                strpos($serviceName, '편의점') !== false ||
-                                strpos($serviceName, '방문택배') !== false ||
-                                strpos($serviceName, '당일택배') !== false ||
-                                strpos($serviceName, '야간배송') !== false
-                            );
-                            
-                            $showWaybillBtn = (
-                                ($order['status'] ?? '') === 'processing' &&
-                                !empty($trackingNumber) &&
-                                $trackingNumber !== '' &&
-                                $isShippingService
-                            );
-                            
-                            if ($showWaybillBtn): ?>
-                                <button onclick="printWaybill('<?= esc($order['order_number']) ?>', '<?= esc($trackingNumber) ?>')" 
-                                        class="form-button form-button-secondary" style="padding: 2px 8px; font-size: 11px; height: 20px; display: inline-block;">
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="1">
+                        <?php
+                        $orderDate = $order['order_date'] ?? '';
+                        $orderTime = $order['order_time'] ?? '';
+                        if ($orderDate && $orderTime) {
+                            echo esc($orderDate . ' ' . $orderTime);
+                        } elseif ($orderDate) {
+                            echo esc($orderDate);
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
+                    <td class="px-4 py-2 text-sm" data-column-index="2"><?= esc($order['reserve_date'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="3">
+                        <?php if ($order['show_map_on_click'] ?? false): ?>
+                            <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)"><?= esc($order['status_label'] ?? '-') ?></span>
+                        <?php else: ?>
+                            <span class="status-badge <?= esc($order['status_class'] ?? '') ?>"><?= esc($order['status_label'] ?? '-') ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="px-4 py-2 text-sm" data-column-index="4"><?= esc($order['company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="5"><?= esc($order['complete_time'] ? date('Y-m-d H:i', strtotime($order['complete_time'])) : '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="6"><?= esc($order['customer_department'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="7"><?= esc($order['customer_duty'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="8"><?= esc($order['destination_manager'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="9"><?= esc($order['delivery_content'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="10"><?= esc($order['item_type'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="11"><?= esc($order['rider_tel_number'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm delivery-list-cell-order-number" data-column-index="12">
+                        <span class="delivery-list-cell-order-number-content">
+                            <?= esc($order['display_order_number'] ?? '-') ?>
+                            <?php if ($order['show_waybill_button'] ?? false): ?>
+                                <button onclick="printWaybill('<?= esc($order['order_number'] ?? '') ?>', '<?= esc($order['shipping_tracking_number'] ?? '') ?>')" 
+                                        class="form-button form-button-secondary delivery-list-waybill-button">
                                     송장출력
                                 </button>
                             <?php endif; ?>
                         </span>
                     </td>
-                    <td><?= esc($order['company_name'] ?? '-') ?></td>
-                    <td><?= esc($order['contact'] ?? '-') ?></td>
-                    <td><?= esc($order['departure_company_name'] ?? '-') ?></td>
-                    <td><?= esc($order['departure_contact'] ?? '-') ?></td>
-                    <td><?= esc($order['destination_company_name'] ?? '-') ?></td>
-                    <td><?= esc($order['destination_contact'] ?? '-') ?></td>
-                    <td><?= esc($order['item_type'] ?? '-') ?></td>
-                    <td><?= esc($order['quantity'] ?? '-') ?></td>
-                    <td><?= esc($order['order_date'] ?? '-') ?></td>
-                    <td><?= esc($order['order_time'] ?? '-') ?></td>
-                    <td class="status-col">
-                        <?php
-                        $statusLabels = [
-                            'pending' => '대기중',
-                            'processing' => '접수완료',
-                            'completed' => '배송중',
-                            'delivered' => '배송완료',
-                            'cancelled' => '취소',
-                            'api_failed' => 'API실패'
-                        ];
-                        $statusLabel = $statusLabels[$order['status'] ?? ''] ?? ($order['status'] ?? '-');
-                        ?>
-                        <span class="status-badge status-<?= esc($order['status'] ?? '') ?>"><?= $statusLabel ?></span>
+                    <td class="px-4 py-2 text-sm" data-column-index="13"><?= esc($order['departure_company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="14"><?= esc($order['departure_manager'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="15"><?= esc($order['departure_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="16"><?= esc($order['destination_company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="17"><?= esc($order['destination_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="18">
+                        <?= esc($order['payment_type_label'] ?? '-') ?>
                     </td>
-                    <td class="action-col">
-                        <span style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
-                            <button onclick="viewOrderDetail('<?= esc($order['encrypted_order_number'] ?? '') ?>')" style="white-space: nowrap; flex-shrink: 0;">상세</button>
+                    <td class="px-4 py-2 text-sm" data-column-index="19">
+                        <?= esc($order['general_status_label'] ?? '-') ?>
+                    </td>
+                    <td class="px-4 py-2 text-sm" data-column-index="20"><?= esc($order['car_type'] ?? ($order['delivery_method'] ?? '-')) ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="21"><?= esc($order['rider_code_no'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm" data-column-index="22"><?= esc($order['rider_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-sm delivery-list-cell-action" data-column-index="23">
+                        <span class="delivery-list-cell-action-buttons">
+                            <button onclick="viewOrderDetail('<?= esc($order['encrypted_order_number'] ?? '') ?>')" class="delivery-list-cell-action-button">상세</button>
                             <?php if (($order['status'] ?? '') === 'pending'): ?>
-                                <button onclick="cancelOrder(<?= $order['id'] ?? 0 ?>)" style="white-space: nowrap; flex-shrink: 0;">취소</button>
+                                <button onclick="cancelOrder(<?= $order['id'] ?? 0 ?>)" class="delivery-list-cell-action-button">취소</button>
+                            <?php endif; ?>
+                            <?php if ($order['show_map_on_click'] ?? false): ?>
+                                <button onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)" class="delivery-list-cell-action-button">
+                                    🗺️ 위치
+                                </button>
                             <?php endif; ?>
                         </span>
                     </td>
@@ -528,50 +197,13 @@
 
     <!-- 페이지네이션 -->
     <?php if (isset($pagination) && $pagination): ?>
-    <div class="list-pagination">
-        <div class="pagination">
-            <?php if ($pagination['has_prev']): ?>
-                <a href="?<?= http_build_query(array_merge($_GET, ['page' => 1])) ?>" class="nav-button">처음</a>
-            <?php else: ?>
-                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">처음</span>
-            <?php endif; ?>
-            
-            <?php if ($pagination['has_prev']): ?>
-                <a href="?<?= http_build_query(array_merge($_GET, ['page' => $pagination['prev_page']])) ?>" class="nav-button">이전</a>
-            <?php else: ?>
-                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">이전</span>
-            <?php endif; ?>
-            
-            <?php
-            $startPage = max(1, $pagination['current_page'] - 2);
-            $endPage = min($pagination['total_pages'], $pagination['current_page'] + 2);
-            
-            for ($i = $startPage; $i <= $endPage; $i++):
-                $isActive = $i == $pagination['current_page'];
-                $queryParams = array_merge($_GET, ['page' => $i]);
-            ?>
-                <a href="?<?= http_build_query($queryParams) ?>" class="page-number <?= $isActive ? 'active' : '' ?>"><?= $i ?></a>
-            <?php endfor; ?>
-            
-            <?php if ($pagination['has_next']): ?>
-                <a href="?<?= http_build_query(array_merge($_GET, ['page' => $pagination['next_page']])) ?>" class="nav-button">다음</a>
-            <?php else: ?>
-                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">다음</span>
-            <?php endif; ?>
-            
-            <?php if ($pagination['has_next']): ?>
-                <a href="?<?= http_build_query(array_merge($_GET, ['page' => $pagination['total_pages']])) ?>" class="nav-button">마지막</a>
-            <?php else: ?>
-                <span class="nav-button" style="opacity: 0.5; cursor: not-allowed;">마지막</span>
-            <?php endif; ?>
-        </div>
-    </div>
+        <?= $pagination->render() ?>
     <?php endif; ?>
 </div>
 
 <!-- 주문 상세 팝업 모달 -->
-<div id="orderDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" style="z-index: 10000 !important;" onclick="event.stopPropagation()">
+<div id="orderDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 order-detail-modal">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto order-detail-modal-content" onclick="event.stopPropagation()">
         <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
             <h3 class="text-lg font-bold text-gray-800">주문 상세 정보</h3>
             <button type="button" onclick="closeOrderDetail()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
@@ -583,7 +215,7 @@
         <div class="p-4">
             <!-- 내용은 restoreModalContent()에서 동적으로 생성됩니다 -->
             <div class="modal-content">
-            </div>
+        </div>
         </div>
         <div class="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end gap-2">
             <button class="form-button form-button-secondary" onclick="closeOrderDetail()">닫기</button>
@@ -591,70 +223,8 @@
     </div>
 </div>
 
-<style>
-/* 모달 콘텐츠 */
-.modal-content {
-    padding: 0 !important;
-}
 
-.detail-section {
-    margin-bottom: 24px !important;
-}
-
-.detail-section:last-child {
-    margin-bottom: 0 !important;
-}
-
-.detail-section h4 {
-    font-size: 14px !important;
-    font-weight: 600 !important;
-    color: #374151 !important;
-    margin: 0 0 12px 0 !important;
-    padding-bottom: 8px !important;
-    border-bottom: 1px solid #e5e7eb !important;
-}
-
-.detail-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 16px !important;
-}
-
-.detail-item {
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-.detail-item.full-width {
-    grid-column: 1 / -1 !important;
-}
-
-.detail-item label {
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    color: #6b7280 !important;
-    margin-bottom: 4px !important;
-}
-
-.detail-item span {
-    font-size: 13px !important;
-    color: #374151 !important;
-    padding: 6px 8px !important;
-    background: #f9fafb !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 4px !important;
-    min-height: 20px !important;
-    word-break: break-word !important;
-}
-
-/* 반응형 */
-@media (max-width: 768px) {
-    .detail-grid {
-        grid-template-columns: 1fr !important;
-    }
-}
-</style>
-
+<script src="<?= base_url('assets/js/common-library.js') ?>"></script>
 <script>
 function viewOrderDetail(encryptedOrderNumber) {
     // 레이어 팝업이 열릴 때 사이드바 처리
@@ -1400,8 +970,327 @@ function cancelOrder(orderId) {
     }
 }
 
+// 테이블 헤더 드래그 앤 드롭 기능
+(function() {
+    let draggedElement = null;
+    let draggedIndex = null;
+    
+    // 서버에서 전달된 컬럼 순서 (PHP 변수)
+    const serverColumnOrder = <?= json_encode($column_order ?? null) ?>;
+
+    // 저장된 컬럼 순서 불러오기 (서버에서 전달된 값 사용)
+    function loadColumnOrder() {
+        return serverColumnOrder;
+    }
+
+    // 컬럼 순서 저장하기 (API 호출)
+    function saveColumnOrder(order) {
+        fetch('/delivery/saveColumnOrder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                column_order: order
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Failed to save column order:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving column order:', error);
+        });
+    }
+
+    // 현재 컬럼 순서 가져오기
+    function getCurrentColumnOrder() {
+        const headerRow = document.getElementById('table-header-row');
+        if (!headerRow) return null;
+        
+        const headers = Array.from(headerRow.querySelectorAll('th'));
+        return headers.map(th => parseInt(th.getAttribute('data-column-index')));
+    }
+
+    // 컬럼 순서 적용하기
+    function applyColumnOrder(order) {
+        if (!order || order.length === 0) return;
+        
+        const headerRow = document.getElementById('table-header-row');
+        const tbody = document.querySelector('tbody');
+        
+        if (!headerRow || !tbody) return;
+
+        // 헤더 순서 재정렬
+        const headers = Array.from(headerRow.querySelectorAll('th'));
+        const headerMap = new Map();
+        headers.forEach(th => {
+            const index = parseInt(th.getAttribute('data-column-index'));
+            headerMap.set(index, th);
+        });
+
+        // 순서대로 헤더 재배치
+        order.forEach(index => {
+            const th = headerMap.get(index);
+            if (th) {
+                headerRow.appendChild(th);
+            }
+        });
+
+        // 데이터 셀 순서 재정렬
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            const cellMap = new Map();
+            cells.forEach(td => {
+                const index = parseInt(td.getAttribute('data-column-index'));
+                cellMap.set(index, td);
+            });
+
+            // 순서대로 셀 재배치
+            order.forEach(index => {
+                const td = cellMap.get(index);
+                if (td) {
+                    row.appendChild(td);
+                }
+            });
+        });
+    }
+
+    // 드래그 시작
+    function handleDragStart(e) {
+        if (!e.target.classList.contains('draggable-header')) {
+            return;
+        }
+        
+        // 드래그 시작 시 정렬 클릭 이벤트 방지
+        e.target.setAttribute('data-dragging', 'true');
+        
+        draggedElement = e.target;
+        draggedIndex = parseInt(e.target.getAttribute('data-column-index'));
+        e.target.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', e.target.innerHTML);
+    }
+
+    // 드래그 오버
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
+        
+        const target = e.target.closest('.draggable-header');
+        if (target && target !== draggedElement) {
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        return false;
+    }
+
+    // 드래그 엔터
+    function handleDragEnter(e) {
+        const target = e.target.closest('.draggable-header');
+        if (target && target !== draggedElement) {
+            target.style.backgroundColor = '#e5e7eb';
+        }
+    }
+
+    // 드래그 리브
+    function handleDragLeave(e) {
+        const target = e.target.closest('.draggable-header');
+        if (target) {
+            target.style.backgroundColor = '';
+        }
+    }
+
+    // 드롭
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+
+        const target = e.target.closest('.draggable-header');
+        if (!target || target === draggedElement || !draggedElement) {
+            return false;
+        }
+
+        const targetIndex = parseInt(target.getAttribute('data-column-index'));
+        const currentOrder = getCurrentColumnOrder();
+        
+        if (!currentOrder) return false;
+
+        // 순서 변경
+        const draggedPos = currentOrder.indexOf(draggedIndex);
+        const targetPos = currentOrder.indexOf(targetIndex);
+        
+        currentOrder.splice(draggedPos, 1);
+        currentOrder.splice(targetPos, 0, draggedIndex);
+
+        // 순서 적용
+        applyColumnOrder(currentOrder);
+        
+        // 저장
+        saveColumnOrder(currentOrder);
+
+        // 스타일 초기화
+        draggedElement.style.opacity = '';
+        target.style.backgroundColor = '';
+        
+        draggedElement = null;
+        draggedIndex = null;
+
+        return false;
+    }
+
+    // 드래그 종료
+    function handleDragEnd(e) {
+        if (draggedElement) {
+            draggedElement.style.opacity = '';
+            draggedElement.removeAttribute('data-dragging');
+        }
+        
+        // 모든 헤더의 배경색 초기화 및 드래그 속성 제거
+        document.querySelectorAll('.draggable-header').forEach(th => {
+            th.style.backgroundColor = '';
+            th.removeAttribute('data-dragging');
+        });
+        
+        draggedElement = null;
+        draggedIndex = null;
+    }
+
+    // 정렬 기능
+    // 컬럼 인덱스와 DB 필드 매핑
+    const columnFieldMap = {
+        1: { field: 'order_date', secondary: 'order_time' }, // 접수일자
+        2: 'reserve_date', // 예약일
+        3: 'state', // 상태
+        4: 'company_name', // 회사명
+        5: 'complete_time', // 완료시간
+        6: 'customer_department', // 접수부서
+        7: 'customer_duty', // 접수담당
+        8: 'destination_manager', // 도착지담당명
+        9: 'delivery_content', // 전달내용
+        10: 'item_type', // 상품
+        11: 'rider_tel_number', // 라이더연락처
+        12: 'order_number', // 주문번호
+        13: 'departure_customer_name', // 출발지고객명
+        14: 'departure_manager', // 출발지담당명
+        15: 'departure_dong', // 출발지동
+        16: 'destination_customer_name', // 도착지고객명
+        17: 'destination_dong', // 도착지동
+        18: 'payment_method', // 지불
+        19: 'delivery_method', // 배송
+        20: 'delivery_vehicle', // 배송수단
+        21: 'rider_id', // 기사번호
+        22: 'rider_name' // 기사이름
+    };
+
+    // 현재 정렬 상태
+    let currentSortColumn = null;
+    let currentSortDirection = null; // 'asc' or 'desc'
+
+    // URL에서 정렬 파라미터 읽기
+    function getSortFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderBy = urlParams.get('order_by');
+        const orderDir = urlParams.get('order_dir');
+        return { orderBy, orderDir };
+    }
+
+    // 정렬 상태 업데이트 (UI)
+    function updateSortUI(columnIndex, direction) {
+        // 모든 헤더에서 정렬 클래스 제거
+        document.querySelectorAll('.draggable-header').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+        });
+
+        // 현재 정렬 컬럼에 클래스 추가
+        const header = document.querySelector(`.draggable-header[data-column-index="${columnIndex}"]`);
+        if (header) {
+            if (direction === 'asc') {
+                header.classList.add('sort-asc');
+            } else if (direction === 'desc') {
+                header.classList.add('sort-desc');
+            }
+        }
+    }
+
+    // 정렬 클릭 핸들러
+    function handleSortClick(e) {
+        // 드래그 중이면 정렬 동작 안 함
+        const header = e.target.closest('.draggable-header');
+        if (!header) return;
+        
+        if (header.getAttribute('data-dragging') === 'true') {
+            return;
+        }
+
+        const columnIndex = parseInt(header.getAttribute('data-column-index'));
+        if (!columnIndex || columnIndex === 0) return; // 번호 컬럼은 제외
+
+        // 현재 정렬 상태 확인
+        const { orderBy, orderDir } = getSortFromURL();
+        let newDirection = 'asc';
+
+        // 같은 컬럼을 클릭하면 방향 전환
+        if (orderBy && parseInt(orderBy) === columnIndex) {
+            newDirection = orderDir === 'asc' ? 'desc' : 'asc';
+        }
+
+        // URL 업데이트 및 페이지 리로드
+        const url = new URL(window.location.href);
+        url.searchParams.set('order_by', columnIndex);
+        url.searchParams.set('order_dir', newDirection);
+        url.searchParams.set('page', '1'); // 정렬 변경 시 첫 페이지로
+        window.location.href = url.toString();
+    }
+
+    // 초기화
+    function init() {
+        // 저장된 순서 불러오기 (처음 로그인한 사용자는 null이므로 기본 순서 유지)
+        const savedOrder = loadColumnOrder();
+        if (savedOrder && Array.isArray(savedOrder) && savedOrder.length > 0) {
+            applyColumnOrder(savedOrder);
+        }
+        // savedOrder가 null이면 기본 HTML 순서 그대로 사용
+
+        // 드래그 이벤트 리스너 등록
+        const headerRow = document.getElementById('table-header-row');
+        if (headerRow) {
+            headerRow.addEventListener('dragstart', handleDragStart);
+            headerRow.addEventListener('dragover', handleDragOver);
+            headerRow.addEventListener('dragenter', handleDragEnter);
+            headerRow.addEventListener('dragleave', handleDragLeave);
+            headerRow.addEventListener('drop', handleDrop);
+            headerRow.addEventListener('dragend', handleDragEnd);
+        }
+
+        // 정렬 클릭 이벤트 등록
+        document.querySelectorAll('.draggable-header').forEach(header => {
+            header.addEventListener('click', handleSortClick);
+        });
+
+        // URL에서 정렬 상태 읽어서 UI 업데이트
+        const { orderBy, orderDir } = getSortFromURL();
+        if (orderBy && orderDir) {
+            updateSortUI(parseInt(orderBy), orderDir);
+        }
+    }
+
+    // DOM 로드 완료 후 초기화
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
 // 인성 API 주문 동기화 (리스트 페이지 접근 시에만 실행)
-<?php if (in_array(session()->get('login_type'), ['daumdata', 'stn'])): ?>
+// 개별 데이터 업데이트 API 주석처리
+<?php if (false && in_array(session()->get('login_type'), ['daumdata', 'stn'])): ?>
 // 동기화 중 플래그 (중복 실행 방지)
 let isSyncing = false;
 let syncIndicator = null;

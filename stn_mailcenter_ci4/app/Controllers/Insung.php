@@ -102,6 +102,42 @@ class Insung extends BaseController
             'has_previous' => $page > 1,
             'has_next' => $page < $totalPages
         ];
+        
+        // 비즈니스 로직: 회사 데이터 포맷팅
+        $formattedCompanyList = [];
+        foreach ($companyList as $company) {
+            $formattedCompany = $company;
+            
+            // 상태 라벨 변환
+            $isActive = ($company['is_active'] ?? 0) == 1;
+            $formattedCompany['status_label'] = $isActive ? '활성' : '비활성';
+            $formattedCompany['status_class'] = $isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+            
+            $formattedCompanyList[] = $formattedCompany;
+        }
+        
+        // PaginationHelper 생성 (뷰에서 사용)
+        $queryParams = array_filter([
+            'cc_code' => ($ccCodeFilter !== 'all') ? $ccCodeFilter : null,
+            'search_name' => !empty($searchName) ? $searchName : null
+        ], function($value) {
+            return $value !== null && $value !== '';
+        });
+        
+        $paginationHelper = new \App\Libraries\PaginationHelper(
+            $totalCount,
+            $perPage,
+            $page,
+            base_url('insung/company-list'),
+            $queryParams
+        );
+        
+        // 페이징 정보 포맷팅 (뷰에서 사용)
+        $paginationInfo = [
+            'start_item' => ($page - 1) * $perPage + 1,
+            'end_item' => min($page * $perPage, $totalCount),
+            'total_count' => $totalCount
+        ];
 
         $data = [
             'title' => '고객사 관리',
@@ -109,11 +145,13 @@ class Insung extends BaseController
                 'title' => '고객사 관리',
                 'description' => '고객사 정보를 관리합니다.'
             ],
-            'company_list' => $companyList,
+            'company_list' => $formattedCompanyList,
             'cc_list' => $ccList,
             'cc_code_filter' => $ccCodeFilter,
             'search_name' => $searchName,
-            'pagination' => $pagination
+            'pagination' => $pagination,
+            'pagination_info' => $paginationInfo,
+            'pagination_helper' => $paginationHelper
         ];
 
         return view('insung/company_list', $data);
@@ -138,8 +176,21 @@ class Insung extends BaseController
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
 
+        // 서브도메인 설정 확인
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+        $subdomainApiCodes = null;
+        $isSubdomainAccess = ($currentSubdomain !== 'default');
+        
+        // 서브도메인으로 접근한 경우 API 정보 조회
+        if ($isSubdomainAccess && $subdomainCompCode) {
+            $subdomainApiCodes = $subdomainConfig->getCurrentApiCodes();
+        }
+
         // 필터 파라미터 (검색 필드 변경: 고객사, 회사명, 아이디, 회원명)
-        $compCodeFilter = $this->request->getGet('comp_code') ?? 'all';
+        // 서브도메인으로 접근한 경우 comp_code를 서브도메인 값으로 고정
+        $compCodeFilter = $isSubdomainAccess && $subdomainCompCode ? $subdomainCompCode : ($this->request->getGet('comp_code') ?? 'all');
         $compName = $this->request->getGet('comp_name') ?? '';
         $userId = $this->request->getGet('user_id') ?? '';
         $userName = $this->request->getGet('user_name') ?? '';
@@ -148,14 +199,22 @@ class Insung extends BaseController
 
         // 전체 고객사 갯수 조회
         $db = \Config\Database::connect();
-        $totalCompanyCount = $db->table('tbl_company_list')->countAllResults();
         
-        // 고객사 목록 조회 (select option용, 회원 수 포함)
+        // 서브도메인으로 접근한 경우 해당 고객사만 조회
         $companyListForSelect = [];
-        // 전체 고객사 조회 (페이징 없이, 고객사명 오름차순)
         $builder = $db->table('tbl_company_list c');
         $builder->select('c.comp_code, c.comp_name, c.cc_idx');
         $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+        
+        if ($isSubdomainAccess && $subdomainCompCode) {
+            // 서브도메인으로 접근한 경우 해당 고객사만 조회
+            $builder->where('c.comp_code', $subdomainCompCode);
+            $totalCompanyCount = 1;
+        } else {
+            // 메인도메인 접근 시 전체 고객사 조회
+            $totalCompanyCount = $db->table('tbl_company_list')->countAllResults();
+        }
+        
         $builder->orderBy('c.comp_name', 'ASC');
         $query = $builder->get();
         if ($query !== false) {
@@ -196,13 +255,21 @@ class Insung extends BaseController
         unset($company); // 참조 해제
 
         // 회원 목록 조회 (기존 모델 메서드 사용, 성능 최적화)
-        $compCodeForQuery = ($compCodeFilter !== 'all') ? $compCodeFilter : null;
+        // 서브도메인으로 접근한 경우 comp_code를 서브도메인 값으로 고정
+        if ($isSubdomainAccess && $subdomainCompCode) {
+            $compCodeForQuery = $subdomainCompCode;
+        } else {
+            $compCodeForQuery = ($compCodeFilter !== 'all') ? $compCodeFilter : null;
+        }
         
         // user_type = 3인 경우 소속 콜센터로 필터링
+        // 서브도메인으로 접근한 경우 comp_code만 사용 (cc_code 필터링 제외)
         $ccCodeForQuery = null;
-        if ($userType == '3' && $sessionCcCode) {
+        if (!$isSubdomainAccess && $userType == '3' && $sessionCcCode) {
+            // 메인도메인 접근 시 user_type=3인 경우만 cc_code 필터링
             $ccCodeForQuery = $sessionCcCode;
         }
+        // 서브도메인으로 접근한 경우 comp_code만으로 필터링하므로 ccCodeForQuery는 null 유지
         
         // comp_name 검색이 있는 경우, 먼저 고객사 코드를 찾아서 필터링
         if ($compName && trim($compName) !== '') {
@@ -211,6 +278,12 @@ class Insung extends BaseController
             $compBuilder = $db->table('tbl_company_list');
             $compBuilder->select('comp_code');
             $compBuilder->like('comp_name', $compNameTrimmed);
+            
+            // 서브도메인으로 접근한 경우 해당 고객사만 검색
+            if ($isSubdomainAccess && $subdomainCompCode) {
+                $compBuilder->where('comp_code', $subdomainCompCode);
+            }
+            
             $compQuery = $compBuilder->get();
             $matchingCompCodes = [];
             if ($compQuery !== false) {
@@ -259,6 +332,9 @@ class Insung extends BaseController
             $searchName = $userName;
             $searchId = $userId;
             
+            // 디버깅 로그
+            log_message('debug', 'Insung::userList - getAllUserListWithFilters params: ccCode=' . ($ccCodeForQuery ?? 'null') . ', compCode=' . ($compCodeForQuery ?? 'null') . ', searchName=' . ($searchName ?? '') . ', searchId=' . ($searchId ?? ''));
+            
             $result = $this->usersListModel->getAllUserListWithFilters(
                 $ccCodeForQuery,
                 $compCodeForQuery,
@@ -271,7 +347,57 @@ class Insung extends BaseController
             $userList = $result['users'];
             $totalCount = $result['total_count'];
             $pagination = $result['pagination'];
+            
+            // 디버깅 로그
+            log_message('debug', 'Insung::userList - result: totalCount=' . $totalCount . ', userList count=' . count($userList));
         }
+        
+        // 비즈니스 로직: 회원 데이터 포맷팅
+        $formattedUserList = [];
+        $totalCountForNumbering = $pagination['total_count'] ?? 0;
+        $currentPageForNumbering = $pagination['current_page'] ?? 1;
+        $perPageForNumbering = $pagination['per_page'] ?? 20;
+        $startNumber = $totalCountForNumbering - (($currentPageForNumbering - 1) * $perPageForNumbering);
+        $rowNumber = $startNumber;
+        
+        // user_type 라벨 매핑
+        $userTypeLabels = [
+            '1' => '메인 사이트 관리자',
+            '3' => '콜센터 관리자',
+            '5' => '일반 고객'
+        ];
+        
+        foreach ($userList as $user) {
+            $formattedUser = $user;
+            
+            // 역순 번호 할당
+            $formattedUser['row_number'] = $rowNumber--;
+            
+            // user_type 라벨 변환
+            $userType = $user['user_type'] ?? '5';
+            $formattedUser['user_type_label'] = $userTypeLabels[$userType] ?? '일반 고객';
+            $formattedUser['user_type_class'] = 'bg-blue-100 text-blue-800';
+            
+            $formattedUserList[] = $formattedUser;
+        }
+        
+        // PaginationHelper 생성 (뷰에서 사용)
+        $queryParams = array_filter([
+            'comp_code' => ($compCodeFilter !== 'all') ? $compCodeFilter : null,
+            'comp_name' => !empty($compName) ? $compName : null,
+            'user_id' => !empty($userId) ? $userId : null,
+            'user_name' => !empty($userName) ? $userName : null
+        ], function($value) {
+            return $value !== null && $value !== '';
+        });
+        
+        $paginationHelper = new \App\Libraries\PaginationHelper(
+            $pagination['total_count'],
+            $pagination['per_page'],
+            $pagination['current_page'],
+            base_url('insung/user-list'),
+            $queryParams
+        );
         
         $data = [
             'title' => '고객사 회원정보',
@@ -279,14 +405,18 @@ class Insung extends BaseController
                 'title' => '고객사 회원정보',
                 'description' => '고객사 회원 정보를 조회합니다.'
             ],
-            'user_list' => $userList,
+            'user_list' => $formattedUserList,
             'company_list' => $companyListForSelect,
             'total_company_count' => $totalCompanyCount,
             'comp_code_filter' => $compCodeFilter,
             'comp_name' => $compName,
             'user_id' => $userId,
             'user_name' => $userName,
-            'pagination' => $pagination
+            'pagination' => $pagination,
+            'pagination_helper' => $paginationHelper,
+            'is_subdomain_access' => $isSubdomainAccess,
+            'subdomain_comp_code' => $subdomainCompCode,
+            'subdomain_api_codes' => $subdomainApiCodes
         ];
 
         return view('insung/user_list', $data);
@@ -424,6 +554,18 @@ class Insung extends BaseController
             ])->setStatusCode(403);
         }
 
+        // 서브도메인 설정 확인
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+        $subdomainApiCodes = null;
+        $isSubdomainAccess = ($currentSubdomain !== 'default');
+        
+        // 서브도메인으로 접근한 경우 API 정보 조회
+        if ($isSubdomainAccess && $subdomainCompCode) {
+            $subdomainApiCodes = $subdomainConfig->getCurrentApiCodes();
+        }
+        
         // 파라미터 받기 (JSON 요청이므로 getJSON으로 받기)
         // comp_no는 tbl_company_list.comp_code 값
         $jsonData = $this->request->getJSON(true);
@@ -446,8 +588,13 @@ class Insung extends BaseController
             $limit = (int)($jsonData['limit'] ?? 20);
         }
         
+        // 서브도메인으로 접근한 경우 comp_no를 서브도메인 값으로 고정
+        if ($isSubdomainAccess && $subdomainCompCode) {
+            $compNo = $subdomainCompCode;
+        }
+        
         // 디버깅: 받은 파라미터 로깅
-        log_message('debug', 'Insung::getInsungMemberList - Received params: comp_no=' . $compNo . ', comp_name=' . $compName . ', user_id=' . $userId . ', user_name=' . $userName);
+        log_message('debug', 'Insung::getInsungMemberList - Received params: comp_no=' . $compNo . ', comp_name=' . $compName . ', user_id=' . $userId . ', user_name=' . $userName . ', is_subdomain=' . ($isSubdomainAccess ? 'true' : 'false'));
 
         // comp_no를 기준으로 DB에서 API 정보 조회 (로그인 시 사용한 조인 쿼리와 동일)
         // comp_no는 tbl_company_list.comp_code 값
@@ -462,46 +609,81 @@ class Insung extends BaseController
             ])->setStatusCode(400);
         }
         
-        // tbl_company_list -> tbl_cc_list -> tbl_api_list
-        // cc_apicode와 tbl_api_list.idx를 매칭
-        $db = \Config\Database::connect();
-        $builder = $db->table('tbl_company_list b');
-        $builder->select('
-            b.comp_code,
-            d.mcode as m_code,
-            d.cccode as cc_code,
-            d.token,
-            d.idx as api_idx
-        ');
-        $builder->join('tbl_cc_list c', 'b.cc_idx = c.idx', 'inner');
-        // cc_apicode와 tbl_api_list.idx를 매칭
-        $builder->join('tbl_api_list d', 'c.cc_apicode = d.idx', 'inner');
-        $builder->where('b.comp_code', $compNo);
-        
-        $query = $builder->get();
-        
-        if ($query === false) {
-            log_message('error', 'Insung::getInsungMemberList - Failed to query API info for comp_no: ' . $compNo);
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'API 정보 조회 중 오류가 발생했습니다.'
-            ])->setStatusCode(500);
+        // 서브도메인으로 접근한 경우 서브도메인의 API 정보 사용
+        if ($isSubdomainAccess && $subdomainApiCodes && !empty($subdomainApiCodes['m_code']) && !empty($subdomainApiCodes['cc_code'])) {
+            $mCode = $subdomainApiCodes['m_code'];
+            $ccCode = $subdomainApiCodes['cc_code'];
+            
+            // token과 api_idx는 DB에서 조회
+            $db = \Config\Database::connect();
+            $apiBuilder = $db->table('tbl_api_list');
+            $apiBuilder->select('token, idx as api_idx');
+            $apiBuilder->where('mcode', $mCode);
+            $apiBuilder->where('cccode', $ccCode);
+            $apiQuery = $apiBuilder->get();
+            
+            if ($apiQuery !== false) {
+                $apiInfo = $apiQuery->getRowArray();
+                if ($apiInfo) {
+                    $token = $apiInfo['token'] ?? '';
+                    $apiIdx = $apiInfo['api_idx'] ?? null;
+                } else {
+                    log_message('error', 'Insung::getInsungMemberList - API info not found for subdomain: m_code=' . $mCode . ', cc_code=' . $ccCode);
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => '서브도메인의 API 정보를 찾을 수 없습니다.'
+                    ])->setStatusCode(400);
+                }
+            } else {
+                log_message('error', 'Insung::getInsungMemberList - Failed to query API info for subdomain');
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보 조회 중 오류가 발생했습니다.'
+                ])->setStatusCode(500);
+            }
+        } else {
+            // 메인도메인 접근 시 기존 로직 사용
+            // tbl_company_list -> tbl_cc_list -> tbl_api_list
+            // cc_apicode와 tbl_api_list.idx를 매칭
+            $db = \Config\Database::connect();
+            $builder = $db->table('tbl_company_list b');
+            $builder->select('
+                b.comp_code,
+                d.mcode as m_code,
+                d.cccode as cc_code,
+                d.token,
+                d.idx as api_idx
+            ');
+            $builder->join('tbl_cc_list c', 'b.cc_idx = c.idx', 'inner');
+            // cc_apicode와 tbl_api_list.idx를 매칭
+            $builder->join('tbl_api_list d', 'c.cc_apicode = d.idx', 'inner');
+            $builder->where('b.comp_code', $compNo);
+            
+            $query = $builder->get();
+            
+            if ($query === false) {
+                log_message('error', 'Insung::getInsungMemberList - Failed to query API info for comp_no: ' . $compNo);
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보 조회 중 오류가 발생했습니다.'
+                ])->setStatusCode(500);
+            }
+            
+            $apiInfo = $query->getRowArray();
+            
+            if (!$apiInfo || empty($apiInfo['m_code']) || empty($apiInfo['cc_code']) || empty($apiInfo['token'])) {
+                log_message('error', 'Insung::getInsungMemberList - API info not found or incomplete for comp_no: ' . $compNo);
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '선택한 고객사의 API 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(400);
+            }
+            
+            $mCode = $apiInfo['m_code'];
+            $ccCode = $apiInfo['cc_code'];
+            $token = $apiInfo['token'];
+            $apiIdx = $apiInfo['api_idx'] ?? null;
         }
-        
-        $apiInfo = $query->getRowArray();
-        
-        if (!$apiInfo || empty($apiInfo['m_code']) || empty($apiInfo['cc_code']) || empty($apiInfo['token'])) {
-            log_message('error', 'Insung::getInsungMemberList - API info not found or incomplete for comp_no: ' . $compNo);
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => '선택한 고객사의 API 정보를 찾을 수 없습니다.'
-            ])->setStatusCode(400);
-        }
-        
-        $mCode = $apiInfo['m_code'];
-        $ccCode = $apiInfo['cc_code'];
-        $token = $apiInfo['token'];
-        $apiIdx = $apiInfo['api_idx'] ?? null;
         
         log_message('debug', 'Insung::getInsungMemberList - Found API info: comp_no=' . $compNo . ', m_code=' . $mCode . ', cc_code=' . $ccCode . ', api_idx=' . $apiIdx);
 
@@ -516,6 +698,10 @@ class Insung extends BaseController
                 $compName,
                 $userId,
                 $userName,
+                '', // telNo
+                '', // custName
+                '', // deptName
+                '', // staffName
                 $page,
                 $limit,
                 $apiIdx

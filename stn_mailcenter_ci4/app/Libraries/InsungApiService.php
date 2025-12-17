@@ -11,7 +11,7 @@ use App\Models\InsungApiListModel;
 class InsungApiService
 {
     //protected $baseUrl = 'http://quick.api.insungdata.com';
-    protected $baseUrl = 'https://requick-api.283.co.kr/'; //new API 서버
+    protected $baseUrl = 'https://requick-api.283.co.kr'; //new API 서버
     
     protected $apiListModel;
     protected $keyStr = ''; // 임의의 8글자 prefix (설정에서 가져올 수 있음)
@@ -271,8 +271,13 @@ class InsungApiService
             return $apiRow['token'];
         }
         
-        // 토큰이 없으면 새로 생성
-        return $this->updateTokenKey($apiIdx);
+        // [주석 처리됨] 토큰이 없으면 새로 생성
+        // 다중 사용자 환경에서 토큰 헬 방지를 위해 자동 토큰 생성 비활성화
+        // 토큰이 없으면 false 반환하고, 관리자가 수동으로 토큰을 갱신해야 함
+        log_message('warning', "Insung API: No token found for api_idx: {$apiIdx}. Manual token refresh required.");
+        return false;
+        
+        // return $this->updateTokenKey($apiIdx);
     }
 
     /**
@@ -311,7 +316,16 @@ class InsungApiService
         }
         
         // 토큰 만료 확인 (에러 코드 1001) - 토큰이 만료되었거나 잘못된 경우
+        // [자동 토큰 갱신 비활성화] 다중 사용자 환경에서 토큰 헬 방지를 위해 자동 갱신 비활성화
+        // 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 함
         if ($code == "1001" && $apiIdx !== null) {
+            log_message('warning', "Insung API: Token expired (code 1001) for api_idx: {$apiIdx}. Manual token refresh required.");
+            
+            // [주석 처리됨] 자동 토큰 갱신 로직 - 다중 사용자 환경에서 토큰 헬 방지를 위해 비활성화
+            // 한 콜센터에 수백 개 거래처, 수천~수만 명의 사용자가 있을 때
+            // 어떤 이슈 발생 시마다 자동으로 토큰을 갱신하면 토큰이 계속 변경되어
+            // 다른 사용자들의 요청이 실패하는 토큰 헬이 발생함
+            /*
             log_message('info', "Insung API: Token expired (code 1001), refreshing token for api_idx: {$apiIdx}");
             
             // 토큰 갱신
@@ -319,7 +333,7 @@ class InsungApiService
             
             if ($newToken) {
                 log_message('info', "Insung API: Token refreshed successfully, retrying API call");
-                
+
                 // 파라미터의 token 업데이트
                 $params['token'] = $newToken;
                 $paramString = http_build_query($params);
@@ -348,6 +362,7 @@ class InsungApiService
             } else {
                 log_message('error', "Insung API: Token refresh failed for api_idx: {$apiIdx}, returning original 1001 response");
             }
+            */
         }
         
         return $jresult;
@@ -404,6 +419,143 @@ class InsungApiService
     }
 
     /**
+     * 회원 상세 정보 조회 (c_code 기반)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $cCode 회원 코드
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function getMemberDetailByCode($mcode, $cccode, $token, $cCode, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/member_detail/find/";
+        $params = [
+            'type' => 'json',
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'token' => $token,
+            'c_code' => $cCode
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
+     * 회원 아이디 중복 확인
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function checkMemberExist($mcode, $cccode, $token, $userId, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/member_exist/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'type' => 'json'
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
+     * 회원 아이디/비밀번호 설정 (회원 등록)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $cCode 회원 코드
+     * @param string $userId 사용자 ID
+     * @param string $password 비밀번호
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function setupCustomer($mcode, $cccode, $token, $cCode, $userId, $password, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/customer/setup/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'token' => $token,
+            'c_code' => $cCode,
+            'user_id' => $userId,
+            'password' => $password,
+            'type' => 'json'
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
+     * 즐겨찾기 리스트 조회 (고객사 목록)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param string $keyword 검색 키워드 (선택)
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function getCustomerList($mcode, $cccode, $token, $userId, $keyword = '', $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/customer_list/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'keyword' => $keyword,
+            'type' => 'json'
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
+     * 고객사 등록 (즐겨찾기 등록)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param array $customerData 고객사 데이터
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function registerCustomer($mcode, $cccode, $token, $userId, $customerData, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/customer_regist/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'company_name' => $customerData['company_name'] ?? '',
+            'dept_name' => $customerData['dept_name'] ?? '',
+            'staff_name' => $customerData['staff_name'] ?? '',
+            'tel_no' => $customerData['tel_no'] ?? '',
+            'sido' => $customerData['sido'] ?? '',
+            'gugun' => $customerData['gugun'] ?? '',
+            'dong' => $customerData['dong'] ?? '',
+            'address_detail' => $customerData['address_detail'] ?? '',
+            'location' => $customerData['location'] ?? '',
+            'c_code' => $customerData['c_code'] ?? '',
+            'type' => 'json'
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
      * 회사 목록 조회 API 호출
      * 
      * @param string $mcode 마스터 코드
@@ -444,12 +596,16 @@ class InsungApiService
      * @param string $compName 회사명 (선택)
      * @param string $userId 사용자 ID (선택)
      * @param string $userName 사용자명 (선택)
+     * @param string $telNo 전화번호 (선택)
+     * @param string $custName 고객명 (선택)
+     * @param string $deptName 부서명 (선택)
+     * @param string $staffName 담당자명 (선택)
      * @param int $page 페이지 번호
      * @param int $limit 페이지당 항목 수
      * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
      * @return object|false JSON 응답 또는 false
      */
-    public function getCustomerAttachedList($mcode, $cccode, $token, $compNo = '', $compName = '', $userId = '', $userName = '', $page = 1, $limit = 1000, $apiIdx = null)
+    public function getCustomerAttachedList($mcode, $cccode, $token, $compNo = '', $compName = '', $userId = '', $userName = '', $telNo = '', $custName = '', $deptName = '', $staffName = '', $page = 1, $limit = 1000, $apiIdx = null)
     {
         $url = $this->baseUrl . "/api/customer/list/";
         $params = [
@@ -460,6 +616,10 @@ class InsungApiService
             'comp_name' => $compName,
             'user_id' => $userId,
             'user_name' => $userName,
+            'tel_no' => $telNo,
+            'cust_name' => $custName,
+            'dept_name' => $deptName,
+            'staff_name' => $staffName,
             'page' => $page,
             'limit' => $limit,
             'type' => 'json'
@@ -518,6 +678,11 @@ class InsungApiService
             $addressForCoord = !empty($departureFullAddr) ? $departureFullAddr : $departureAddress;
             if (!empty($addressForCoord)) {
                 $addressForCoord = str_replace("강원특별자치도", "강원도", $addressForCoord);
+                // "지하"가 포함된 주소는 인성 API에서 좌표를 찾지 못하는 경우가 있으므로 제거
+                // 예: "경원대로 지하 285" → "경원대로 285"
+                $addressForCoord = preg_replace('/\s*지하\s*/i', ' ', $addressForCoord);
+                $addressForCoord = preg_replace('/\s+/', ' ', $addressForCoord); // 연속된 공백 제거
+                $addressForCoord = trim($addressForCoord);
                 log_message('debug', "Insung::registerOrder - Fetching coordinates for departure address: {$addressForCoord}");
                 $coordResult = $this->getAddressCoordinates($mcode, $cccode, $token, $addressForCoord, $apiIdx);
                 if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
@@ -543,6 +708,11 @@ class InsungApiService
             $addressForCoord = !empty($destinationFullAddr) ? $destinationFullAddr : $destinationAddress;
             if (!empty($addressForCoord)) {
                 $addressForCoord = str_replace("강원특별자치도", "강원도", $addressForCoord);
+                // "지하"가 포함된 주소는 인성 API에서 좌표를 찾지 못하는 경우가 있으므로 제거
+                // 예: "경원대로 지하 285" → "경원대로 285"
+                $addressForCoord = preg_replace('/\s*지하\s*/i', ' ', $addressForCoord);
+                $addressForCoord = preg_replace('/\s+/', ' ', $addressForCoord); // 연속된 공백 제거
+                $addressForCoord = trim($addressForCoord);
                 log_message('debug', "Insung::registerOrder - Fetching coordinates for destination address: {$addressForCoord}");
                 $coordResult = $this->getAddressCoordinates($mcode, $cccode, $token, $addressForCoord, $apiIdx);
                 if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
@@ -1001,6 +1171,150 @@ class InsungApiService
     }
 
     /**
+     * 주문 목록 조회 API 호출 (/api/order_list/dept/)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param string $fromDate 조회 시작일자 (YYYY-MM-DD 또는 YYYYMMDD, 기본값: 오늘)
+     * @param string $toDate 조회 종료일자 (YYYY-MM-DD 또는 YYYYMMDD, 기본값: 오늘, 최대: 3개월)
+     * @param string|null $state 처리상태 (10:접수, 11:배차, 12:운행, 20:대기, 30:완료, 40:취소, 50:문의, 90:예약)
+     * @param string|null $staffCode 사용자 코드
+     * @param string|null $deptName 부서명 (URL 인코딩)
+     * @param string|null $compNo 거래처 코드
+     * @param int $limit 페이지단위 출력 오더 레코드 수 (기본값: 1000, 최대: 1000)
+     * @param int $page 출력 페이지 (기본값: 1)
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
+     */
+    public function getOrderList($mcode, $cccode, $token, $userId, $fromDate = null, $toDate = null, $state = null, $staffCode = null, $deptName = null, $compNo = null, $limit = 1000, $page = 1, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/order_list/dept/";
+        
+        log_message('info', "InsungApiService::getOrderList - 호출 시작: userId={$userId}, compNo={$compNo}, fromDate={$fromDate}, toDate={$toDate}, page={$page}");
+        
+        // 시작일자/종료일자가 없으면 오늘 날짜로 설정
+        if (empty($fromDate)) {
+            $fromDate = date('Y-m-d');
+        }
+        if (empty($toDate)) {
+            $toDate = date('Y-m-d');
+        }
+        
+        // 날짜 형식 변환 (YYYY-MM-DD -> YYYYMMDD 또는 그대로 유지)
+        $fromDateFormatted = str_replace('-', '', $fromDate);
+        $toDateFormatted = str_replace('-', '', $toDate);
+        
+        $params = [
+            'type' => 'json',
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'from_date' => $fromDateFormatted,
+            'to_date' => $toDateFormatted,
+            'limit' => $limit,
+            'page' => $page
+        ];
+        
+        // 선택적 파라미터 추가
+        if (!empty($state)) {
+            $params['state'] = $state;
+        }
+        if (!empty($staffCode)) {
+            $params['staff_code'] = $staffCode;
+        }
+        if (!empty($deptName)) {
+            $params['dept_name'] = urlencode($deptName);
+        }
+        if (!empty($compNo)) {
+            $params['comp_no'] = $compNo;
+        }
+        
+        // cc_order 파라미터 추가 (맨 뒤에)
+        //$params['cc_order'] = 'F';
+        
+        log_message('debug', "InsungApiService::getOrderList - API 파라미터: " . json_encode($params, JSON_UNESCAPED_UNICODE));
+        
+        $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+        
+        log_message('info', "InsungApiService::getOrderList - API 호출 완료: " . ($result ? '응답 수신' : '응답 없음'));
+        
+        // API 응답 전체 로그 출력 (DB 저장 확인용) - 주석처리
+        // log_message('info', "Insung::getOrderList - Full API Response: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        // log_message('info', "Insung::getOrderList - Response Type: " . gettype($result));
+        // if (is_array($result)) {
+        //     log_message('info', "Insung::getOrderList - Response Array Count: " . count($result));
+        //     if (isset($result[0])) {
+        //         log_message('info', "Insung::getOrderList - Response[0] Type: " . gettype($result[0]));
+        //         log_message('info', "Insung::getOrderList - Response[0] Content: " . json_encode($result[0], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        //     }
+        //     if (isset($result[1])) {
+        //         log_message('info', "Insung::getOrderList - Response[1] Type: " . gettype($result[1]));
+        //         if (is_array($result[1])) {
+        //             log_message('info', "Insung::getOrderList - Response[1] Array Count: " . count($result[1]));
+        //             // 첫 번째 주문 항목만 샘플로 로그 출력
+        //             if (isset($result[1][0])) {
+        //                 log_message('info', "Insung::getOrderList - Response[1][0] Sample: " . json_encode($result[1][0], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        //             }
+        //         } elseif (is_object($result[1])) {
+        //             log_message('info', "Insung::getOrderList - Response[1] Object: " . json_encode($result[1], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        //         }
+        //     }
+        // } elseif (is_object($result)) {
+        //     log_message('info', "Insung::getOrderList - Response Object: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        // }
+        
+        if (!$result) {
+            return [
+                'success' => false,
+                'data' => null,
+                'message' => 'API 호출 실패'
+            ];
+        }
+        
+        // 응답이 배열인 경우 첫 번째 요소 확인
+        if (is_array($result) && isset($result[0])) {
+            $code = $result[0]->code ?? $result[0]['code'] ?? '';
+            $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
+            
+            log_message('info', "InsungApiService::getOrderList - 응답 코드: {$code}, 메시지: {$msg}");
+            
+            if ($code === '1000') {
+                log_message('info', "InsungApiService::getOrderList - 성공: 데이터 반환, 배열 크기=" . (is_array($result) ? count($result) : 'N/A'));
+                // 성공 시 주문 목록 데이터 반환
+                // log_message('info', "Insung::getOrderList - Success, returning data. Data structure: " . json_encode([
+                //     'is_array' => is_array($result),
+                //     'count' => is_array($result) ? count($result) : 'N/A',
+                //     'has_index_0' => isset($result[0]),
+                //     'has_index_1' => isset($result[1]),
+                //     'index_1_type' => isset($result[1]) ? gettype($result[1]) : 'N/A',
+                //     'index_1_count' => (isset($result[1]) && is_array($result[1])) ? count($result[1]) : 'N/A'
+                // ], JSON_UNESCAPED_UNICODE));
+                
+                return [
+                    'success' => true,
+                    'data' => $result,
+                    'message' => '주문 목록 조회 성공'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => "주문 목록 조회 실패: [{$code}] {$msg}"
+                ];
+            }
+        }
+        
+        return [
+            'success' => false,
+            'data' => null,
+            'message' => '응답 형식 오류'
+        ];
+    }
+
+    /**
      * 주소로부터 좌표 조회 (인성 API /api/axis/address/)
      * 루비 버전 참조: $s_fulladdr && !$s_lon && !$s_lat일 때 호출
      * 
@@ -1105,14 +1419,23 @@ class InsungApiService
             }
         }
         
-        if (!empty($lon) && !empty($lat)) {
+        // 좌표 유효성 검사: "0"은 유효하지 않은 좌표로 간주
+        // 개발서버에서 주소를 찾지 못하면 "0"으로 반환되는 경우가 있음
+        $lonNum = floatval($lon);
+        $latNum = floatval($lat);
+        
+        if (!empty($lon) && !empty($lat) && $lonNum > 0 && $latNum > 0) {
             log_message('info', "Insung::getAddressCoordinates - Coordinates found: lon={$lon}, lat={$lat}");
             return [
                 'lon' => $lon,
                 'lat' => $lat
             ];
         } else {
-            log_message('warning', "Insung::getAddressCoordinates - Coordinate data not found in response structure. Response: " . json_encode($result));
+            if ($lonNum == 0 || $latNum == 0) {
+                log_message('warning', "Insung::getAddressCoordinates - Invalid coordinates (0,0) returned for address. Address may not be found in geocoding database.");
+            } else {
+                log_message('warning', "Insung::getAddressCoordinates - Coordinate data not found in response structure. Response: " . json_encode($result));
+            }
             return false;
         }
     }

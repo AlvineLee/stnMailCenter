@@ -136,7 +136,7 @@ class Service extends BaseController
         }
         
         $data = [
-            'title' => "STN Network - 이사짐화물(소형)",
+            'title' => "DaumData - 이사짐화물(소형)",
             'content_header' => [
                 'title' => '이사짐화물(소형)',
                 'description' => "주문을 접수해주세요"
@@ -332,7 +332,7 @@ class Service extends BaseController
         }
         
         $data = [
-            'title' => "STN Network - {$serviceName}",
+            'title' => "DaumData - {$serviceName}",
             'content_header' => [
                 'title' => $serviceName,
                 'description' => "주문을 접수해주세요"
@@ -573,13 +573,25 @@ class Service extends BaseController
                     $token = session()->get('token');
                     $userId = session()->get('user_id');
                     
-                    // STN 로그인인 경우 (mcode, cccode가 없는 경우) 기본값 사용
-                    $isStnLogin = empty($mCode) || empty($ccCode);
-                    if ($isStnLogin) {
-                        $mCode = '4540';
-                        $ccCode = '7829';
-                        $userId = '에스티엔온라인접수'; // STN 로그인 시 고정 user_id
-                        log_message('info', "STN login detected - Using default mcode={$mCode}, cccode={$ccCode}, user_id={$userId}");
+                    // m_code, cc_code가 없는 경우 처리 (슈퍼유저 또는 서브도메인 접근)
+                    if (empty($mCode) || empty($ccCode)) {
+                        // 서브도메인 기반으로 조회 시도
+                        $subdomainConfig = config('Subdomain');
+                        $apiCodes = $subdomainConfig->getCurrentApiCodes();
+                        
+                        if ($apiCodes && !empty($apiCodes['m_code']) && !empty($apiCodes['cc_code'])) {
+                            // 서브도메인에서 조회 성공
+                            $mCode = $apiCodes['m_code'];
+                            $ccCode = $apiCodes['cc_code'];
+                            $subdomain = $subdomainConfig->getCurrentSubdomain();
+                            log_message('info', "Subdomain access detected ({$subdomain}) - Using mcode={$mCode}, cccode={$ccCode}");
+                        } else {
+                            // 서브도메인 조회 실패 시 기본값 사용 (STN 로그인)
+                            $mCode = '4540';
+                            $ccCode = '7829';
+                            $userId = '에스티엔온라인접수'; // STN 로그인 시 고정 user_id
+                            log_message('info', "STN login detected - Using default mcode={$mCode}, cccode={$ccCode}, user_id={$userId}");
+                        }
                     }
                     
                     // api_idx 조회 (mcode, cccode로 조회)

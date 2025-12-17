@@ -777,30 +777,147 @@ function renderSegmentTable() {
     
     distanceSegments.forEach((segment, index) => {
         const key = `${segment.start}_${segment.dest}`;
-        const pricing = segmentPricingData[key] || {};
+        const pricing = segmentPricingData[key] || {
+            truck_base_price: 0,
+            bike_calc_type: 'fixed',
+            bike_value: 0,
+            damas_calc_type: 'fixed',
+            damas_value: 0,
+            labo_calc_type: 'fixed',
+            labo_value: 0
+        };
         
         const row = document.createElement('tr');
         row.className = `segment-table-row ${currentSelectedSegmentIndex === index ? 'active' : ''}`;
         row.onclick = () => selectSegment(index);
         
+        // 트럭 기본 요금
+        const truckBasePrice = pricing.truck_base_price > 0 ? formatNumberWithComma(pricing.truck_base_price) : '';
+        // 오토바이
+        const bikeValue = pricing.bike_value > 0 ? (pricing.bike_calc_type === 'percent' ? pricing.bike_value : formatNumberWithComma(pricing.bike_value)) : '';
+        const bikeUnit = pricing.bike_calc_type === 'percent' ? '%' : '원';
+        // 다마스
+        const damasValue = pricing.damas_value > 0 ? (pricing.damas_calc_type === 'percent' ? pricing.damas_value : formatNumberWithComma(pricing.damas_value)) : '';
+        const damasUnit = pricing.damas_calc_type === 'percent' ? '%' : '원';
+        // 라보
+        const laboValue = pricing.labo_value > 0 ? (pricing.labo_calc_type === 'percent' ? pricing.labo_value : formatNumberWithComma(pricing.labo_value)) : '';
+        const laboUnit = pricing.labo_calc_type === 'percent' ? '%' : '원';
+        
         row.innerHTML = `
             <td class="px-4 py-2">${index + 1}</td>
             <td class="px-4 py-2 font-medium">${segment.start} ~ ${segment.dest} km</td>
-            <td class="px-4 py-2">${(pricing.truck_base_price || 0).toLocaleString()}원</td>
-            <td class="px-4 py-2">${pricing.bike_calc_type === 'percent' ? (pricing.bike_value || 0) + '%' : (pricing.bike_value || 0).toLocaleString() + '원'}</td>
-            <td class="px-4 py-2">${pricing.damas_calc_type === 'percent' ? (pricing.damas_value || 0) + '%' : (pricing.damas_value || 0).toLocaleString() + '원'}</td>
-            <td class="px-4 py-2">${pricing.labo_calc_type === 'percent' ? (pricing.labo_value || 0) + '%' : (pricing.labo_value || 0).toLocaleString() + '원'}</td>
+            <td class="px-4 py-2">
+                <div class="flex items-center gap-1">
+                    <input type="text" 
+                           class="form-input currency-input w-full text-xs" 
+                           value="${truckBasePrice}"
+                           placeholder="0"
+                           oninput="formatNumberInput(this)"
+                           onblur="formatCurrencyInput(this)"
+                           onclick="event.stopPropagation()"
+                           data-segment-index="${index}"
+                           data-field="truck_base_price">
+                    <span class="text-xs text-gray-700 whitespace-nowrap">원</span>
+                </div>
+            </td>
+            <td class="px-4 py-2">
+                <div class="flex items-center gap-1">
+                    <input type="text" 
+                           class="form-input currency-input w-full text-xs" 
+                           value="${bikeValue}"
+                           placeholder="0"
+                           oninput="formatBikeDamasLaboInput(this)"
+                           onblur="formatBikeDamasLaboBlur(this)"
+                           onclick="event.stopPropagation()"
+                           data-segment-index="${index}"
+                           data-field="bike_value"
+                           data-calc-type="${pricing.bike_calc_type}">
+                    <span class="text-xs text-gray-700 whitespace-nowrap">${bikeUnit}</span>
+                </div>
+            </td>
+            <td class="px-4 py-2">
+                <div class="flex items-center gap-1">
+                    <input type="text" 
+                           class="form-input currency-input w-full text-xs" 
+                           value="${damasValue}"
+                           placeholder="0"
+                           oninput="formatBikeDamasLaboInput(this)"
+                           onblur="formatBikeDamasLaboBlur(this)"
+                           onclick="event.stopPropagation()"
+                           data-segment-index="${index}"
+                           data-field="damas_value"
+                           data-calc-type="${pricing.damas_calc_type}">
+                    <span class="text-xs text-gray-700 whitespace-nowrap">${damasUnit}</span>
+                </div>
+            </td>
+            <td class="px-4 py-2">
+                <div class="flex items-center gap-1">
+                    <input type="text" 
+                           class="form-input currency-input w-full text-xs" 
+                           value="${laboValue}"
+                           placeholder="0"
+                           oninput="formatBikeDamasLaboInput(this)"
+                           onblur="formatBikeDamasLaboBlur(this)"
+                           onclick="event.stopPropagation()"
+                           data-segment-index="${index}"
+                           data-field="labo_value"
+                           data-calc-type="${pricing.labo_calc_type}">
+                    <span class="text-xs text-gray-700 whitespace-nowrap">${laboUnit}</span>
+                </div>
+            </td>
             <td class="px-4 py-2 text-center">
                 <button type="button" 
-                        onclick="event.stopPropagation(); removeDistanceSegment(${index})" 
-                        class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs">
-                    삭제
+                        onclick="event.stopPropagation(); applySegmentPricing(${index})" 
+                        class="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">
+                    적용
                 </button>
             </td>
         `;
         
         tbody.appendChild(row);
     });
+}
+
+// 구간별 요금 적용 (테이블에서 직접 수정한 값 저장)
+function applySegmentPricing(index) {
+    if (index < 0 || index >= distanceSegments.length) return;
+    
+    const segment = distanceSegments[index];
+    const key = `${segment.start}_${segment.dest}`;
+    
+    // 테이블의 입력 필드에서 값 가져오기
+    const truckBasePriceInput = document.querySelector(`input[data-segment-index="${index}"][data-field="truck_base_price"]`);
+    const bikeValueInput = document.querySelector(`input[data-segment-index="${index}"][data-field="bike_value"]`);
+    const damasValueInput = document.querySelector(`input[data-segment-index="${index}"][data-field="damas_value"]`);
+    const laboValueInput = document.querySelector(`input[data-segment-index="${index}"][data-field="labo_value"]`);
+    
+    // 기존 calc_type 유지 (테이블에는 표시하지 않지만 메모리에는 저장되어 있음)
+    const existingPricing = segmentPricingData[key] || {
+        bike_calc_type: 'fixed',
+        damas_calc_type: 'fixed',
+        labo_calc_type: 'fixed'
+    };
+    
+    // 메모리에 저장 (컴마 제거하여 숫자로 변환)
+    segmentPricingData[key] = {
+        truck_base_price: parseInt(removeComma(truckBasePriceInput?.value || '')) || 0,
+        bike_calc_type: existingPricing.bike_calc_type,
+        bike_value: parseFloat(removeComma(bikeValueInput?.value || '')) || 0,
+        damas_calc_type: existingPricing.damas_calc_type,
+        damas_value: parseFloat(removeComma(damasValueInput?.value || '')) || 0,
+        labo_calc_type: existingPricing.labo_calc_type,
+        labo_value: parseFloat(removeComma(laboValueInput?.value || '')) || 0
+    };
+    
+    // 테이블 다시 렌더링 (적용된 값으로 업데이트)
+    renderSegmentTable();
+    
+    // 현재 선택된 구간이면 패널도 업데이트
+    if (currentSelectedSegmentIndex === index) {
+        showPricingPanel(segment);
+    }
+    
+    alert('요금이 적용되었습니다.');
 }
 
 // 거리로 구간 검색

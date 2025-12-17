@@ -76,10 +76,10 @@ if (session()->get('is_logged_in')) {
                 </label>
             </div>
             <div class="flex space-x-2">
-                <button type="button" id="recent_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                <button type="button" id="recent_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=S') ?>', 'RECENT_S', 750, 500)">
                     최근접수내역
                 </button>
-                <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                <button type="button" id="bookmark_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/popup?type=S') ?>', 'BOOKMARK_S', 750, 500)">
                     즐겨찾기
                 </button>
             </div>
@@ -168,10 +168,10 @@ if (session()->get('is_logged_in')) {
                 </label>
             </div>
             <div class="flex space-x-2">
-                <button type="button" id="recent_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                <button type="button" id="recent_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=D') ?>', 'RECENT_D', 750, 500)">
                     최근접수내역
                 </button>
-                <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                <button type="button" id="bookmark_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/popup?type=D') ?>', 'BOOKMARK_D', 750, 500)">
                     즐겨찾기
                 </button>
             </div>
@@ -681,16 +681,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 최근접수내역 버튼 클릭 이벤트
+    // 팝업 열기 함수
+    function select_pop(url, name, w, h) {
+        if (window.innerWidth < w) {
+            w = window.innerWidth - 20;
+        }
+        var options = 'top=10, left=10, width=' + w + ', height=' + h + ', status=no, menubar=no, toolbar=no, resizable=no, scrollbars=yes';
+        window.open(url, name, options);
+    }
+    
+    // 전역 함수로 등록 (팝업에서 호출 가능하도록)
+    window.select_pop = select_pop;
+    
+    // 최근접수내역 버튼 클릭 이벤트 (onclick이 없을 때만)
     const recentDepartureBtn = document.getElementById('recent_departure_btn');
-    if (recentDepartureBtn) {
+    if (recentDepartureBtn && !recentDepartureBtn.onclick) {
         recentDepartureBtn.addEventListener('click', function() {
             loadDepartureInfo();
         });
     }
     
     const recentDestinationBtn = document.getElementById('recent_destination_btn');
-    if (recentDestinationBtn) {
+    if (recentDestinationBtn && !recentDestinationBtn.onclick) {
         recentDestinationBtn.addEventListener('click', function() {
             loadDestinationInfo();
         });

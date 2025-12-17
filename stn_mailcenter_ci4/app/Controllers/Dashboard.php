@@ -30,6 +30,12 @@ class Dashboard extends BaseController
             return redirect()->to('/auth/login');
         }
         
+        // 서브도메인 접근 권한 체크
+        $subdomainCheck = $this->checkSubdomainAccess();
+        if ($subdomainCheck !== true) {
+            return $subdomainCheck;
+        }
+        
         $loginType = session()->get('login_type');
         $userRole = session()->get('user_role');
         $userType = session()->get('user_type');
@@ -79,7 +85,7 @@ class Dashboard extends BaseController
         ];
         
         $data = [
-            'title' => 'STN Network - 대시보드',
+            'title' => 'DaumData - 대시보드',
             'content_header' => [
                 'title' => '대시보드',
                 'description' => '전체 현황을 한눈에 확인하세요'
@@ -192,7 +198,7 @@ class Dashboard extends BaseController
         }
         
         $data = [
-            'title' => 'STN Network - 주문조회',
+            'title' => 'DaumData - 주문조회',
             'content_header' => [
                 'title' => '주문조회',
                 'description' => '접수된 주문을 확인하세요'

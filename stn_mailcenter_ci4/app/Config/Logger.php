@@ -39,7 +39,27 @@ class Logger extends BaseConfig
      *
      * @var int|list<int>
      */
-    public $threshold = (ENVIRONMENT === 'production') ? 4 : 9;
+    public $threshold = 9; // 기본값: 모든 로그 출력 (0=OFF, 1=Emergency, 2=Alert, 3=Critical, 4=Error, 5=Warning, 6=Notice, 7=Info, 8=Debug, 9=All)
+    
+    public function __construct()
+    {
+        parent::__construct();
+        
+        // 환경별 로그 레벨 설정
+        switch (ENVIRONMENT) {
+            case 'production':
+                $this->threshold = 4;   // 운영: Error 이상만 로그 (INFO, DEBUG 제외)
+                break;
+            case 'development':
+                $this->threshold = 9;  // 개발서버: 모든 로그 출력
+                break;
+            case 'local':
+                $this->threshold = 9;  // 로컬: 모든 로그 출력
+                break;
+            default:
+                $this->threshold = 9;  // 기본값: 모든 로그 출력
+        }
+    }
 
     /**
      * --------------------------------------------------------------------------

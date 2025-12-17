@@ -31,7 +31,8 @@ class PaginationHelper
             return '';
         }
 
-        return $this->renderFullPagination($totalPages);
+        // URL 링크 방식 사용 (goToPage 함수 불필요)
+        return $this->renderWithCurrentStyle();
     }
     
     /**

@@ -8,16 +8,30 @@
         <div class="search-filter-container">
             <div class="search-filter-item">
                 <label class="search-filter-label">고객사</label>
-                <select name="comp_code" id="comp_code_select" class="search-filter-select">
-                    <option value="all" <?= ($comp_code_filter ?? 'all') === 'all' ? 'selected' : '' ?>>전체 (<?= number_format($total_company_count ?? 0) ?>)</option>
-                    <?php if (!empty($company_list)): ?>
-                        <?php foreach ($company_list as $company): ?>
-                            <option value="<?= esc($company['comp_code']) ?>" <?= ($comp_code_filter ?? 'all') === $company['comp_code'] ? 'selected' : '' ?>>
-                                <?= esc($company['comp_name'] ?? $company['comp_code']) ?> (<?= number_format($company['user_count'] ?? 0) ?>)
+                <select name="comp_code" id="comp_code_select" class="search-filter-select" <?= ($is_subdomain_access ?? false) ? 'disabled' : '' ?>>
+                    <?php if ($is_subdomain_access ?? false): ?>
+                        <!-- 서브도메인 접근 시 해당 고객사만 표시 -->
+                        <?php if (!empty($company_list) && count($company_list) > 0): ?>
+                            <?php $subdomainCompany = $company_list[0]; ?>
+                            <option value="<?= esc($subdomainCompany['comp_code']) ?>" selected>
+                                <?= esc($subdomainCompany['comp_name'] ?? $subdomainCompany['comp_code']) ?> (<?= number_format($subdomainCompany['user_count'] ?? 0) ?>)
                             </option>
-                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <!-- 메인도메인 접근 시 전체 고객사 표시 -->
+                        <option value="all" <?= ($comp_code_filter ?? 'all') === 'all' ? 'selected' : '' ?>>전체 (<?= number_format($total_company_count ?? 0) ?>)</option>
+                        <?php if (!empty($company_list)): ?>
+                            <?php foreach ($company_list as $company): ?>
+                                <option value="<?= esc($company['comp_code']) ?>" <?= ($comp_code_filter ?? 'all') === $company['comp_code'] ? 'selected' : '' ?>>
+                                    <?= esc($company['comp_name'] ?? $company['comp_code']) ?> (<?= number_format($company['user_count'] ?? 0) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </select>
+                <?php if ($is_subdomain_access ?? false): ?>
+                    <input type="hidden" name="comp_code" value="<?= esc($subdomain_comp_code ?? '') ?>">
+                <?php endif; ?>
             </div>
             <div class="search-filter-item">
                 <label class="search-filter-label">회사명</label>
@@ -75,17 +89,9 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
-                    <?php 
-                    // 역순 번호 계산 (전체 개수에서 현재 페이지의 시작 인덱스를 빼고, 현재 항목의 인덱스를 뺌)
-                    $totalCount = $pagination['total_count'] ?? 0;
-                    $currentPage = $pagination['current_page'] ?? 1;
-                    $perPage = $pagination['per_page'] ?? 20;
-                    $startNumber = $totalCount - (($currentPage - 1) * $perPage);
-                    $rowNumber = $startNumber;
-                    foreach ($user_list as $user): 
-                    ?>
+                    <?php foreach ($user_list as $user): ?>
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2 text-sm text-center"><?= $rowNumber-- ?></td>
+                        <td class="px-4 py-2 text-sm text-center"><?= esc($user['row_number'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm" style="word-break: break-all;"><?= esc($user['user_id'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm"><?= esc($user['user_name'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm"><?= esc($user['user_dept'] ?? '-') ?></td>
@@ -93,16 +99,8 @@
                         <td class="px-4 py-2 text-sm"><?= esc($user['user_tel1'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm" style="word-break: break-all;"><?= esc($user['user_addr'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm">
-                            <?php
-                            $userTypeLabels = [
-                                '1' => '메인 사이트 관리자',
-                                '3' => '콜센터 관리자',
-                                '5' => '일반 고객'
-                            ];
-                            $userType = $user['user_type'] ?? '5';
-                            ?>
-                            <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
-                                <?= $userTypeLabels[$userType] ?? '일반 고객' ?>
+                            <span class="px-2 py-1 text-xs rounded <?= esc($user['user_type_class'] ?? 'bg-blue-100 text-blue-800') ?>">
+                                <?= esc($user['user_type_label'] ?? '일반 고객') ?>
                             </span>
                         </td>
                     </tr>
@@ -114,25 +112,8 @@
     </div>
 
     <!-- 페이지네이션 -->
-    <?php if (isset($pagination) && $pagination && $pagination['total_pages'] > 1): ?>
-    <?php
-    // 공통 페이징 라이브러리 사용
-    $paginationHelper = new \App\Libraries\PaginationHelper(
-        $pagination['total_count'],
-        $pagination['per_page'],
-        $pagination['current_page'],
-        base_url('insung/user-list'),
-        array_filter([
-            'comp_code' => ($comp_code_filter ?? 'all') !== 'all' ? $comp_code_filter : null,
-            'comp_name' => !empty($comp_name) ? $comp_name : null,
-            'user_id' => !empty($user_id) ? $user_id : null,
-            'user_name' => !empty($user_name) ? $user_name : null
-        ], function($value) {
-            return $value !== null && $value !== '';
-        })
-    );
-    echo $paginationHelper->renderWithCurrentStyle();
-    ?>
+    <?php if (isset($pagination_helper) && $pagination_helper && ($pagination['total_pages'] ?? 1) > 1): ?>
+        <?= $pagination_helper->renderWithCurrentStyle() ?>
     <?php endif; ?>
 </div>
 
@@ -153,20 +134,39 @@
                     <div class="search-filter-container" style="display: flex; flex-wrap: nowrap !important; gap: 8px; align-items: center; width: 100%;">
                         <div class="search-filter-item" style="flex: 0 0 auto; display: flex; align-items: center; gap: 6px;">
                             <label class="search-filter-label" style="margin: 0; white-space: nowrap; font-size: 12px;">고객사</label>
-                            <select name="comp_no" id="insung_comp_no_select" class="search-filter-select" style="min-width: 160px; width: 160px;">
-                                <option value="">전체</option>
-                                <?php if (!empty($company_list)): ?>
-                                    <?php foreach ($company_list as $company): ?>
-                                        <option value="<?= esc($company['comp_code']) ?>"
-                                            data-m-code="<?= esc($company['m_code'] ?? '') ?>"
-                                            data-cc-code="<?= esc($company['cc_code'] ?? '') ?>"
-                                            data-token="<?= esc($company['token'] ?? '') ?>"
-                                            data-api-idx="<?= esc($company['api_idx'] ?? '') ?>">
-                                            <?= esc($company['comp_name'] ?? $company['comp_code']) ?> (<?= number_format($company['user_count'] ?? 0) ?>)
+                            <select name="comp_no" id="insung_comp_no_select" class="search-filter-select" style="min-width: 160px; width: 160px;" <?= ($is_subdomain_access ?? false) ? 'disabled' : '' ?>>
+                                <?php if ($is_subdomain_access ?? false): ?>
+                                    <!-- 서브도메인 접근 시 해당 고객사만 표시 -->
+                                    <?php if (!empty($company_list) && count($company_list) > 0): ?>
+                                        <?php $subdomainCompany = $company_list[0]; ?>
+                                        <option value="<?= esc($subdomainCompany['comp_code']) ?>" 
+                                            data-m-code="<?= esc($subdomain_api_codes['m_code'] ?? $subdomainCompany['m_code'] ?? '') ?>"
+                                            data-cc-code="<?= esc($subdomain_api_codes['cc_code'] ?? $subdomainCompany['cc_code'] ?? '') ?>"
+                                            data-token="<?= esc($subdomainCompany['token'] ?? '') ?>"
+                                            data-api-idx="<?= esc($subdomainCompany['api_idx'] ?? '') ?>"
+                                            selected>
+                                            <?= esc($subdomainCompany['comp_name'] ?? $subdomainCompany['comp_code']) ?> (<?= number_format($subdomainCompany['user_count'] ?? 0) ?>)
                                         </option>
-                                    <?php endforeach; ?>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <!-- 메인도메인 접근 시 전체 고객사 표시 -->
+                                    <option value="">전체</option>
+                                    <?php if (!empty($company_list)): ?>
+                                        <?php foreach ($company_list as $company): ?>
+                                            <option value="<?= esc($company['comp_code']) ?>"
+                                                data-m-code="<?= esc($company['m_code'] ?? '') ?>"
+                                                data-cc-code="<?= esc($company['cc_code'] ?? '') ?>"
+                                                data-token="<?= esc($company['token'] ?? '') ?>"
+                                                data-api-idx="<?= esc($company['api_idx'] ?? '') ?>">
+                                                <?= esc($company['comp_name'] ?? $company['comp_code']) ?> (<?= number_format($company['user_count'] ?? 0) ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </select>
+                            <?php if ($is_subdomain_access ?? false): ?>
+                                <input type="hidden" name="comp_no" id="insung_comp_no_hidden" value="<?= esc($subdomain_comp_code ?? '') ?>">
+                            <?php endif; ?>
                         </div>
                         <div class="search-filter-item" style="flex: 0 0 auto; display: flex; align-items: center; gap: 6px;">
                             <label class="search-filter-label" style="margin: 0; white-space: nowrap; font-size: 12px;">회사명</label>
@@ -234,7 +234,14 @@ function openInsungMemberSearch() {
     
     // 레이어팝업 검색 폼에 값 설정
     const insungCompNoSelect = document.getElementById('insung_comp_no_select');
-    if (insungCompNoSelect && mainCompCode && mainCompCode !== 'all') {
+    const insungCompNoHidden = document.getElementById('insung_comp_no_hidden');
+    
+    // 서브도메인 접근 시 hidden 필드 값 사용
+    if (insungCompNoHidden && insungCompNoHidden.value) {
+        if (insungCompNoSelect) {
+            insungCompNoSelect.value = insungCompNoHidden.value;
+        }
+    } else if (insungCompNoSelect && mainCompCode && mainCompCode !== 'all') {
         insungCompNoSelect.value = mainCompCode;
     }
     document.getElementById('insung_comp_name').value = mainCompName;
@@ -284,13 +291,17 @@ function searchInsungMembers(event, page = 1) {
     }
     
     // comp_no는 고객사 선택 드롭다운에서 선택한 comp_code 값 (tbl_company_list.comp_code)
+    // 서브도메인 접근 시 hidden 필드 우선 사용
+    const compNoHidden = document.getElementById('insung_comp_no_hidden');
     const compNoSelect = document.getElementById('insung_comp_no_select');
-    if (!compNoSelect) {
-        alert('고객사 선택 드롭다운을 찾을 수 없습니다.');
-        return;
-    }
     
-    const compNo = compNoSelect.value || '';
+    let compNo = '';
+    if (compNoHidden && compNoHidden.value) {
+        // 서브도메인 접근 시 hidden 필드 값 사용
+        compNo = compNoHidden.value;
+    } else if (compNoSelect) {
+        compNo = compNoSelect.value || '';
+    }
     
     // comp_no가 비어있으면 에러
     if (!compNo || compNo === '') {

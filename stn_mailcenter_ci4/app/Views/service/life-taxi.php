@@ -125,7 +125,7 @@
 <!-- 다음 주소검색 API -->
 <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <!-- 카카오맵 API -->
-<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=932d8ce409bcb8c51cf815a322fcd423&libraries=services"></script>
+<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=<?= getenv('KAKAO_MAP_API_KEY') ?? 'a2180855daef22f5e4386a9ee1ea78b7' ?>&libraries=services"></script>
 
 <script>
 // 전역 변수
@@ -143,31 +143,46 @@ let driverBlinkInterval = null; // 기사 마커 깜빡임 인터벌
 function initMap() {
     // 카카오맵 API가 로드되었는지 확인
     if (typeof kakao === 'undefined' || typeof kakao.maps === 'undefined') {
-        // console.error('카카오맵 API가 로드되지 않았습니다.');
+        console.error('카카오맵 API가 로드되지 않았습니다. API 키를 확인하세요.');
         setTimeout(initMap, 100); // 100ms 후 재시도
         return;
     }
     
     const container = document.getElementById('map');
     if (!container) {
-        // console.error('지도 컨테이너를 찾을 수 없습니다.');
+        console.error('지도 컨테이너를 찾을 수 없습니다. #map 요소가 존재하는지 확인하세요.');
         return;
     }
     
-    const options = {
-        center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울시청 기본 위치
-        level: 3
-    };
+    // 지도 컨테이너 크기 확인
+    const containerRect = container.getBoundingClientRect();
+    if (containerRect.width === 0 || containerRect.height === 0) {
+        console.warn('지도 컨테이너 크기가 0입니다. CSS를 확인하세요.', {
+            width: containerRect.width,
+            height: containerRect.height
+        });
+    }
     
-    map = new kakao.maps.Map(container, options);
-    geocoder = new kakao.maps.services.Geocoder();
-    
-    // console.log('지도 초기화 완료');
-    
-    // 지도 초기화 성공 후 위치 가져오기 (200ms 지연)
-    setTimeout(function() {
-        getCurrentLocation();
-    }, 200);
+    try {
+        const options = {
+            center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울시청 기본 위치
+            level: 3
+        };
+        
+        map = new kakao.maps.Map(container, options);
+        geocoder = new kakao.maps.services.Geocoder();
+        
+        console.log('지도 초기화 완료');
+        
+        // 지도 초기화 성공 후 위치 가져오기 (200ms 지연)
+        setTimeout(function() {
+            getCurrentLocation();
+        }, 200);
+    } catch (error) {
+        console.error('지도 초기화 중 오류 발생:', error);
+        console.error('API 키:', '<?= getenv('KAKAO_MAP_API_KEY') ?? 'NOT_SET' ?>');
+        console.error('현재 도메인:', window.location.hostname);
+    }
 }
 
 // 현재 위치 가져오기
@@ -934,8 +949,18 @@ function closeDriverInfo(event) {
 // 페이지 로드 시 초기화 (카카오맵 API 로드 대기)
 function waitForKakaoMap() {
     if (typeof kakao !== 'undefined' && typeof kakao.maps !== 'undefined') {
+        console.log('카카오맵 API 로드 완료');
         initMap();
     } else {
+        // 5초 후에도 로드되지 않으면 오류 메시지 표시
+        if (!window.kakaoMapLoadTimeout) {
+            window.kakaoMapLoadTimeout = setTimeout(function() {
+                console.error('카카오맵 API가 5초 내에 로드되지 않았습니다.');
+                console.error('API 키:', '<?= getenv('KAKAO_MAP_API_KEY') ?? 'NOT_SET' ?>');
+                console.error('현재 도메인:', window.location.hostname);
+                console.error('카카오 개발자 센터에 도메인이 등록되어 있는지 확인하세요.');
+            }, 5000);
+        }
         setTimeout(waitForKakaoMap, 100);
     }
 }

@@ -39,13 +39,14 @@ class DeliveryModel extends Model
         $builder = $this->db->table('tbl_orders o');
         
         // tbl_orders의 모든 필드 선택
+        // 인성 API 주문의 경우 customer_name을 tbl_company_list에서 가져오기
         $builder->select('
             o.*,
             st.service_name,
             st.service_code,
             st.service_category,
-            ch.customer_name,
-            u.real_name as user_name,
+            COALESCE(ch.customer_name, cl_ch.comp_name) as customer_name,
+            COALESCE(u.real_name, u_list.user_name) as user_name,
             oq.delivery_method,
             oq.urgency_level,
             oq.delivery_instructions,
@@ -60,21 +61,232 @@ class DeliveryModel extends Model
         ');
         
         $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+        // customer_id JOIN: 인성 API 주문은 comp_code를 통해, 일반 주문은 customer_id를 통해
         $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
+        // 인성 API 주문과 일반 주문 모두를 위한 JOIN (필터링에서도 사용)
+        $builder->join('tbl_users_list u_list', 'o.user_id = u_list.idx', 'left');
+        $builder->join('tbl_company_list cl_ch', 'u_list.user_company = cl_ch.comp_code', 'left');
+        // 일반 주문의 경우 tbl_users를 통해 user_name 가져오기
         $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
         $builder->join('tbl_orders_quick oq', 'o.id = oq.order_id', 'left');
         
-        // daumdata 로그인 필터링 (cc_code 또는 comp_name)
-        if (isset($filters['cc_code']) && $filters['cc_code']) {
+        // 서브도메인 기반 필터링 (최우선)
+        $hasSubdomainFilter = isset($filters['subdomain_comp_code']) && $filters['subdomain_comp_code'];
+        
+        if ($hasSubdomainFilter) {
+            // 서브도메인으로 접근한 경우 해당 고객사만 조회
+            $subdomainCompCode = $filters['subdomain_comp_code'];
+            
+            // comp_code로 comp_name 조회
+            $compNameBuilder = $this->db->table('tbl_company_list');
+            $compNameBuilder->select('comp_name');
+            $compNameBuilder->where('comp_code', $subdomainCompCode);
+            $compNameQuery = $compNameBuilder->get();
+            $subdomainCompName = null;
+            if ($compNameQuery !== false) {
+                $compNameResult = $compNameQuery->getRowArray();
+                if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                    $subdomainCompName = $compNameResult['comp_name'];
+                }
+            }
+            
+            // 서브도메인 필터 적용 (항상 적용)
+            if ($subdomainCompName) {
+                $builder->groupStart()
+                    ->groupStart()
+                        ->where('o.order_system', 'insung')
+                        ->where('u_list.user_company', $subdomainCompCode)
+                    ->groupEnd()
+                    ->orGroupStart()
+                        ->groupStart()
+                            ->where('o.order_system IS NULL', null, true)
+                            ->orWhere('o.order_system !=', 'insung')
+                        ->groupEnd()
+                        ->where('o.company_name', $subdomainCompName)
+                    ->groupEnd()
+                ->groupEnd();
+            } else {
+                // comp_name 조회 실패 시 comp_code로만 필터링
+                $builder->groupStart()
+                    ->groupStart()
+                        ->where('o.order_system', 'insung')
+                        ->where('u_list.user_company', $subdomainCompCode)
+                    ->groupEnd()
+                ->groupEnd();
+            }
+            
+            // 서브도메인 필터가 있을 때 user_type별 추가 필터링
+            if (isset($filters['user_type'])) {
+                if ($filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
+                    // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
+                    // 인성 API 주문: u_list.user_company로 필터링
+                    // 일반 주문: o.company_name으로 필터링 (comp_code로 comp_name 조회 필요)
+                    $compNameBuilder = $this->db->table('tbl_company_list');
+                    $compNameBuilder->select('comp_name');
+                    $compNameBuilder->where('comp_code', $filters['user_company']);
+                    $compNameQuery = $compNameBuilder->get();
+                    $userCompName = null;
+                    if ($compNameQuery !== false) {
+                        $compNameResult = $compNameQuery->getRowArray();
+                        if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                            $userCompName = $compNameResult['comp_name'];
+                        }
+                    }
+                    
+                    if ($userCompName) {
+                        $builder->groupStart()
+                            ->groupStart()
+                                ->where('o.order_system', 'insung')
+                                ->where('u_list.user_company', $filters['user_company'])
+                            ->groupEnd()
+                            ->orGroupStart()
+                                ->groupStart()
+                                    ->where('o.order_system IS NULL', null, true)
+                                    ->orWhere('o.order_system !=', 'insung')
+                                ->groupEnd()
+                                ->where('o.company_name', $userCompName)
+                            ->groupEnd()
+                        ->groupEnd();
+                    } else {
+                        // comp_name 조회 실패 시 comp_code로만 필터링
+                        $builder->where('u_list.user_company', $filters['user_company']);
+                    }
+                } elseif ($filters['user_type'] == '5') {
+                    // user_type = 5: user_id 본인 것만
+                    // 인성 API 주문: o.user_id = user_idx (tbl_users_list.idx, 숫자)
+                    // 일반 주문: o.user_id = user_id (tbl_users.id 또는 문자열 user_id)
+                    if (isset($filters['user_idx']) && $filters['user_idx']) {
+                        // user_idx가 있으면 인성 API 주문과 일반 주문 모두 필터링
+                        $builder->groupStart()
+                            ->groupStart()
+                                ->where('o.order_system', 'insung')
+                                ->where('o.user_id', (int)$filters['user_idx']) // 숫자로 변환하여 정확한 매칭
+                            ->groupEnd();
+                        // 일반 주문도 user_idx로 필터링 (일반 주문도 user_id에 tbl_users_list.idx가 저장될 수 있음)
+                        if (isset($filters['user_id']) && $filters['user_id']) {
+                            $builder->orGroupStart()
+                                ->groupStart()
+                                    ->where('o.order_system IS NULL', null, true)
+                                    ->orWhere('o.order_system !=', 'insung')
+                                ->groupEnd()
+                                ->where('o.user_id', $filters['user_id'])
+                            ->groupEnd();
+                        }
+                        $builder->groupEnd();
+                    } elseif (isset($filters['user_id']) && $filters['user_id']) {
+                        // user_idx가 없으면 user_id로만 필터링
+                        $builder->where('o.user_id', $filters['user_id']);
+                    } else {
+                        // user_idx와 user_id가 모두 없으면 빈 결과 반환
+                        $builder->where('1', '0'); // 항상 false 조건
+                    }
+                }
+                // user_type = 1: 서브도메인 필터만 적용 (추가 필터 없음)
+            }
+        }
+        // 서브도메인 필터가 없을 때 daumdata 로그인 필터링
+        elseif (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
+            // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
+            $compNameBuilder = $this->db->table('tbl_company_list');
+            $compNameBuilder->select('comp_name');
+            $compNameBuilder->where('comp_code', $filters['user_company']);
+            $compNameQuery = $compNameBuilder->get();
+            $userCompName = null;
+            if ($compNameQuery !== false) {
+                $compNameResult = $compNameQuery->getRowArray();
+                if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                    $userCompName = $compNameResult['comp_name'];
+                }
+            }
+            
+            if ($userCompName) {
+                $builder->groupStart()
+                    ->groupStart()
+                        ->where('o.order_system', 'insung')
+                        ->where('u_list.user_company', $filters['user_company'])
+                    ->groupEnd()
+                    ->orGroupStart()
+                        ->groupStart()
+                            ->where('o.order_system IS NULL', null, true)
+                            ->orWhere('o.order_system !=', 'insung')
+                        ->groupEnd()
+                        ->where('o.company_name', $userCompName)
+                    ->groupEnd()
+                ->groupEnd();
+            } else {
+                // comp_name 조회 실패 시 comp_code로만 필터링
+                $builder->where('u_list.user_company', $filters['user_company']);
+            }
+        } elseif (isset($filters['user_type']) && $filters['user_type'] == '5') {
+            // user_type = 5: user_id 본인 것만
+            // 인성 API 주문: o.user_id = user_idx (tbl_users_list.idx, 숫자)
+            // 일반 주문: o.user_id = user_id (tbl_users.id 또는 문자열 user_id)
+            if (isset($filters['user_idx']) && $filters['user_idx']) {
+                // user_idx가 있으면 인성 API 주문과 일반 주문 모두 필터링
+                $builder->groupStart()
+                    ->groupStart()
+                        ->where('o.order_system', 'insung')
+                        ->where('o.user_id', (int)$filters['user_idx']) // 숫자로 변환하여 정확한 매칭
+                    ->groupEnd();
+                // 일반 주문도 user_idx로 필터링 (일반 주문도 user_id에 tbl_users_list.idx가 저장될 수 있음)
+                if (isset($filters['user_id']) && $filters['user_id']) {
+                    $builder->orGroupStart()
+                        ->groupStart()
+                            ->where('o.order_system IS NULL', null, true)
+                            ->orWhere('o.order_system !=', 'insung')
+                        ->groupEnd()
+                        ->where('o.user_id', $filters['user_id'])
+                    ->groupEnd();
+                }
+                $builder->groupEnd();
+            } elseif (isset($filters['user_id']) && $filters['user_id']) {
+                // user_idx가 없으면 user_id로만 필터링
+                $builder->where('o.user_id', $filters['user_id']);
+            } else {
+                // user_idx와 user_id가 모두 없으면 빈 결과 반환
+                $builder->where('1', '0'); // 항상 false 조건
+            }
+        } elseif (isset($filters['cc_code']) && $filters['cc_code']) {
             // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
-            // tbl_orders의 company_name과 tbl_company_list의 comp_name을 매칭
-            // tbl_company_list를 통해 cc_code로 필터링
-            $builder->join('tbl_company_list cl', 'o.company_name = cl.comp_name', 'inner');
-            $builder->join('tbl_cc_list ccl', 'cl.cc_idx = ccl.idx', 'inner');
-            $builder->where('ccl.cc_code', $filters['cc_code']);
+            // 인성 API 주문과 일반 주문 모두 포함
+            // WHERE 절에서 조건 분리 (JOIN은 이미 위에서 했음)
+            $builder->join('tbl_company_list cl_insung', 'u_list.user_company = cl_insung.comp_code', 'left');
+            $builder->join('tbl_company_list cl_normal', 'o.company_name = cl_normal.comp_name', 'left');
+            $builder->join('tbl_cc_list ccl_insung', 'cl_insung.cc_idx = ccl_insung.idx', 'left');
+            $builder->join('tbl_cc_list ccl_normal', 'cl_normal.cc_idx = ccl_normal.idx', 'left');
+            
+            $builder->groupStart()
+                ->groupStart()
+                    ->where('o.order_system', 'insung')
+                    ->where('ccl_insung.cc_code', $filters['cc_code'])
+                ->groupEnd()
+                ->orGroupStart()
+                    ->groupStart()
+                        ->where('o.order_system IS NULL', null, true)
+                        ->orWhere('o.order_system !=', 'insung')
+                    ->groupEnd()
+                    ->where('ccl_normal.cc_code', $filters['cc_code'])
+                ->groupEnd()
+            ->groupEnd();
         } elseif (isset($filters['comp_name']) && $filters['comp_name']) {
             // user_type = 5: 본인 고객사의 주문접수 리스트만
-            $builder->where('o.company_name', $filters['comp_name']);
+            // 인성 API 주문과 일반 주문 모두 포함
+            // JOIN은 이미 위에서 했음
+            $builder->join('tbl_company_list cl_insung', 'u_list.user_company = cl_insung.comp_code', 'left');
+            
+            $builder->groupStart()
+                ->groupStart()
+                    ->where('o.order_system', 'insung')
+                    ->where('cl_insung.comp_name', $filters['comp_name'])
+                ->groupEnd()
+                ->orGroupStart()
+                    ->groupStart()
+                        ->where('o.order_system IS NULL', null, true)
+                        ->orWhere('o.order_system !=', 'insung')
+                    ->groupEnd()
+                    ->where('o.company_name', $filters['comp_name'])
+                ->groupEnd()
+            ->groupEnd();
         } elseif (isset($filters['customer_id']) && $filters['customer_id']) {
             // STN 로그인: 기존 로직
             $builder->where('o.customer_id', $filters['customer_id']);
@@ -129,12 +341,61 @@ class DeliveryModel extends Model
             $builder->where('st.service_category', $filters['service']);
         }
         
+        // 날짜 필터: order_date가 오늘 날짜보다 같거나 큰 경우만 조회
+        $today = date('Y-m-d');
+        $builder->where('DATE(o.order_date) >=', $today);
+        
         // 총 개수 조회 (페이징용)
         $countBuilder = clone $builder;
         $totalCount = $countBuilder->countAllResults();
         
         // 정렬 및 페이징
-        $builder->orderBy('o.created_at', 'DESC');
+        // 컬럼 인덱스와 DB 필드 매핑
+        $columnFieldMap = [
+            1 => ['field' => 'o.order_date', 'secondary' => 'o.order_time'], // 접수일자
+            2 => 'o.reserve_date', // 예약일
+            3 => 'o.state', // 상태
+            4 => 'o.company_name', // 회사명
+            5 => 'o.complete_time', // 완료시간
+            6 => 'o.customer_department', // 접수부서
+            7 => 'o.customer_duty', // 접수담당
+            8 => 'o.destination_manager', // 도착지담당명
+            9 => 'o.delivery_content', // 전달내용
+            10 => 'o.item_type', // 상품
+            11 => 'o.rider_tel_number', // 라이더연락처
+            12 => 'o.order_number', // 주문번호
+            13 => 'o.departure_company_name', // 출발지고객명
+            14 => 'o.departure_manager', // 출발지담당명
+            15 => 'o.departure_dong', // 출발지동
+            16 => 'o.destination_company_name', // 도착지고객명
+            17 => 'o.destination_dong', // 도착지동
+            18 => 'o.payment_method', // 지불
+            19 => 'oq.delivery_method', // 배송
+            20 => 'o.delivery_vehicle', // 배송수단
+            21 => 'o.rider_id', // 기사번호
+            22 => 'o.rider_name' // 기사이름
+        ];
+        
+        $orderBy = $filters['order_by'] ?? null;
+        $orderDir = strtoupper($filters['order_dir'] ?? 'DESC');
+        
+        if ($orderBy && isset($columnFieldMap[$orderBy])) {
+            $sortField = $columnFieldMap[$orderBy];
+            
+            // 복합 정렬이 필요한 경우 (접수일자)
+            if (is_array($sortField) && isset($sortField['field']) && isset($sortField['secondary'])) {
+                $builder->orderBy($sortField['field'], $orderDir);
+                $builder->orderBy($sortField['secondary'], $orderDir);
+            } else {
+                // 단일 필드 정렬
+                $builder->orderBy($sortField, $orderDir);
+            }
+        } else {
+            // 기본 정렬
+            $builder->orderBy('o.order_date', 'DESC');
+            $builder->orderBy('o.order_time', 'DESC');
+        }
+        
         $offset = ($page - 1) * $perPage;
         $builder->limit($perPage, $offset);
         
@@ -148,6 +409,12 @@ class DeliveryModel extends Model
         }
         
         $orders = $query->getResultArray();
+        
+        // 순번 추가 (역순: 마지막 항목이 1번)
+        $endNum = $totalCount - (($page - 1) * $perPage);
+        foreach ($orders as $index => &$order) {
+            $order['row_number'] = $endNum - $index;
+        }
         
         // 주문 목록에 인코딩된 주문번호 추가
         foreach ($orders as &$order) {
@@ -284,6 +551,10 @@ class DeliveryModel extends Model
         // STN 로그인 주문도 인성 API 연동 시 insung_order_number가 있으므로 포함
         $builder->where('o.insung_order_number IS NOT NULL');
         $builder->where('o.insung_order_number !=', '');
+        
+        // 오늘 날짜인 주문만 연동 처리
+        $today = date('Y-m-d');
+        $builder->where('DATE(o.order_date)', $today);
         
         // 완료된 주문만 제외 (취소된 주문은 포함하여 인성 CS에서 취소 처리된 경우 상태 업데이트)
         // 취소 상태는 인성 API에서 확인하여 업데이트해야 하므로 동기화 대상에 포함

@@ -15,8 +15,49 @@ class App extends BaseConfig
      * WITH a trailing slash:
      *
      * E.g., http://example.com/
+     * 
+     * 환경별 설정:
+     * - 로컬: http://local.daumdata.com/
+     * - 개발: http://dev.daumdata.com/
+     * - 운영: https://daumdata.com/
      */
-    public string $baseURL = 'http://stnmailcenter.local/';
+    public string $baseURL = '';
+    
+    public function __construct()
+    {
+        parent::__construct();
+        
+        // 환경변수에서 baseURL 읽기, 없으면 현재 요청 호스트 기반으로 설정
+        $envBaseURL = getenv('app.baseURL') ?: getenv('APP_BASE_URL');
+        
+        if (!empty($envBaseURL)) {
+            $this->baseURL = rtrim($envBaseURL, '/') . '/';
+        } else {
+            // 현재 요청의 호스트를 기반으로 baseURL 동적 설정 (서브도메인 유지)
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            
+            if (!empty($host)) {
+                // 현재 호스트를 그대로 사용 (서브도메인 포함)
+                $this->baseURL = $protocol . '://' . $host . '/';
+            } else {
+                // 호스트를 감지할 수 없는 경우 환경별 기본값 사용
+                switch (ENVIRONMENT) {
+                    case 'local':
+                        $this->baseURL = 'http://local.daumdata.com/';
+                        break;
+                    case 'development':
+                        $this->baseURL = 'http://dev.daumdata.com/';
+                        break;
+                    case 'production':
+                        $this->baseURL = 'https://daumdata.com/';
+                        break;
+                    default:
+                        $this->baseURL = 'http://local.daumdata.com/';
+                }
+            }
+        }
+    }
 
     /**
      * Allowed Hostnames in the Site URL other than the hostname in the baseURL.

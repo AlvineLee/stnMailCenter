@@ -15,6 +15,15 @@ $routes->group('auth', function($routes) {
     $routes->get('logout', 'Auth::logout');
 });
 
+// 고객검색 관련 라우트
+$routes->group('search-company', function($routes) {
+    $routes->get('/', 'SearchCompany::index');
+    $routes->get('register', 'SearchCompany::register');
+    $routes->post('getCompanyInfo', 'SearchCompany::getCompanyInfo');
+    $routes->post('search', 'SearchCompany::search');
+    $routes->post('doRegister', 'SearchCompany::doRegister');
+});
+
 // 입점신청 관련 라우트
 $routes->group('store-registration', function($routes) {
     $routes->get('/', 'StoreRegistration::index');
@@ -82,6 +91,22 @@ $routes->group('delivery', function($routes) {
     $routes->post('updateStatus', 'Delivery::updateStatus');
     $routes->get('printWaybill', 'Delivery::printWaybill');
     $routes->post('syncInsungOrders', 'Delivery::syncInsungOrders');
+    $routes->post('saveColumnOrder', 'Delivery::saveColumnOrder');
+    $routes->get('map-view', 'Delivery::mapView');
+});
+
+// 이용내역상세조회 관련 라우트
+$routes->group('history', function($routes) {
+    $routes->get('list', 'History::list');
+    $routes->post('saveColumnOrder', 'History::saveColumnOrder');
+});
+
+// 즐겨찾기 관련 라우트
+$routes->group('bookmark', function($routes) {
+    $routes->get('popup', 'Bookmark::popup');
+    $routes->get('recent-popup', 'Bookmark::recentPopup');
+    $routes->get('organization-popup', 'Bookmark::organizationPopup');
+    $routes->post('add', 'Bookmark::add');
 });
 
 // 회원정보 관련 라우트
@@ -238,6 +263,25 @@ $routes->group('insung', function($routes) {
     $routes->post('getInsungMemberList', 'Insung::getInsungMemberList');
     $routes->post('useInsungMember', 'Insung::useInsungMember');
     $routes->post('batchUseInsungMembers', 'Insung::batchUseInsungMembers');
+});
+
+// 관리자 관련 라우트
+$routes->group('admin', function($routes) {
+    $routes->get('order-type', 'Admin::orderType');
+    $routes->get('pricing', 'Admin::pricing');
+    $routes->get('notification', 'Admin::notification');
+    $routes->get('order-list', 'Admin::orderList');
+    $routes->post('order-list-ajax', 'Admin::orderListAjax');
+    $routes->get('order-detail', 'Admin::getOrderDetail');
+    $routes->get('company-list', 'Admin::companyList');
+    $routes->post('createServiceType', 'Admin::createServiceType');
+    $routes->post('updateServiceType', 'Admin::updateServiceType');
+    $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');
+    $routes->post('deactivateAllServices', 'Admin::deactivateAllServices');
+    $routes->post('updateServiceSortOrder', 'Admin::updateServiceSortOrder');
+    $routes->post('savePricing', 'Admin::savePricing');
+    $routes->post('updateServicePermission', 'Admin::updateServicePermission');
+    $routes->post('createServicePermission', 'Admin::createServicePermission');
 });
 
 // 테스트 라우트

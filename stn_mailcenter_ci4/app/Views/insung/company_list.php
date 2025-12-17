@@ -38,9 +38,9 @@
     <div class="mb-4 px-2 md:px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div class="text-sm text-gray-700">
-                <?php if (isset($pagination) && $pagination): ?>
-                    총 <?= number_format($pagination['total_count']) ?>건 중 
-                    <?= number_format(($pagination['current_page'] - 1) * $pagination['per_page'] + 1) ?>-<?= number_format(min($pagination['current_page'] * $pagination['per_page'], $pagination['total_count'])) ?>건 표시
+                <?php if (isset($pagination_info) && $pagination_info): ?>
+                    총 <?= number_format($pagination_info['total_count']) ?>건 중 
+                    <?= number_format($pagination_info['start_item']) ?>-<?= number_format($pagination_info['end_item']) ?>건 표시
                 <?php else: ?>
                     검색 결과가 없습니다.
                 <?php endif; ?>
@@ -115,8 +115,8 @@
                         <td class="px-4 py-2 text-sm"><?= esc($company['contact_phone'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm"><?= esc($company['address'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm">
-                            <span class="px-2 py-1 text-xs rounded <?= ($company['is_active'] ?? 0) == 1 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' ?>">
-                                <?= ($company['is_active'] ?? 0) == 1 ? '활성' : '비활성' ?>
+                            <span class="px-2 py-1 text-xs rounded <?= esc($company['status_class'] ?? 'bg-gray-100 text-gray-800') ?>">
+                                <?= esc($company['status_label'] ?? '비활성') ?>
                             </span>
                         </td>
                     </tr>
@@ -128,23 +128,8 @@
     </div>
 
     <!-- 페이지네이션 -->
-    <?php if (isset($pagination) && $pagination && $pagination['total_pages'] > 1): ?>
-    <?php
-    // 공통 페이징 라이브러리 사용
-    $paginationHelper = new \App\Libraries\PaginationHelper(
-        $pagination['total_count'],
-        $pagination['per_page'],
-        $pagination['current_page'],
-        base_url('insung/company-list'),
-        array_filter([
-            'cc_code' => ($cc_code_filter ?? 'all') !== 'all' ? $cc_code_filter : null,
-            'search_name' => !empty($search_name) ? $search_name : null
-        ], function($value) {
-            return $value !== null && $value !== '';
-        })
-    );
-    echo $paginationHelper->renderWithCurrentStyle();
-    ?>
+    <?php if (isset($pagination_helper) && $pagination_helper && ($pagination['total_pages'] ?? 1) > 1): ?>
+        <?= $pagination_helper->renderWithCurrentStyle() ?>
     <?php endif; ?>
 </div>
 

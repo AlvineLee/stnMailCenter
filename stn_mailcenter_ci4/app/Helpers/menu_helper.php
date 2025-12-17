@@ -16,19 +16,166 @@ if (!function_exists('getUserServicePermissions')) {
         // daumdata 로그인인 경우
         if ($loginType === 'daumdata') {
             $userType = session()->get('user_type');
+            $userCompany = session()->get('user_company'); // 거래처 코드
+            $ccCode = session()->get('cc_code'); // 콜센터 코드
             
-            // user_type = 1 (메인 사이트 관리자)는 모든 서비스 접근 가능
-            if ($userType == '1') {
+            // 서브도메인 설정값 확인 (최우선순위)
+            $subdomainConfig = config('Subdomain');
+            $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+            $subdomainApiCodes = null;
+            
+            // 서브도메인이 있고 default가 아닌 경우, 서브도메인에서 m_code, cc_code 조회
+            if ($currentSubdomain !== 'default') {
+                $subdomainApiCodes = $subdomainConfig->getCurrentApiCodes();
+                
+                // 서브도메인에서 조회한 m_code, cc_code가 있으면 사용 (슈퍼권한 계정의 경우 세션에 없을 수 있음)
+                if ($subdomainApiCodes && (!empty($subdomainApiCodes['m_code']) || !empty($subdomainApiCodes['cc_code']))) {
+                    // 세션에 없으면 서브도메인에서 조회한 값 사용
+                    if (empty($ccCode) && !empty($subdomainApiCodes['cc_code'])) {
+                        $ccCode = $subdomainApiCodes['cc_code'];
+                    }
+                }
+            }
+            
+            // user_type = 1 (메인 사이트 관리자)도 거래처/콜센터 권한을 따름
+            // 거래처/콜센터 정보가 없고 서브도메인도 없으면 모든 서비스 접근 가능 (관리자 전용)
+            if ($userType == '1' && !$userCompany && !$ccCode && $currentSubdomain === 'default') {
                 return getActiveServiceTypes();
             }
             
-            // 나중에 daumdata 사용자 권한 체크가 들어갈 수 있도록 구조 준비
-            // 현재는 user_type=5일 때만 주문접수 메뉴가 보이도록 처리
-            // TODO: daumdata 사용자별 서비스 권한 테이블 연동 시 여기서 권한 체크
-            // 예: $insungUserServicePermissionModel->getUserServicePermissions($userId);
+            // 모든 활성 서비스 타입 조회
+            $allServices = getActiveServiceTypes();
+            if (empty($allServices)) {
+                return [];
+            }
             
-            // 임시로 모든 활성 서비스 반환 (나중에 권한 체크로 변경 예정)
-            return getActiveServiceTypes();
+            // 권한 맵 초기화 (service_code를 키로)
+            $permissionMap = [];
+            
+            log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인: {$currentSubdomain}, 조회된 comp_code: " . ($subdomainCompCode ?? 'NULL') . ", userCompany: " . ($userCompany ?? 'NULL') . ", ccCode: " . ($ccCode ?? 'NULL') . ", subdomainApiCodes: " . ($subdomainApiCodes ? json_encode($subdomainApiCodes) : 'NULL'));
+            
+            // 서브도메인이 있고 default가 아닌 경우, 서브도메인 권한만 사용 (최우선)
+            if ($currentSubdomain !== 'default') {
+                // 서브도메인 comp_code가 조회되지 않았으면 빈 배열 반환 (서브도메인 설정이 우선이므로)
+                if (!$subdomainCompCode) {
+                    log_message('warning', "menu_helper::getUserServicePermissions - 서브도메인({$currentSubdomain})에서 comp_code 조회 실패, 빈 배열 반환");
+                    return [];
+                }
+                
+                $companyServicePermissionModel = new \App\Models\CompanyServicePermissionModel();
+                $subdomainPermissions = $companyServicePermissionModel->getCompanyServicePermissions($subdomainCompCode);
+                
+                log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인 comp_code: {$subdomainCompCode}, 전체 권한 레코드 수: " . count($subdomainPermissions));
+                
+                // 서브도메인 거래처 권한 확인
+                $enabledCount = 0;
+                foreach ($subdomainPermissions as $permission) {
+                    $serviceCode = $permission['service_code'] ?? null;
+                    $serviceTypeId = $permission['service_type_id'] ?? null;
+                    $isMasterActive = isset($permission['service_is_active']) && $permission['service_is_active'] == 1;
+                    $isCompanyEnabled = isset($permission['is_enabled']) && $permission['is_enabled'] == 1;
+                    
+                    log_message('debug', "menu_helper::getUserServicePermissions - service_type_id: {$serviceTypeId}, service_code: {$serviceCode}, is_master_active: " . ($isMasterActive ? '1' : '0') . ", is_enabled: " . ($isCompanyEnabled ? '1' : '0'));
+                    
+                    if ($serviceCode && isset($allServices[$serviceCode])) {
+                        // 마스터가 활성화되어 있고 거래처 권한도 활성화되어 있어야 함
+                        if ($isMasterActive && $isCompanyEnabled) {
+                            $permissionMap[$serviceCode] = $allServices[$serviceCode];
+                            $enabledCount++;
+                        }
+                    }
+                }
+                
+                // 거래처 권한이 없으면 상위 콜센터 권한 상속
+                if (empty($permissionMap) && $subdomainApiCodes && !empty($subdomainApiCodes['cc_code'])) {
+                    $ccCodeForInheritance = $subdomainApiCodes['cc_code'];
+                    log_message('debug', "menu_helper::getUserServicePermissions - 거래처 권한 없음, 콜센터 권한 상속 시도: cc_code={$ccCodeForInheritance}");
+                    
+                    $ccServicePermissionModel = new \App\Models\CcServicePermissionModel();
+                    $ccPermissions = $ccServicePermissionModel->getCcServicePermissions($ccCodeForInheritance);
+                    
+                    log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 조회 결과: cc_code={$ccCodeForInheritance}, 전체 권한 레코드 수: " . count($ccPermissions));
+                    
+                    if (!empty($ccPermissions)) {
+                        foreach ($ccPermissions as $permission) {
+                            $serviceCode = $permission['service_code'] ?? null;
+                            $serviceTypeId = $permission['service_type_id'] ?? null;
+                            $isMasterActive = isset($permission['service_is_active']) && $permission['service_is_active'] == 1;
+                            $isCcEnabled = isset($permission['is_enabled']) && $permission['is_enabled'] == 1;
+                            
+                            log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한: service_type_id={$serviceTypeId}, service_code={$serviceCode}, is_master_active=" . ($isMasterActive ? '1' : '0') . ", is_enabled=" . ($isCcEnabled ? '1' : '0'));
+                            
+                            if ($serviceCode && isset($allServices[$serviceCode])) {
+                                // 마스터가 활성화되어 있고 콜센터 권한도 활성화되어 있어야 함
+                                if ($isMasterActive && $isCcEnabled) {
+                                    $permissionMap[$serviceCode] = $allServices[$serviceCode];
+                                    $enabledCount++;
+                                    log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 추가됨: service_code={$serviceCode}");
+                                }
+                            }
+                        }
+                        log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 상속 완료: 활성화된 권한 {$enabledCount}개");
+                    } else {
+                        log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한이 없음: cc_code={$ccCodeForInheritance}");
+                    }
+                }
+                
+                // 서브도메인이 있으면 서브도메인 권한(또는 상속받은 콜센터 권한) 반환
+                log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인 활성화된 권한: {$enabledCount}개, 최종 반환 권한: " . count($permissionMap) . "개");
+                return $permissionMap;
+            }
+            
+            // 2. 사용자 세션의 거래처 권한 확인 (서브도메인이 없을 경우)
+            if ($userCompany && empty($permissionMap)) {
+                $companyServicePermissionModel = new \App\Models\CompanyServicePermissionModel();
+                $companyPermissions = $companyServicePermissionModel->getCompanyServicePermissions($userCompany);
+                
+                if (!empty($companyPermissions)) {
+                    // 거래처 권한이 있으면 거래처 권한 사용
+                    foreach ($companyPermissions as $permission) {
+                        $serviceCode = $permission['service_code'] ?? null;
+                        if ($serviceCode && isset($allServices[$serviceCode])) {
+                            // 마스터가 활성화되어 있고 거래처 권한도 활성화되어 있어야 함
+                            $isMasterActive = isset($permission['service_is_active']) && $permission['service_is_active'] == 1;
+                            $isCompanyEnabled = isset($permission['is_enabled']) && $permission['is_enabled'] == 1;
+                            
+                            if ($isMasterActive && $isCompanyEnabled) {
+                                $permissionMap[$serviceCode] = $allServices[$serviceCode];
+                            }
+                        }
+                    }
+                    
+                    // 거래처 권한이 하나라도 있으면 거래처 권한만 반환
+                    if (!empty($permissionMap)) {
+                        return $permissionMap;
+                    }
+                }
+            }
+            
+            // 3. 거래처 권한이 없으면 콜센터 권한 확인
+            if ($ccCode && empty($permissionMap)) {
+                $ccServicePermissionModel = new \App\Models\CcServicePermissionModel();
+                $ccPermissions = $ccServicePermissionModel->getCcServicePermissions($ccCode);
+                
+                if (!empty($ccPermissions)) {
+                    foreach ($ccPermissions as $permission) {
+                        $serviceCode = $permission['service_code'] ?? null;
+                        if ($serviceCode && isset($allServices[$serviceCode])) {
+                            // 마스터가 활성화되어 있고 콜센터 권한도 활성화되어 있어야 함
+                            $isMasterActive = isset($permission['service_is_active']) && $permission['service_is_active'] == 1;
+                            $isCcEnabled = isset($permission['is_enabled']) && $permission['is_enabled'] == 1;
+                            
+                            if ($isMasterActive && $isCcEnabled) {
+                                $permissionMap[$serviceCode] = $allServices[$serviceCode];
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 4. 거래처/콜센터 권한이 모두 없으면 빈 배열 반환 (마스터 설정만으로는 접근 불가)
+            return $permissionMap;
         }
         
         // STN 로그인인 경우
