@@ -34,10 +34,18 @@ class App extends BaseConfig
             $this->baseURL = rtrim($envBaseURL, '/') . '/';
         } else {
             // 현재 요청의 호스트를 기반으로 baseURL 동적 설정 (서브도메인 유지)
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            // 개발/로컬 환경에서는 HTTP 강제, 운영 환경에서만 HTTPS 허용
             $host = $_SERVER['HTTP_HOST'] ?? '';
             
             if (!empty($host)) {
+                // 환경별 프로토콜 결정
+                if (ENVIRONMENT === 'production') {
+                    // 운영 환경: HTTPS 우선, 없으면 HTTP
+                    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                } else {
+                    // 개발/로컬 환경: HTTP 강제
+                    $protocol = 'http';
+                }
                 // 현재 호스트를 그대로 사용 (서브도메인 포함)
                 $this->baseURL = $protocol . '://' . $host . '/';
             } else {

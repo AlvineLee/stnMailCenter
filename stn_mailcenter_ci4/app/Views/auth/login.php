@@ -75,7 +75,7 @@
                 <div class="flex gap-2 mb-3">
                     <select id="apiSelect" class="bg-white text-gray-700 border border-gray-300 px-3 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors">
                         <?php if (count($api_list) > 1): ?>
-                        <option value="">API 선택</option>
+                        <option value="">회사 선택</option>
                         <?php endif; ?>
                         <?php foreach ($api_list as $api): ?>
                         <option value="<?= esc($api['idx']) ?>" <?= (isset($api_idx) && $api['idx'] == $api_idx) ? 'selected' : '' ?>>

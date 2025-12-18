@@ -396,14 +396,31 @@ class Auth extends BaseController
                 
                 // AJAX 요청인 경우 JSON 응답 반환
                 if ($this->request->isAJAX()) {
+                    // 현재 요청의 프로토콜을 유지하여 리다이렉트 URL 생성
+                    $currentProtocol = $this->request->getServer('HTTPS') && $this->request->getServer('HTTPS') !== 'off' ? 'https' : 'http';
+                    $currentHost = $this->request->getServer('HTTP_HOST') ?? '';
+                    // 개발/로컬 환경에서는 HTTP 강제
+                    if (ENVIRONMENT !== 'production') {
+                        $currentProtocol = 'http';
+                    }
+                    $redirectUrl = $currentProtocol . '://' . $currentHost . '/';
+                    
                     return $this->response->setJSON([
                         'success' => true,
                         'message' => '로그인되었습니다.',
-                        'redirect' => base_url('/')
+                        'redirect' => $redirectUrl
                     ]);
                 }
                 
-                return redirect()->to('/')->with('success', '로그인되었습니다.');
+                // 현재 요청의 프로토콜을 유지하여 리다이렉트
+                $currentProtocol = $this->request->getServer('HTTPS') && $this->request->getServer('HTTPS') !== 'off' ? 'https' : 'http';
+                $currentHost = $this->request->getServer('HTTP_HOST') ?? '';
+                // 개발/로컬 환경에서는 HTTP 강제
+                if (ENVIRONMENT !== 'production') {
+                    $currentProtocol = 'http';
+                }
+                $redirectUrl = $currentProtocol . '://' . $currentHost . '/';
+                return redirect()->to($redirectUrl)->with('success', '로그인되었습니다.');
             } else {
                 // daumdata 로그인 실패: 아이디/비밀번호 불일치 (이미 위에서 처리됨)
                 // 이 부분은 실행되지 않지만, 안전을 위해 유지
@@ -445,7 +462,33 @@ class Auth extends BaseController
                 // 마지막 로그인 시간 업데이트
                 $this->authModel->updateUserInfo($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
                 
-                return redirect()->to('/')->with('success', '로그인되었습니다.');
+                // AJAX 요청인 경우 JSON 응답 반환
+                if ($this->request->isAJAX()) {
+                    // 현재 요청의 프로토콜을 유지하여 리다이렉트 URL 생성
+                    $currentProtocol = $this->request->getServer('HTTPS') && $this->request->getServer('HTTPS') !== 'off' ? 'https' : 'http';
+                    $currentHost = $this->request->getServer('HTTP_HOST') ?? '';
+                    // 개발/로컬 환경에서는 HTTP 강제
+                    if (ENVIRONMENT !== 'production') {
+                        $currentProtocol = 'http';
+                    }
+                    $redirectUrl = $currentProtocol . '://' . $currentHost . '/';
+                    
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'message' => '로그인되었습니다.',
+                        'redirect' => $redirectUrl
+                    ]);
+                }
+                
+                // 현재 요청의 프로토콜을 유지하여 리다이렉트
+                $currentProtocol = $this->request->getServer('HTTPS') && $this->request->getServer('HTTPS') !== 'off' ? 'https' : 'http';
+                $currentHost = $this->request->getServer('HTTP_HOST') ?? '';
+                // 개발/로컬 환경에서는 HTTP 강제
+                if (ENVIRONMENT !== 'production') {
+                    $currentProtocol = 'http';
+                }
+                $redirectUrl = $currentProtocol . '://' . $currentHost . '/';
+                return redirect()->to($redirectUrl)->with('success', '로그인되었습니다.');
             } else {
                 // STN 로그인 실패: 아이디/비밀번호 불일치
                 return redirect()->back()
