@@ -70,8 +70,23 @@
             <?php endif; ?>
             
             <?= form_open('auth/processLogin', ['class' => 'space-y-3', 'id' => 'loginForm', 'data-ajax' => 'true']) ?>
-                <?php if (!empty($api_list)): ?>
-                <!-- API 선택 + 고객검색 버튼 (맨 위쪽) -->
+                <?php if (!$is_subdomain && !empty($api_list)): ?>
+                <!-- 메인도메인에서 소속 퀵사 선택 (api_list 사용) -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">소속 퀵사 선택</label>
+                    <select name="selected_api_idx" id="selectedApiIdx" class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" required>
+                        <option value="">소속 퀵사를 선택하세요</option>
+                        <?php foreach ($api_list as $api): ?>
+                        <option value="<?= esc($api['idx']) ?>">
+                            <?= esc($api['cccode'] ?? '') ?> - <?= esc($api['api_name'] ?? '') ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($api_list) && $is_subdomain): ?>
+                <!-- 서브도메인에서 API 선택 + 고객검색 버튼 (기존 기능) -->
                 <div class="flex gap-2 mb-3">
                     <select id="apiSelect" class="bg-white text-gray-700 border border-gray-300 px-3 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors">
                         <?php if (count($api_list) > 1): ?>
@@ -482,6 +497,19 @@
             e.preventDefault();
             
             const form = this;
+            const selectedApiIdx = document.getElementById('selectedApiIdx');
+            
+            // 메인도메인에서 소속 퀵사 선택 필수 체크
+            <?php if (!$is_subdomain && !empty($api_list)): ?>
+            if (!selectedApiIdx || !selectedApiIdx.value) {
+                alert('소속 퀵사를 선택해주세요.');
+                if (selectedApiIdx) {
+                    selectedApiIdx.focus();
+                }
+                return;
+            }
+            <?php endif; ?>
+            
             const formData = new FormData(form);
             const loginButton = document.getElementById('loginButton');
             const originalButtonText = loginButton.innerHTML;

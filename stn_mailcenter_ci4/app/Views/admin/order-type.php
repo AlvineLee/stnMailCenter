@@ -2,6 +2,114 @@
 
 <?= $this->section('content') ?>
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
+<script>
+// 페이지 로드 후 해시에 따라 포커스 복원 및 거래처 목록 유지
+document.addEventListener('DOMContentLoaded', function() {
+    // 해시가 있으면 포커스 복원
+    if (window.location.hash === '#comp_code_select') {
+        const compSelect = document.getElementById('comp_code_select');
+        if (compSelect) {
+            // 약간의 지연 후 포커스 (렌더링 완료 대기)
+            setTimeout(function() {
+                compSelect.focus();
+                // 해시 제거 (다음 리로드 시 중복 방지)
+                window.history.replaceState(null, null, window.location.pathname + window.location.search);
+            }, 100);
+        }
+    }
+    
+    // URL 파라미터에서 거래처 코드가 있으면 거래처 선택 박스 표시
+    const urlParams = new URLSearchParams(window.location.search);
+    const ccCode = urlParams.get('cc_code');
+    const compCode = urlParams.get('comp_code');
+    
+    if (ccCode) {
+        // 거래처 선택 영역 표시
+        const companyContainer = document.getElementById('company_select_container');
+        if (companyContainer) {
+            companyContainer.style.display = 'flex';
+        }
+        
+        // 거래처 선택 박스 확인 및 선택된 값 설정
+        const compSelect = document.getElementById('comp_code_select');
+        if (compSelect) {
+            // 서버에서 이미 거래처 목록이 렌더링되었는지 확인
+            // 옵션이 2개 이상이면 서버에서 이미 로드된 것 (기본 옵션 + 거래처 목록)
+            const hasServerRenderedOptions = compSelect.options.length > 1;
+            
+            if (hasServerRenderedOptions) {
+                // 서버에서 이미 로드됨 - AJAX 호출 안 함, 선택된 값만 설정
+                if (compCode) {
+                    // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 설정
+                    setTimeout(function() {
+                        compSelect.value = compCode;
+                        // 값이 제대로 설정되었는지 확인
+                        if (compSelect.value !== compCode) {
+                            console.warn('거래처 선택 값 설정 실패:', compCode, '현재 값:', compSelect.value);
+                        }
+                    }, 100);
+                }
+            } else {
+                // 서버에서 로드되지 않음 - AJAX로 로드
+                loadCompaniesByCc(ccCode, compCode);
+            }
+        }
+    }
+});
+
+// 콜센터별 거래처 목록 로드 (AJAX) - 선택된 거래처 코드 전달
+function loadCompaniesByCc(ccCode, selectedCompCode = null) {
+    if (!ccCode) {
+        return;
+    }
+    
+    fetch(`<?= base_url('admin/getCompaniesByCcForOrderType') ?>?cc_code=${encodeURIComponent(ccCode)}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.companies) {
+            const compSelect = document.getElementById('comp_code_select');
+            if (!compSelect) return;
+            
+            // 거래처 목록 초기화
+            compSelect.innerHTML = '<option value="">전체 (콜센터 설정)</option>';
+            
+            // 거래처 목록 추가
+            data.companies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.comp_code;
+                option.textContent = company.comp_name || company.comp_code;
+                compSelect.appendChild(option);
+            });
+            
+            // 거래처 선택 영역 표시
+            const companyContainer = document.getElementById('company_select_container');
+            if (companyContainer) {
+                companyContainer.style.display = 'flex';
+            }
+            
+            // 선택된 거래처 코드 설정 (URL 파라미터 우선)
+            if (selectedCompCode) {
+                // 약간의 지연을 두어 DOM이 완전히 업데이트된 후 설정
+                setTimeout(function() {
+                    compSelect.value = selectedCompCode;
+                    // 값이 제대로 설정되었는지 확인
+                    if (compSelect.value !== selectedCompCode) {
+                        console.warn('거래처 선택 값 설정 실패:', selectedCompCode, '현재 값:', compSelect.value);
+                    }
+                }, 100);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error loading companies:', error);
+    });
+}
+</script>
 
     <!-- 콜센터 및 거래처 선택 (daumdata 로그인 user_type=1인 경우만 표시) -->
     <?php if (isset($login_type) && $login_type === 'daumdata' && isset($user_type) && $user_type == '1' && !empty($cc_list)): ?>
@@ -13,7 +121,7 @@
                     <option value="">전체 (마스터 설정)</option>
                     <?php foreach ($cc_list as $cc): ?>
                     <option value="<?= htmlspecialchars($cc['cc_code']) ?>" <?= (isset($selected_cc_code) && $selected_cc_code === $cc['cc_code']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($cc['cc_name']) ?> (<?= htmlspecialchars($cc['cc_code']) ?>)
+                        <?= htmlspecialchars($cc['cc_name']) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
@@ -559,14 +667,12 @@ function changeCcCode() {
     if (ccCode) {
         url.searchParams.set('cc_code', ccCode);
         url.searchParams.delete('comp_code'); // 거래처 파라미터 제거
-        
-        // 콜센터 선택 시 거래처 목록 로드
-        loadCompaniesByCc(ccCode);
     } else {
         url.searchParams.delete('cc_code');
         url.searchParams.delete('comp_code');
     }
     
+    // 페이지 리로드 (거래처 목록은 서버에서 다시 조회됨)
     window.location.href = url.toString();
 }
 
@@ -576,9 +682,14 @@ function changeCompCode() {
     const compCode = document.getElementById('comp_code_select').value;
     const url = new URL(window.location.href);
     
-    if (ccCode) {
-        url.searchParams.set('cc_code', ccCode);
+    // 콜센터 코드가 없으면 거래처 선택 불가
+    if (!ccCode) {
+        alert('콜센터를 먼저 선택해주세요.');
+        document.getElementById('comp_code_select').value = '';
+        return;
     }
+    
+    url.searchParams.set('cc_code', ccCode);
     
     if (compCode) {
         url.searchParams.set('comp_code', compCode);
@@ -586,42 +697,13 @@ function changeCompCode() {
         url.searchParams.delete('comp_code');
     }
     
+    // 페이지 리로드 후 거래처 선택 박스에 포커스 주기 위해 해시 추가
+    url.hash = 'comp_code_select';
+    
     window.location.href = url.toString();
 }
 
 // 콜센터별 거래처 목록 로드 (AJAX)
-function loadCompaniesByCc(ccCode) {
-    if (!ccCode) {
-        return;
-    }
-    
-    fetch(`<?= base_url('admin/getCompaniesByCcForOrderType') ?>?cc_code=${encodeURIComponent(ccCode)}`, {
-        method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success && data.companies) {
-            const compSelect = document.getElementById('comp_code_select');
-            compSelect.innerHTML = '<option value="">전체 (콜센터 설정)</option>';
-            
-            data.companies.forEach(company => {
-                const option = document.createElement('option');
-                option.value = company.comp_code;
-                option.textContent = company.comp_name || company.comp_code;
-                compSelect.appendChild(option);
-            });
-            
-            // 거래처 선택 영역 표시
-            document.getElementById('company_select_container').style.display = 'flex';
-        }
-    })
-    .catch(error => {
-        console.error('Error loading companies:', error);
-    });
-}
 
 // 설정 저장 (일괄 상태 업데이트)
 function saveSettings() {
@@ -675,7 +757,9 @@ function saveSettings() {
         // console.log('서버 응답:', data);
         if (data.success) {
             alert(data.message);
-            location.reload();
+            // 현재 URL 파라미터 유지하면서 리로드
+            const url = new URL(window.location.href);
+            window.location.href = url.toString();
         } else {
             alert(data.message || '설정 저장에 실패했습니다.');
         }

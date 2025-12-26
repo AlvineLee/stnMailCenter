@@ -1024,7 +1024,8 @@ td.text-center {
     color: #155724 !important; /* 진한 초록색 텍스트 */
 }
 
-/* 완료 (state-50, state-완료, A완료) - 흰색 */
+/* 완료 (state-30, state-50, state-완료, A완료) - 흰색 */
+.state-30,
 .state-50,
 .state-완료 {
     background: #ffffff !important; /* 흰색 */

@@ -268,6 +268,7 @@ $routes->group('insung', function($routes) {
 // 관리자 관련 라우트
 $routes->group('admin', function($routes) {
     $routes->get('order-type', 'Admin::orderType');
+    $routes->get('getCompaniesByCcForOrderType', 'Admin::getCompaniesByCcForOrderType');
     $routes->get('pricing', 'Admin::pricing');
     $routes->get('notification', 'Admin::notification');
     $routes->get('order-list', 'Admin::orderList');

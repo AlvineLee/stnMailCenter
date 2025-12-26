@@ -53,20 +53,20 @@ if (!function_exists('getUserServicePermissions')) {
             // 권한 맵 초기화 (service_code를 키로)
             $permissionMap = [];
             
-            log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인: {$currentSubdomain}, 조회된 comp_code: " . ($subdomainCompCode ?? 'NULL') . ", userCompany: " . ($userCompany ?? 'NULL') . ", ccCode: " . ($ccCode ?? 'NULL') . ", subdomainApiCodes: " . ($subdomainApiCodes ? json_encode($subdomainApiCodes) : 'NULL'));
+            // log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인: {$currentSubdomain}, 조회된 comp_code: " . ($subdomainCompCode ?? 'NULL') . ", userCompany: " . ($userCompany ?? 'NULL') . ", ccCode: " . ($ccCode ?? 'NULL') . ", subdomainApiCodes: " . ($subdomainApiCodes ? json_encode($subdomainApiCodes) : 'NULL'));
             
             // 서브도메인이 있고 default가 아닌 경우, 서브도메인 권한만 사용 (최우선)
             if ($currentSubdomain !== 'default') {
                 // 서브도메인 comp_code가 조회되지 않았으면 빈 배열 반환 (서브도메인 설정이 우선이므로)
                 if (!$subdomainCompCode) {
-                    log_message('warning', "menu_helper::getUserServicePermissions - 서브도메인({$currentSubdomain})에서 comp_code 조회 실패, 빈 배열 반환");
+                    // log_message('warning', "menu_helper::getUserServicePermissions - 서브도메인({$currentSubdomain})에서 comp_code 조회 실패, 빈 배열 반환");
                     return [];
                 }
                 
                 $companyServicePermissionModel = new \App\Models\CompanyServicePermissionModel();
                 $subdomainPermissions = $companyServicePermissionModel->getCompanyServicePermissions($subdomainCompCode);
                 
-                log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인 comp_code: {$subdomainCompCode}, 전체 권한 레코드 수: " . count($subdomainPermissions));
+                // log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인 comp_code: {$subdomainCompCode}, 전체 권한 레코드 수: " . count($subdomainPermissions));
                 
                 // 서브도메인 거래처 권한 확인
                 $enabledCount = 0;
@@ -76,7 +76,7 @@ if (!function_exists('getUserServicePermissions')) {
                     $isMasterActive = isset($permission['service_is_active']) && $permission['service_is_active'] == 1;
                     $isCompanyEnabled = isset($permission['is_enabled']) && $permission['is_enabled'] == 1;
                     
-                    log_message('debug', "menu_helper::getUserServicePermissions - service_type_id: {$serviceTypeId}, service_code: {$serviceCode}, is_master_active: " . ($isMasterActive ? '1' : '0') . ", is_enabled: " . ($isCompanyEnabled ? '1' : '0'));
+                    // log_message('debug', "menu_helper::getUserServicePermissions - service_type_id: {$serviceTypeId}, service_code: {$serviceCode}, is_master_active: " . ($isMasterActive ? '1' : '0') . ", is_enabled: " . ($isCompanyEnabled ? '1' : '0'));
                     
                     if ($serviceCode && isset($allServices[$serviceCode])) {
                         // 마스터가 활성화되어 있고 거래처 권한도 활성화되어 있어야 함
@@ -90,12 +90,12 @@ if (!function_exists('getUserServicePermissions')) {
                 // 거래처 권한이 없으면 상위 콜센터 권한 상속
                 if (empty($permissionMap) && $subdomainApiCodes && !empty($subdomainApiCodes['cc_code'])) {
                     $ccCodeForInheritance = $subdomainApiCodes['cc_code'];
-                    log_message('debug', "menu_helper::getUserServicePermissions - 거래처 권한 없음, 콜센터 권한 상속 시도: cc_code={$ccCodeForInheritance}");
+                    // log_message('debug', "menu_helper::getUserServicePermissions - 거래처 권한 없음, 콜센터 권한 상속 시도: cc_code={$ccCodeForInheritance}");
                     
                     $ccServicePermissionModel = new \App\Models\CcServicePermissionModel();
                     $ccPermissions = $ccServicePermissionModel->getCcServicePermissions($ccCodeForInheritance);
                     
-                    log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 조회 결과: cc_code={$ccCodeForInheritance}, 전체 권한 레코드 수: " . count($ccPermissions));
+                    // log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 조회 결과: cc_code={$ccCodeForInheritance}, 전체 권한 레코드 수: " . count($ccPermissions));
                     
                     if (!empty($ccPermissions)) {
                         foreach ($ccPermissions as $permission) {
@@ -104,25 +104,25 @@ if (!function_exists('getUserServicePermissions')) {
                             $isMasterActive = isset($permission['service_is_active']) && $permission['service_is_active'] == 1;
                             $isCcEnabled = isset($permission['is_enabled']) && $permission['is_enabled'] == 1;
                             
-                            log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한: service_type_id={$serviceTypeId}, service_code={$serviceCode}, is_master_active=" . ($isMasterActive ? '1' : '0') . ", is_enabled=" . ($isCcEnabled ? '1' : '0'));
+                            // log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한: service_type_id={$serviceTypeId}, service_code={$serviceCode}, is_master_active=" . ($isMasterActive ? '1' : '0') . ", is_enabled=" . ($isCcEnabled ? '1' : '0'));
                             
                             if ($serviceCode && isset($allServices[$serviceCode])) {
                                 // 마스터가 활성화되어 있고 콜센터 권한도 활성화되어 있어야 함
                                 if ($isMasterActive && $isCcEnabled) {
                                     $permissionMap[$serviceCode] = $allServices[$serviceCode];
                                     $enabledCount++;
-                                    log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 추가됨: service_code={$serviceCode}");
+                                    // log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 추가됨: service_code={$serviceCode}");
                                 }
                             }
                         }
-                        log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 상속 완료: 활성화된 권한 {$enabledCount}개");
+                        // log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한 상속 완료: 활성화된 권한 {$enabledCount}개");
                     } else {
-                        log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한이 없음: cc_code={$ccCodeForInheritance}");
+                        // log_message('debug', "menu_helper::getUserServicePermissions - 콜센터 권한이 없음: cc_code={$ccCodeForInheritance}");
                     }
                 }
                 
                 // 서브도메인이 있으면 서브도메인 권한(또는 상속받은 콜센터 권한) 반환
-                log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인 활성화된 권한: {$enabledCount}개, 최종 반환 권한: " . count($permissionMap) . "개");
+                // log_message('debug', "menu_helper::getUserServicePermissions - 서브도메인 활성화된 권한: {$enabledCount}개, 최종 반환 권한: " . count($permissionMap) . "개");
                 return $permissionMap;
             }
             

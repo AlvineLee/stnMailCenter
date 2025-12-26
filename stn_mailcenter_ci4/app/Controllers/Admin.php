@@ -10,6 +10,7 @@ use App\Models\InsungCcListModel;
 use App\Models\CcServicePermissionModel;
 use App\Models\CompanyServicePermissionModel;
 use App\Models\InsungCompanyListModel;
+use App\Models\InsungApiListModel;
 
 class Admin extends BaseController
 {
@@ -20,6 +21,7 @@ class Admin extends BaseController
     protected $ccServicePermissionModel;
     protected $companyServicePermissionModel;
     protected $insungCompanyListModel;
+    protected $insungApiListModel;
     
     public function __construct()
     {
@@ -30,6 +32,7 @@ class Admin extends BaseController
         $this->ccServicePermissionModel = new CcServicePermissionModel();
         $this->companyServicePermissionModel = new CompanyServicePermissionModel();
         $this->insungCompanyListModel = new InsungCompanyListModel();
+        $this->insungApiListModel = new InsungApiListModel();
     }
     
     public function orderType()
@@ -91,13 +94,82 @@ class Admin extends BaseController
         $selectedCcCode = $this->request->getGet('cc_code');
         $selectedCompCode = $this->request->getGet('comp_code');
         
+        log_message('debug', "orderType - 선택된 값: ccCode=" . ($selectedCcCode ?? 'null') . ", compCode=" . ($selectedCompCode ?? 'null'));
+        
+        // 슈퍼관리자인 경우 항상 tbl_api_list에서만 조회
         if ($loginType === 'daumdata' && $userType == '1') {
-            $ccList = $this->insungCcListModel->getAllCcList();
+            // tbl_api_list에서 API 목록 조회 (tbl_cc_list가 아닌 tbl_api_list만 사용)
+            $apiList = $this->insungApiListModel->orderBy('idx', 'ASC')->findAll();
+            
+            // 뷰에서 사용하는 형식으로 변환 (cc_code, cc_name)
+            // cc_code는 cccode 값, cc_name은 "cccode - api_name" 형식
+            foreach ($apiList as $api) {
+                $cccode = $api['cccode'] ?? '';
+                $apiName = $api['api_name'] ?? '';
+                
+                // cccode와 api_name이 모두 있는 경우만 추가
+                if (!empty($cccode) && !empty($apiName)) {
+                    $ccList[] = [
+                        'cc_code' => $cccode,
+                        'cc_name' => $cccode . ' - ' . $apiName
+                    ];
+                }
+            }
             
             // 선택된 콜센터가 있으면 해당 콜센터의 거래처 목록 조회
+            // tbl_api_list.cccode로 tbl_cc_list를 찾고, tbl_cc_list -> tbl_company_list 조인
             if ($selectedCcCode) {
-                $companyList = $this->insungCompanyListModel->getAllCompanyListWithCc($selectedCcCode);
-                $companyList = $companyList['companies'] ?? [];
+                $db = \Config\Database::connect();
+                
+                // 먼저 tbl_api_list에서 cccode로 idx 찾기 (cc_apicode는 idx와 매칭)
+                $apiBuilder = $db->table('tbl_api_list');
+                $apiBuilder->select('idx');
+                $apiBuilder->where('cccode', $selectedCcCode);
+                $apiQuery = $apiBuilder->get();
+                
+                if ($apiQuery !== false) {
+                    $apiResult = $apiQuery->getRowArray();
+                    if ($apiResult && !empty($apiResult['idx'])) {
+                        $apiIdx = (int)$apiResult['idx']; // 명시적으로 정수로 변환
+                        
+                        // tbl_cc_list -> tbl_company_list 직접 조인
+                        $builder = $db->table('tbl_cc_list cc');
+                        
+                        $builder->select('
+                            c.comp_code,
+                            c.comp_name,
+                            c.cc_idx,
+                            cc.cc_code,
+                            cc.cc_name
+                        ');
+                        
+                        // tbl_cc_list -> tbl_company_list (cc_idx = idx)
+                        $builder->join('tbl_company_list c', 'c.cc_idx = cc.idx', 'inner');
+                        
+                        // tbl_cc_list.cc_apicode로 필터링 (tbl_api_list.idx와 매칭, 숫자로 비교)
+                        $builder->where('cc.cc_apicode', $apiIdx);
+                        
+                        // 거래처명 오름차순 정렬
+                        $builder->orderBy('c.comp_name', 'ASC');
+                        
+                        $query = $builder->get();
+                        if ($query !== false) {
+                            $companyList = $query->getResultArray();
+                            log_message('debug', "orderType - 거래처 목록 조회 성공: 개수=" . count($companyList));
+                        } else {
+                            $companyList = [];
+                            log_message('error', "orderType - 거래처 목록 조회 실패: ccCode={$selectedCcCode}, apiIdx={$apiIdx}");
+                        }
+                    } else {
+                        $companyList = [];
+                        log_message('warning', "orderType - API idx를 찾을 수 없음: ccCode={$selectedCcCode}");
+                    }
+                } else {
+                    $companyList = [];
+                    log_message('error', "orderType - API 조회 실패: ccCode={$selectedCcCode}");
+                }
+            } else {
+                log_message('debug', "orderType - 콜센터가 선택되지 않음, 거래처 목록 없음");
             }
             
             // 권한 조회 우선순위: 거래처 > 콜센터 > 마스터
@@ -106,21 +178,38 @@ class Admin extends BaseController
             
             // 거래처가 선택된 경우: 거래처 권한 우선 조회
             if ($selectedCompCode && $selectedCcCode) {
+                log_message('debug', "orderType - 거래처 권한 조회 시작: compCode={$selectedCompCode}, ccCode={$selectedCcCode}");
                 $companyPermissions = $this->companyServicePermissionModel->getCompanyServicePermissions($selectedCompCode);
+                log_message('debug', "orderType - 거래처 권한 조회 결과 개수: " . count($companyPermissions));
+                
                 if (!empty($companyPermissions)) {
                     // 거래처 권한이 있으면 거래처 권한 사용
                     foreach ($companyPermissions as $permission) {
-                        $permissionMap[$permission['service_type_id']] = (bool)$permission['is_enabled'];
+                        $serviceTypeId = $permission['service_type_id'] ?? null;
+                        $isEnabled = (bool)($permission['is_enabled'] ?? false);
+                        if ($serviceTypeId) {
+                            $permissionMap[$serviceTypeId] = $isEnabled;
+                        }
                     }
                     $permissionSource = 'company';
+                    log_message('debug', "orderType - 거래처 권한 사용: permissionSource=company, permissionMap 개수: " . count($permissionMap));
                 } else {
                     // 거래처 권한이 없으면 콜센터 권한 상속
+                    log_message('debug', "orderType - 거래처 권한 없음, 콜센터 권한 상속 시도: ccCode={$selectedCcCode}");
                     $ccPermissions = $this->ccServicePermissionModel->getCcServicePermissions($selectedCcCode);
+                    log_message('debug', "orderType - 콜센터 권한 조회 결과 개수: " . count($ccPermissions));
                     if (!empty($ccPermissions)) {
                         foreach ($ccPermissions as $permission) {
-                            $permissionMap[$permission['service_type_id']] = (bool)$permission['is_enabled'];
+                            $serviceTypeId = $permission['service_type_id'] ?? null;
+                            $isEnabled = (bool)($permission['is_enabled'] ?? false);
+                            if ($serviceTypeId) {
+                                $permissionMap[$serviceTypeId] = $isEnabled;
+                            }
                         }
                         $permissionSource = 'cc';
+                        log_message('debug', "orderType - 콜센터 권한 사용: permissionSource=cc, permissionMap 개수: " . count($permissionMap));
+                    } else {
+                        log_message('debug', "orderType - 콜센터 권한도 없음, 마스터 설정 사용");
                     }
                 }
             } elseif ($selectedCcCode) {
@@ -155,6 +244,8 @@ class Admin extends BaseController
                     }
                 }
             }
+            
+            log_message('debug', "orderType - 권한 적용 완료: permissionSource={$permissionSource}, permissionMap 개수: " . count($permissionMap));
         }
         
         $data = [
@@ -502,6 +593,7 @@ class Admin extends BaseController
         if ($loginType === 'daumdata' && $userType == '1') {
             // 거래처가 선택된 경우: 거래처 권한 저장
             if ($compCode && $ccCode) {
+                log_message('debug', "batchUpdateServiceStatus - 거래처 권한 저장 시작: compCode={$compCode}, ccCode={$ccCode}");
                 $permissions = [];
                 foreach ($statusUpdates as $update) {
                     $serviceId = $update['service_id'] ?? null;
@@ -515,7 +607,12 @@ class Admin extends BaseController
                     }
                 }
                 
+                log_message('debug', "batchUpdateServiceStatus - 저장할 거래처 권한 개수: " . count($permissions));
+                log_message('debug', "batchUpdateServiceStatus - 거래처 권한 데이터: " . json_encode($permissions, JSON_UNESCAPED_UNICODE));
+                
                 $result = $this->companyServicePermissionModel->batchUpdateCompanyServicePermissions($compCode, $permissions);
+                
+                log_message('debug', "batchUpdateServiceStatus - 거래처 권한 저장 결과: " . ($result ? 'success' : 'failed'));
                 
                 if ($result) {
                     return $this->response->setJSON([
@@ -1905,6 +2002,16 @@ class Admin extends BaseController
                                         // 주문 객체인지 확인 (serial_number 등이 있는지)
                                         if (is_object($order) || is_array($order)) {
                                             $orderObj = is_object($order) ? $order : (object)$order;
+                                            
+                                            // 필터링 조건 확인을 위한 로그
+                                            $hasSerialNumber = isset($orderObj->serial_number);
+                                            $hasUserId = isset($orderObj->user_id);
+                                            $hasOrderDate = isset($orderObj->order_date);
+                                            
+                                            if (!($hasSerialNumber || $hasUserId || $hasOrderDate)) {
+                                                log_message('debug', "Admin::orderListAjax - 인덱스 {$i} 데이터 필터링됨: serial_number=" . ($hasSerialNumber ? '있음' : '없음') . ", user_id=" . ($hasUserId ? '있음' : '없음') . ", order_date=" . ($hasOrderDate ? '있음' : '없음') . ", 데이터: " . json_encode($orderObj, JSON_UNESCAPED_UNICODE));
+                                            }
+                                            
                                             if (isset($orderObj->serial_number) || isset($orderObj->user_id) || isset($orderObj->order_date)) {
                                                 $orderCount++;
                                                 $orders[] = [
@@ -2037,9 +2144,73 @@ class Admin extends BaseController
             ])->setStatusCode(400);
         }
 
-        // 해당 콜센터의 거래처 목록 조회
-        $result = $this->insungCompanyListModel->getAllCompanyListWithCc($ccCode);
-        $companyList = $result['companies'] ?? [];
+        // tbl_api_list.cccode로 api_code 찾고, tbl_cc_list -> tbl_company_list 직접 조인
+        $db = \Config\Database::connect();
+        
+        // 먼저 tbl_api_list에서 cccode로 idx 찾기 (cc_apicode는 idx와 매칭)
+        $apiBuilder = $db->table('tbl_api_list');
+        $apiBuilder->select('idx');
+        $apiBuilder->where('cccode', $ccCode);
+        $apiQuery = $apiBuilder->get();
+        
+        log_message('debug', "getCompaniesByCcForOrderType - cccode: {$ccCode}, SQL: " . $apiBuilder->getCompiledSelect(false));
+        
+        if ($apiQuery === false) {
+            log_message('error', "getCompaniesByCcForOrderType - API 정보 조회 실패: cccode={$ccCode}");
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+        
+        $apiResult = $apiQuery->getRowArray();
+        log_message('debug', "getCompaniesByCcForOrderType - API 결과: " . json_encode($apiResult, JSON_UNESCAPED_UNICODE));
+        
+        if (!$apiResult || empty($apiResult['idx'])) {
+            log_message('warning', "getCompaniesByCcForOrderType - idx를 찾을 수 없음: cccode={$ccCode}");
+            return $this->response->setJSON([
+                'success' => true,
+                'companies' => []
+            ]);
+        }
+        
+        $apiIdx = (int)$apiResult['idx']; // 명시적으로 정수로 변환
+        log_message('debug', "getCompaniesByCcForOrderType - api_idx: {$apiIdx} (type: " . gettype($apiIdx) . ")");
+        
+        // tbl_cc_list -> tbl_company_list 직접 조인
+        $builder = $db->table('tbl_cc_list cc');
+        
+        $builder->select('
+            c.comp_code,
+            c.comp_name,
+            c.cc_idx,
+            cc.cc_code,
+            cc.cc_name
+        ');
+        
+        // tbl_cc_list -> tbl_company_list (cc_idx = idx)
+        $builder->join('tbl_company_list c', 'c.cc_idx = cc.idx', 'inner');
+        
+        // tbl_cc_list.cc_apicode로 필터링 (tbl_api_list.idx와 매칭, 숫자로 비교)
+        $builder->where('cc.cc_apicode', $apiIdx);
+        
+        // 거래처명 오름차순 정렬
+        $builder->orderBy('c.comp_name', 'ASC');
+        
+        log_message('debug', "getCompaniesByCcForOrderType - 거래처 조회 SQL: " . $builder->getCompiledSelect(false));
+        
+        $query = $builder->get();
+        
+        if ($query === false) {
+            log_message('error', "getCompaniesByCcForOrderType - 거래처 목록 조회 실패: api_code={$apiCode}");
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '거래처 목록 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+        
+        $companyList = $query->getResultArray();
+        log_message('debug', "getCompaniesByCcForOrderType - 거래처 개수: " . count($companyList));
         
         return $this->response->setJSON([
             'success' => true,
