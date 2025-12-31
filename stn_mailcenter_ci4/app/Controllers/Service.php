@@ -566,7 +566,7 @@ class Service extends BaseController
                 try {
                     $insungApiService = new \App\Libraries\InsungApiService();
                     $insungApiListModel = new \App\Models\InsungApiListModel();
-                    
+
                     // 세션에서 API 정보 가져오기
                     $mCode = session()->get('m_code');
                     $ccCode = session()->get('cc_code');
@@ -667,9 +667,10 @@ class Service extends BaseController
                         $insungResult = $insungApiService->registerOrder($mCode, $ccCode, $token, $userId, $insungOrderData, $apiIdx);
                         
                         if ($insungResult['success'] && !empty($insungResult['serial_number'])) {
-                            // 인성 주문번호 저장
+                            // 인성 주문번호 저장 및 order_number 업데이트 (daumdata 로그인은 INSUNG- 형식 사용)
                             $orderModel->update($orderId, [
-                                'insung_order_number' => $insungResult['serial_number']
+                                'insung_order_number' => $insungResult['serial_number'],
+                                'order_number' => 'INSUNG-' . $insungResult['serial_number']
                             ]);
                             
                             log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}");

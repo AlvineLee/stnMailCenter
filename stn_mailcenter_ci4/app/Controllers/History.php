@@ -98,10 +98,9 @@ class History extends BaseController
                 $filters['user_type'] = '3';
                 $filters['user_company'] = $userCompany; // 본인의 user_company
             } elseif ($userType == '5') {
-                // user_type = 5: user_id 본인 것만
+                // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
                 $filters['user_type'] = '5';
-                $filters['user_idx'] = $userIdx; // 인성 API 주문용 (tbl_users_list.idx)
-                $filters['user_id'] = $userId; // 일반 주문용
+                $filters['user_company'] = $userCompany; // 같은 회사의 모든 주문 조회
             }
         } else {
             // STN 로그인인 경우 기존 로직

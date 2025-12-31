@@ -34,7 +34,20 @@ class Subdomain extends BaseConfig
             'theme_color' => '#1C1C1C', // 구찌 브랜드 컬러
             'description' => '구찌 전용 온라인 접수 시스템',
             'm_code' => null, // DB에서 조회 (서브도메인 기반)
-            'cc_code' => null // DB에서 조회 (서브도메인 기반)
+            'cc_code' => null, // 로드로지스 (ROD)
+            'cccode' => null // 로드로지스 (ROD) - API 조회용
+        ],
+        'aloyoga' => [
+            'name' => '알로요가코리아',
+            'logo_path' => '/assets/images/logos/aloyoga.png',
+            'logo_text' => '알로요가코리아',
+            'contact' => '02-0000-0000',
+            'email' => 'support@aloyoga.daumdata.com',
+            'theme_color' => '#667eea',
+            'description' => '알로요가코리아 전용 온라인 접수 시스템',
+            'm_code' => null, // DB에서 조회 (서브도메인 기반)
+            'cc_code' => null, // 로드로지스 (ROD)
+            'cccode' => null // 로드로지스 (ROD) - API 조회용
         ],
         'dev' => [
             'name' => 'DaumData (개발)',
@@ -189,7 +202,8 @@ class Subdomain extends BaseConfig
             // 서브도메인 이름으로 고객사명 매핑
             $companyNameMap = [
                 'gucci' => '구찌',
-                'lgchem' => 'LG화학'
+                'lgchem' => 'LG화학',
+                'aloyoga' => '알로요가코리아'
             ];
             
             $companyName = $companyNameMap[$subdomain] ?? $this->configs[$subdomain]['name'] ?? null;
@@ -199,9 +213,10 @@ class Subdomain extends BaseConfig
             }
             
             // 고객사명으로 comp_code 조회
+            // comp_owner 필드에서 검색 (comp_name은 'ROD_구찌'처럼 접두사가 있어서 매칭 안됨)
             $compBuilder = $db->table('tbl_company_list c');
             $compBuilder->select('c.comp_code');
-            $compBuilder->like('c.comp_name', $companyName);
+            $compBuilder->like('c.comp_owner', $companyName);
             $compQuery = $compBuilder->get();
             
             if ($compQuery === false) {
@@ -279,7 +294,8 @@ class Subdomain extends BaseConfig
             // 서브도메인 이름으로 고객사명 매핑
             $companyNameMap = [
                 'gucci' => '구찌',
-                'lgchem' => 'LG화학'
+                'lgchem' => 'LG화학',
+                'aloyoga' => '알로요가코리아'
             ];
             
             $companyName = $companyNameMap[$subdomain] ?? $this->configs[$subdomain]['name'] ?? null;
@@ -289,9 +305,10 @@ class Subdomain extends BaseConfig
             }
             
             // 고객사명으로 comp_code 조회
+            // comp_owner 필드에서 검색 (comp_name은 'ROD_구찌'처럼 접두사가 있어서 매칭 안됨)
             $compBuilder = $db->table('tbl_company_list c');
             $compBuilder->select('c.comp_code, c.comp_name');
-            $compBuilder->like('c.comp_name', $companyName);
+            $compBuilder->like('c.comp_owner', $companyName);
             $compBuilder->limit(1);
             $compQuery = $compBuilder->get();
             
