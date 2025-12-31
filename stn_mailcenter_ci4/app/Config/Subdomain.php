@@ -280,6 +280,13 @@ class Subdomain extends BaseConfig
     }
     
     /**
+     * 서브도메인별 comp_code 캐시
+     * 
+     * @var array<string, string|null>
+     */
+    private static $compCodeCache = [];
+    
+    /**
      * 서브도메인별 comp_code 조회 (DB에서)
      * 
      * @param string $subdomain 서브도메인 이름
@@ -289,6 +296,11 @@ class Subdomain extends BaseConfig
     {
         if (!$subdomain || !isset($this->configs[$subdomain])) {
             return null;
+        }
+        
+        // 캐시 확인
+        if (isset(self::$compCodeCache[$subdomain])) {
+            return self::$compCodeCache[$subdomain];
         }
         
         try {
@@ -304,6 +316,7 @@ class Subdomain extends BaseConfig
             $companyName = $companyNameMap[$subdomain] ?? $this->configs[$subdomain]['name'] ?? null;
             
             if (!$companyName) {
+                self::$compCodeCache[$subdomain] = null;
                 return null;
             }
             
@@ -317,12 +330,14 @@ class Subdomain extends BaseConfig
             
             if ($compQuery === false) {
                 log_message('debug', "Subdomain::getCompCodeBySubdomain - 쿼리 실패: subdomain={$subdomain}, companyName={$companyName}");
+                self::$compCodeCache[$subdomain] = null;
                 return null;
             }
             
             $compResult = $compQuery->getRowArray();
             if (!$compResult || empty($compResult['comp_code'])) {
                 log_message('debug', "Subdomain::getCompCodeBySubdomain - 결과 없음: subdomain={$subdomain}, companyName={$companyName}");
+                self::$compCodeCache[$subdomain] = null;
                 return null;
             }
             
@@ -330,10 +345,14 @@ class Subdomain extends BaseConfig
             $compName = $compResult['comp_name'] ?? '';
             log_message('debug', "Subdomain::getCompCodeBySubdomain - 조회 성공: subdomain={$subdomain}, companyName={$companyName}, comp_code={$compCode}, comp_name={$compName}");
             
+            // 캐시에 저장
+            self::$compCodeCache[$subdomain] = $compCode;
+            
             return $compCode;
             
         } catch (\Exception $e) {
             log_message('error', 'Subdomain::getCompCodeBySubdomain - Error: ' . $e->getMessage());
+            self::$compCodeCache[$subdomain] = null;
             return null;
         }
     }
