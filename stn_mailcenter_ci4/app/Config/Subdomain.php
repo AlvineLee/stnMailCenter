@@ -23,7 +23,8 @@ class Subdomain extends BaseConfig
             'contact' => '02-1234-5678',
             'email' => 'support@lgchem.daumdata.com',
             'theme_color' => '#0066CC', // LG화학 브랜드 컬러
-            'description' => 'LG화학 전용 온라인 접수 시스템'
+            'description' => 'LG화학 전용 온라인 접수 시스템',
+            'comp_code' => '2327787'
         ],
         'gucci' => [
             'name' => '구찌',
@@ -35,7 +36,8 @@ class Subdomain extends BaseConfig
             'description' => '구찌 전용 온라인 접수 시스템',
             'm_code' => null, // DB에서 조회 (서브도메인 기반)
             'cc_code' => null, // 로드로지스 (ROD)
-            'cccode' => null // 로드로지스 (ROD) - API 조회용
+            'cccode' => null, // 로드로지스 (ROD) - API 조회용
+            'comp_code' => '1136344' // 구찌 거래처 코드
         ],
         'aloyoga' => [
             'name' => '알로요가코리아',
@@ -47,7 +49,8 @@ class Subdomain extends BaseConfig
             'description' => '알로요가코리아 전용 온라인 접수 시스템',
             'm_code' => null, // DB에서 조회 (서브도메인 기반)
             'cc_code' => null, // 로드로지스 (ROD)
-            'cccode' => null // 로드로지스 (ROD) - API 조회용
+            'cccode' => null, // 로드로지스 (ROD) - API 조회용
+            'comp_code' => '2335527'
         ],
         'dev' => [
             'name' => 'DaumData (개발)',

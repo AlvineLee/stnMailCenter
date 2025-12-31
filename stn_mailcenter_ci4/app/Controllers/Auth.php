@@ -43,6 +43,8 @@ class Auth extends BaseController
         $apiIdx = null;
         $apiList = [];
         
+        $apiCode = null; // api_code 추가
+        
         if ($isSubdomainAccess) {
             // 서브도메인 접근 시: 해당 서브도메인의 API만 조회
             $apiCodes = $subdomainConfig->getCurrentApiCodes();
@@ -51,6 +53,7 @@ class Auth extends BaseController
                 $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($apiCodes['m_code'], $apiCodes['cc_code']);
                 if ($apiInfo) {
                     $apiIdx = $apiInfo['idx'] ?? null;
+                    $apiCode = $apiInfo['api_code'] ?? null; // api_code 가져오기
                     // 서브도메인 API를 리스트에 추가 (드롭다운 표시용)
                     $apiList = [$apiInfo];
                 }
@@ -67,6 +70,7 @@ class Auth extends BaseController
             'subdomain' => $subdomainInfo,
             'is_subdomain' => $isSubdomainAccess,
             'api_idx' => $apiIdx,
+            'api_code' => $apiCode, // api_code 추가
             'api_list' => $apiList
         ];
         

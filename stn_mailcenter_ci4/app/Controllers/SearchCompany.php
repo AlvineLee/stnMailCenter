@@ -23,6 +23,7 @@ class SearchCompany extends BaseController
     public function index()
     {
         $apiIdx = $this->request->getGet('api_idx');
+        $apiCode = $this->request->getGet('api_code'); // api_code 파라미터 추가
         
         if (empty($apiIdx)) {
             return $this->response->setJSON([
@@ -41,15 +42,99 @@ class SearchCompany extends BaseController
             ])->setStatusCode(404);
         }
 
+        // api_code가 전달되지 않았으면 apiInfo에서 가져오기
+        if (empty($apiCode) && !empty($apiInfo['api_code'])) {
+            $apiCode = $apiInfo['api_code'];
+        }
+
         // 서브도메인에서 comp_code 가져오기
         $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
         $compCode = $subdomainConfig->getCurrentCompCode();
+        
+        // 서브도메인일 경우: 해당 서브도메인의 comp_code만 사용 (하드코딩)
+        $companyList = [];
+        $defaultCompCode = '';
+        $isSubdomainAccess = ($currentSubdomain && $currentSubdomain !== 'default');
+        
+        if ($isSubdomainAccess) {
+            // 서브도메인 설정에서 comp_code 가져오기
+            $subdomainInfo = $subdomainConfig->getCurrentConfig();
+            if (!empty($subdomainInfo['comp_code'])) {
+                $defaultCompCode = $subdomainInfo['comp_code'];
+                
+                // 해당 comp_code의 정보만 조회
+                $db = \Config\Database::connect();
+                $compBuilder = $db->table('tbl_company_list');
+                $compBuilder->select('comp_code, comp_name');
+                $compBuilder->where('comp_code', $defaultCompCode);
+                $compQuery = $compBuilder->get();
+                
+                if ($compQuery !== false) {
+                    $compResult = $compQuery->getRowArray();
+                    if ($compResult) {
+                        $companyList = [$compResult]; // 단일 항목만
+                    }
+                }
+            }
+        } else {
+            // 메인 도메인일 경우: api_code를 사용하여 올바른 cc_list 찾기
+            $defaultCompCode = $compCode ?? '';
+            
+            if (!empty($apiCode) && !empty($apiIdx)) {
+                $db = \Config\Database::connect();
+                
+                // 1. tbl_cc_list에서 cc_apicode=api_idx AND cc_code=api_code인 레코드 찾기
+                $ccBuilder = $db->table('tbl_cc_list');
+                $ccBuilder->select('idx');
+                $ccBuilder->where('cc_apicode', $apiIdx);
+                $ccBuilder->where('cc_code', $apiCode);
+                $ccQuery = $ccBuilder->get();
+                
+                if ($ccQuery !== false) {
+                    $ccResult = $ccQuery->getRowArray();
+                    if ($ccResult && !empty($ccResult['idx'])) {
+                        $ccIdx = $ccResult['idx'];
+                        
+                        // 2. tbl_company_list에서 cc_idx=ccIdx인 모든 레코드 조회
+                        $compBuilder = $db->table('tbl_company_list');
+                        $compBuilder->select('comp_code, comp_name');
+                        $compBuilder->where('cc_idx', $ccIdx);
+                        $compBuilder->orderBy('comp_name', 'ASC');
+                        $compQuery = $compBuilder->get();
+                        
+                        if ($compQuery !== false) {
+                            $companyList = $compQuery->getResultArray();
+                            
+                            // 서브도메인에서 가져온 comp_code가 목록에 있으면 기본값으로 설정
+                            if (!empty($defaultCompCode)) {
+                                $found = false;
+                                foreach ($companyList as $company) {
+                                    if ($company['comp_code'] === $defaultCompCode) {
+                                        $found = true;
+                                        break;
+                                    }
+                                }
+                                if (!$found) {
+                                    $defaultCompCode = ''; // 목록에 없으면 빈 값
+                                }
+                            } else if (!empty($companyList)) {
+                                // 기본값이 없으면 첫 번째 항목을 기본값으로
+                                $defaultCompCode = $companyList[0]['comp_code'] ?? '';
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         $data = [
             'title' => '고객 검색',
             'api_idx' => $apiIdx,
+            'api_code' => $apiCode, // api_code 추가
             'api_info' => $apiInfo,
-            'comp_code' => $compCode ?? ''
+            'comp_code' => $defaultCompCode,
+            'company_list' => $companyList // 회사 목록 추가
         ];
 
         return view('search_company/index', $data);
@@ -546,6 +631,22 @@ class SearchCompany extends BaseController
             // 서브도메인에서 comp_code 가져오기
             $subdomainConfig = config('Subdomain');
             $compCode = $subdomainConfig->getCurrentCompCode();
+            
+            // api_code를 사용하여 올바른 cc_list 찾기 (cc_apicode와 cc_code로 필터링)
+            $ccIdx = null;
+            if (!empty($apiInfo['api_code'])) {
+                $ccBuilder = $db->table('tbl_cc_list');
+                $ccBuilder->select('idx');
+                $ccBuilder->where('cc_apicode', $apiIdx);
+                $ccBuilder->where('cc_code', $apiInfo['api_code']); // api_code로 필터링
+                $ccQuery = $ccBuilder->get();
+                if ($ccQuery !== false) {
+                    $ccResult = $ccQuery->getRowArray();
+                    if ($ccResult && !empty($ccResult['idx'])) {
+                        $ccIdx = $ccResult['idx'];
+                    }
+                }
+            }
             
             if ($existingUser) {
                 // 기존 사용자: UPDATE (user_code가 동일하면 아이디 변경 가능)

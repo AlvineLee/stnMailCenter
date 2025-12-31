@@ -3132,7 +3132,8 @@ html.list-page-html {
 }
 
 /* 로그인 페이지 전용 스타일 */
-.login-page #apiSelect {
+.login-page #apiSelect,
+.login-page #selectedApiIdx {
     flex: 1 1 0% !important;
     min-width: 0 !important;
     width: auto !important;
@@ -3140,6 +3141,7 @@ html.list-page-html {
 }
 
 .login-page #customerSearchButton,
+.login-page #customerSearchButtonMain,
 .login-page #loginButton {
     width: auto !important;
     min-width: 80px !important;
