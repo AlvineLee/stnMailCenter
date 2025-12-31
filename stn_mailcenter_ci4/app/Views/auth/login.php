@@ -71,17 +71,19 @@
             
             <?= form_open('auth/processLogin', ['class' => 'space-y-3', 'id' => 'loginForm', 'data-ajax' => 'true']) ?>
                 <?php if (!$is_subdomain && !empty($api_list)): ?>
-                <!-- 메인도메인에서 소속 퀵사 선택 (api_list 사용) -->
-                <div class="mb-3">
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">소속 퀵사 선택</label>
-                    <select name="selected_api_idx" id="selectedApiIdx" class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" required>
-                        <option value="">소속 퀵사를 선택하세요</option>
+                <!-- 메인도메인에서 회사 선택 (api_list 사용) -->
+                <div class="flex gap-2 mb-3">
+                    <select name="selected_api_idx" id="selectedApiIdx" class="bg-white text-gray-700 border border-gray-300 px-3 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors flex-1" required>
+                        <option value="">회사 선택</option>
                         <?php foreach ($api_list as $api): ?>
                         <option value="<?= esc($api['idx']) ?>">
                             <?= esc($api['cccode'] ?? '') ?> - <?= esc($api['api_name'] ?? '') ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
+                    <button type="button" id="customerSearchButtonMain" onclick="openCustomerSearchPopupMain()" class="bg-gray-100 text-gray-700 border border-gray-300 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors whitespace-nowrap">
+                        고객검색
+                    </button>
                 </div>
                 <?php endif; ?>
                 
@@ -93,7 +95,7 @@
                         <option value="">회사 선택</option>
                         <?php endif; ?>
                         <?php foreach ($api_list as $api): ?>
-                        <option value="<?= esc($api['idx']) ?>" <?= (isset($api_idx) && $api['idx'] == $api_idx) ? 'selected' : '' ?>>
+                        <option value="<?= esc($api['idx']) ?>" data-api-code="<?= esc($api['api_code'] ?? '') ?>" <?= (isset($api_idx) && $api['idx'] == $api_idx) ? 'selected' : '' ?>>
                             <?= esc($api['cccode'] ?? '') ?> - <?= esc($api['api_name'] ?? '') ?>
                         </option>
                         <?php endforeach; ?>
@@ -442,15 +444,51 @@
         }
 
         function openCustomerSearchPopupMain() {
-            const apiSelect = document.getElementById('apiSelect');
-            const selectedApiIdx = apiSelect ? apiSelect.value : null;
+            let selectedApiIdx = null;
+            let selectedApiCode = null;
+            
+            // 메인 도메인: selectedApiIdx에서 값 가져오기
+            const selectedApiIdxElement = document.getElementById('selectedApiIdx');
+            if (selectedApiIdxElement) {
+                selectedApiIdx = selectedApiIdxElement.value;
+                // 선택된 옵션에서 api_code 가져오기 (data 속성 또는 옵션 텍스트에서)
+                if (selectedApiIdx) {
+                    const selectedOption = selectedApiIdxElement.options[selectedApiIdxElement.selectedIndex];
+                    selectedApiCode = selectedOption ? selectedOption.getAttribute('data-api-code') : null;
+                }
+            }
+            
+            // 서브도메인: apiSelect에서 값 가져오기 또는 기본 api_idx 사용
+            if (!selectedApiIdx) {
+                const apiSelect = document.getElementById('apiSelect');
+                if (apiSelect) {
+                    selectedApiIdx = apiSelect.value;
+                    if (selectedApiIdx) {
+                        const selectedOption = apiSelect.options[apiSelect.selectedIndex];
+                        selectedApiCode = selectedOption ? selectedOption.getAttribute('data-api-code') : null;
+                    }
+                }
+            }
+            
+            // 서브도메인이고 apiSelect에 값이 없으면 기본 api_idx, api_code 사용
+            <?php if ($is_subdomain && isset($api_idx) && $api_idx): ?>
+            if (!selectedApiIdx) {
+                selectedApiIdx = '<?= esc($api_idx) ?>';
+                <?php if (isset($api_code) && $api_code): ?>
+                selectedApiCode = '<?= esc($api_code) ?>';
+                <?php endif; ?>
+            }
+            <?php endif; ?>
             
             if (!selectedApiIdx) {
-                alert('API를 선택해주세요.');
+                alert('<?= $is_subdomain ? "회사를 선택해주세요." : "회사를 선택해주세요." ?>');
                 return;
             }
             
-            const url = '<?= base_url('search-company') ?>?api_idx=' + selectedApiIdx;
+            let url = '<?= base_url('search-company') ?>?api_idx=' + selectedApiIdx;
+            if (selectedApiCode) {
+                url += '&api_code=' + encodeURIComponent(selectedApiCode);
+            }
             window.open(url, 'customerSearch', 'width=850,height=650,scrollbars=yes,resizable=yes');
         }
 
@@ -499,10 +537,10 @@
             const form = this;
             const selectedApiIdx = document.getElementById('selectedApiIdx');
             
-            // 메인도메인에서 소속 퀵사 선택 필수 체크
+            // 메인도메인에서 회사 선택 필수 체크
             <?php if (!$is_subdomain && !empty($api_list)): ?>
             if (!selectedApiIdx || !selectedApiIdx.value) {
-                alert('소속 퀵사를 선택해주세요.');
+                alert('회사를 선택해주세요.');
                 if (selectedApiIdx) {
                     selectedApiIdx.focus();
                 }
