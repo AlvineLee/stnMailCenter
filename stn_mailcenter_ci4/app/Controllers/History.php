@@ -86,25 +86,83 @@ class History extends BaseController
             }
         }
         
-        // user_type별 필터링 (서브도메인 필터와 함께 적용)
+        // user_class는 세션에서 가져오거나 DB에서 조회 (주문조회 권한용)
+        $userClass = session()->get('user_class');
+        if (empty($userClass) && $loginType === 'daumdata') {
+            $userId = session()->get('user_id');
+            if ($userId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_class');
+                $userBuilder->where('user_id', $userId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                }
+            }
+        }
+        
+        // user_class별 필터링 (주문조회 권한): user_class=1(관리자) 또는 user_class=3(부서장)은 전체 조회
         if ($loginType === 'daumdata') {
-            if ($userType == '1') {
-                // user_type = 1: 전체 주문 리스트
+            // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
+            if ($userIdx) {
+                $filters['user_idx'] = $userIdx;
+            }
+            if ($userId) {
+                $filters['user_id'] = $userId;
+            }
+            
+            if ($userClass == '1' || $userClass == '3') {
+                // user_class = 1(관리자) 또는 3(부서장): 전체 주문 리스트
                 // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
                 $filters['user_type'] = '1';
                 $filters['customer_id'] = null;
-            } elseif ($userType == '3') {
-                // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
-                $filters['user_type'] = '3';
-                $filters['user_company'] = $userCompany; // 본인의 user_company
-            } elseif ($userType == '5') {
-                // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
+            } elseif ($userClass == '5') {
+                // user_class = 5(일반): 같은 회사(comp_code)의 모든 주문 조회
                 $filters['user_type'] = '5';
                 $filters['user_company'] = $userCompany; // 같은 회사의 모든 주문 조회
+            } else {
+                // user_class가 없거나 다른 값인 경우 user_type으로 폴백
+                if ($userType == '1') {
+                    $filters['user_type'] = '1';
+                    $filters['customer_id'] = null;
+                } elseif ($userType == '3') {
+                    $filters['user_type'] = '3';
+                    $filters['user_company'] = $userCompany;
+                } elseif ($userType == '5') {
+                    $filters['user_type'] = '5';
+                    $filters['user_company'] = $userCompany;
+                }
             }
         } else {
             // STN 로그인인 경우 기존 로직
             $filters['customer_id'] = $userRole !== 'super_admin' ? $customerId : null;
+        }
+        
+        // 본인주문조회(env1=3) 필터링: 일반 등급(user_class=5)일 때만 insung_user_id로 필터링
+        
+        if ($userClass == '5') {
+            $compCodeForEnv = $subdomainCompCode ?? $userCompany;
+            if ($compCodeForEnv) {
+                $db = \Config\Database::connect();
+                $envBuilder = $db->table('tbl_company_env');
+                $envBuilder->select('env1');
+                $envBuilder->where('comp_code', $compCodeForEnv);
+                $envQuery = $envBuilder->get();
+                if ($envQuery !== false) {
+                    $envResult = $envQuery->getRowArray();
+                    if ($envResult && isset($envResult['env1']) && $envResult['env1'] == '3') {
+                        // 본인주문조회: 로그인한 사용자의 insung_user_id로 필터링
+                        $loginUserId = session()->get('user_id'); // tbl_users_list.user_id (문자열)
+                        if ($loginUserId) {
+                            $filters['insung_user_id'] = $loginUserId;
+                        }
+                    }
+                }
+            }
         }
         
         // Model을 통한 데이터 조회

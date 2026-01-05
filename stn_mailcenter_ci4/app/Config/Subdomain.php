@@ -287,7 +287,7 @@ class Subdomain extends BaseConfig
     private static $compCodeCache = [];
     
     /**
-     * 서브도메인별 comp_code 조회 (DB에서)
+     * 서브도메인별 comp_code 조회 (설정 우선, 없으면 DB에서)
      * 
      * @param string $subdomain 서브도메인 이름
      * @return string|null comp_code 또는 null
@@ -303,6 +303,16 @@ class Subdomain extends BaseConfig
             return self::$compCodeCache[$subdomain];
         }
         
+        // 1. 설정에 comp_code가 하드코딩되어 있으면 우선 사용
+        if (isset($this->configs[$subdomain]['comp_code']) && !empty($this->configs[$subdomain]['comp_code'])) {
+            $compCode = $this->configs[$subdomain]['comp_code'];
+            log_message('debug', "Subdomain::getCompCodeBySubdomain - 설정에서 조회: subdomain={$subdomain}, comp_code={$compCode}");
+            // 캐시에 저장
+            self::$compCodeCache[$subdomain] = $compCode;
+            return $compCode;
+        }
+        
+        // 2. 설정에 없으면 DB에서 조회
         try {
             $db = \Config\Database::connect();
             
@@ -343,7 +353,7 @@ class Subdomain extends BaseConfig
             
             $compCode = $compResult['comp_code'];
             $compName = $compResult['comp_name'] ?? '';
-            log_message('debug', "Subdomain::getCompCodeBySubdomain - 조회 성공: subdomain={$subdomain}, companyName={$companyName}, comp_code={$compCode}, comp_name={$compName}");
+            log_message('debug', "Subdomain::getCompCodeBySubdomain - DB 조회 성공: subdomain={$subdomain}, companyName={$companyName}, comp_code={$compCode}, comp_name={$compName}");
             
             // 캐시에 저장
             self::$compCodeCache[$subdomain] = $compCode;
@@ -369,6 +379,21 @@ class Subdomain extends BaseConfig
             return null;
         }
         
+        // 캐시 확인
+        if (isset(self::$compCodeCache[$subdomain])) {
+            return self::$compCodeCache[$subdomain];
+        }
+        
+        // 설정에 comp_code가 하드코딩되어 있으면 우선 사용
+        if (isset($this->configs[$subdomain]['comp_code']) && !empty($this->configs[$subdomain]['comp_code'])) {
+            $compCode = $this->configs[$subdomain]['comp_code'];
+            // 캐시에 저장 (로그는 첫 호출 시에만 출력)
+            self::$compCodeCache[$subdomain] = $compCode;
+            // log_message('debug', "Subdomain::getCurrentCompCode - 설정에서 조회: subdomain={$subdomain}, comp_code={$compCode}");
+            return $compCode;
+        }
+        
+        // 설정에 없으면 DB에서 조회 (이미 캐싱 포함)
         return $this->getCompCodeBySubdomain($subdomain);
     }
 }

@@ -398,6 +398,41 @@ class SearchCompany extends BaseController
             }
         }
         
+        // 이미 등록된 사용자 체크 (tbl_users_list에서 user_id로 확인)
+        if (!empty($members)) {
+            $db = \Config\Database::connect();
+            $userIds = array_filter(array_column($members, 'user_id'));
+            
+            if (!empty($userIds)) {
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_id');
+                $userBuilder->whereIn('user_id', $userIds);
+                $userQuery = $userBuilder->get();
+                
+                $registeredUserIds = [];
+                if ($userQuery !== false) {
+                    $registeredUsers = $userQuery->getResultArray();
+                    foreach ($registeredUsers as $user) {
+                        if (!empty($user['user_id'])) {
+                            $registeredUserIds[] = $user['user_id'];
+                        }
+                    }
+                }
+                
+                // 각 회원에 is_registered 플래그 추가
+                foreach ($members as &$member) {
+                    $member['is_registered'] = !empty($member['user_id']) && in_array($member['user_id'], $registeredUserIds);
+                }
+                unset($member);
+            } else {
+                // user_id가 없는 경우 모두 미등록으로 처리
+                foreach ($members as &$member) {
+                    $member['is_registered'] = false;
+                }
+                unset($member);
+            }
+        }
+        
         // 필터링 후 실제 반환된 개수 로그
         // log_message('debug', 'SearchCompany::search - API 응답: page=' . $page . ', limit=' . $limit . ', rawItemCount=' . $rawItemCount . ', filteredCount=' . count($members) . ', totalRecord=' . $totalRecord . ', totalPage=' . $totalPage);
         // log_message('debug', 'SearchCompany::search - 검색 조건: compCode=' . $compCode . ', chargeName=' . $chargeName . ', telNo=' . $telNo);

@@ -495,6 +495,168 @@ class InsungApiService
     }
 
     /**
+     * 회원 등록 (인성 API /api/member_regist/)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $compNo 거래처 코드
+     * @param string $userId 사용자 ID
+     * @param string $password 비밀번호
+     * @param string $custName 고객명 (거래처명에서 cc_code prefix 제거)
+     * @param string $dongName 동명
+     * @param string $telNo 전화번호
+     * @param string $credit 신용도 코드
+     * @param string $deptName 부서명
+     * @param string $chargeName 담당자명
+     * @param string $email 이메일
+     * @param string $location 상세주소
+     * @param string $lon 경도
+     * @param string $lat 위도
+     * @param string $address 기본주소
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function registerMember($mcode, $cccode, $token, $compNo, $userId, $password, $custName, $dongName, $telNo, $credit, $deptName, $chargeName, $email, $location, $lon, $lat, $address, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/member_regist/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'comp_no' => $compNo,
+            'token' => $token,
+            'user_id' => $userId,
+            'password' => $password,
+            'password_confirm' => $password,
+            'cust_name' => $custName,
+            'dong_name' => $dongName,
+            'tel_no' => $telNo,
+            'credit' => $credit,
+            'dept_name' => $deptName,
+            'charge_name' => $chargeName,
+            'email' => $email,
+            'location' => $location,
+            'lon' => $lon,
+            'lat' => $lat,
+            'address' => $address,
+            'type' => 'json'
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
+     * 회원 수정 (인성 API /api/member_modify/)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param string $password 비밀번호
+     * @param string $custName 고객명
+     * @param string $dongName 동명
+     * @param string $telNo 전화번호
+     * @param string $credit 신용도 코드
+     * @param string $deptName 부서명
+     * @param string $chargeName 담당자명
+     * @param string $email 이메일
+     * @param string $location 상세주소
+     * @param string $lon 경도
+     * @param string $lat 위도
+     * @param string $address 기본주소
+     * @param string $compNo 거래처 코드
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return object|false JSON 응답 또는 false
+     */
+    public function modifyMember($mcode, $cccode, $token, $userId, $password, $custName, $dongName, $telNo, $credit, $deptName, $chargeName, $email, $location, $lon, $lat, $address, $compNo, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/member_modify/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'token' => $token,
+            'user_id' => $userId,
+            'password' => $password,
+            'password_confirm' => $password,
+            'cust_name' => $custName,
+            'dong_name' => $dongName,
+            'tel_no' => $telNo,
+            'credit' => $credit,
+            'dept_name' => $deptName,
+            'charge_name' => $chargeName,
+            'email' => $email,
+            'location' => $location,
+            'lon' => $lon,
+            'lat' => $lat,
+            'state' => '',
+            'address' => $address,
+            'comp_no' => $compNo,
+            'type' => 'json'
+        ];
+        
+        return $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+    }
+
+    /**
+     * 좌표로 주소 분리 (인성 API /api/axis/point/)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $lat 위도
+     * @param string $lon 경도
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return array|false ['sido' => string, 'gugun' => string, 'dong' => string, 'detail' => string] 또는 false
+     */
+    public function getAddressFromCoordinates($mcode, $cccode, $token, $lat, $lon, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/axis/point/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'token' => $token,
+            'lat' => $lat,
+            'lon' => $lon,
+            'type' => 'json'
+        ];
+        
+        $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+        
+        if (!$result) {
+            return false;
+        }
+        
+        // 응답 구조 확인
+        $code = '';
+        $zip = null;
+        
+        if (is_object($result) && isset($result->code)) {
+            $code = $result->code ?? '';
+            if (isset($result->zip) && is_array($result->zip) && isset($result->zip[0])) {
+                $zip = $result->zip[0];
+            }
+        } elseif (is_array($result) && isset($result[0])) {
+            if (is_object($result[0])) {
+                $code = $result[0]->code ?? '';
+            }
+            if (isset($result[0]->zip) && is_array($result[0]->zip) && isset($result[0]->zip[0])) {
+                $zip = $result[0]->zip[0];
+            }
+        }
+        
+        if ($code !== '1000' || !$zip) {
+            return false;
+        }
+        
+        return [
+            'sido' => $zip->sido ?? '',
+            'gugun' => $zip->gugun ?? '',
+            'dong' => $zip->dong ?? '',
+            'detail' => $zip->detail ?? ''
+        ];
+    }
+
+    /**
      * 즐겨찾기 리스트 조회 (고객사 목록)
      * 
      * @param string $mcode 마스터 코드
@@ -1186,12 +1348,12 @@ class InsungApiService
      * @param int $limit 페이지단위 출력 오더 레코드 수 (기본값: 1000, 최대: 1000)
      * @param int $page 출력 페이지 (기본값: 1)
      * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @param bool $onlyDept true이면 부서별 오더목록만 호출
+     * @param bool $onlyCancel true이면 취소포함 오더목록만 호출
      * @return array ['success' => bool, 'data' => array|null, 'message' => string]
      */
-    public function getOrderList($mcode, $cccode, $token, $userId, $fromDate = null, $toDate = null, $state = null, $staffCode = null, $deptName = null, $compNo = null, $limit = 1000, $page = 1, $apiIdx = null)
+    public function getOrderList($mcode, $cccode, $token, $userId, $fromDate = null, $toDate = null, $state = null, $staffCode = null, $deptName = null, $compNo = null, $limit = 1000, $page = 1, $apiIdx = null, $onlyDept = false, $onlyCancel = false)
     {
-        $url = $this->baseUrl . "/api/order_list/dept/";
-        
         log_message('info', "InsungApiService::getOrderList - 호출 시작: userId={$userId}, compNo={$compNo}, fromDate={$fromDate}, toDate={$toDate}, page={$page}");
         
         // 시작일자/종료일자가 없으면 오늘 날짜로 설정
@@ -1237,81 +1399,378 @@ class InsungApiService
         
         log_message('debug', "InsungApiService::getOrderList - API 파라미터: " . json_encode($params, JSON_UNESCAPED_UNICODE));
         
-        $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+        // onlyDept가 true이면 부서별 오더목록만 호출
+        // 2번 호출: 1) state 파라미터 없이 (모든 상태), 2) state=40 (취소)
+        if ($onlyDept) {
+            $urlDept = $this->baseUrl . "/api/order_list/dept/";
+            $allOrdersDept = [];
+            
+            log_message('info', "Insung API: 부서별 오더목록 호출 (onlyDept=true) - 2번 호출 구조 - {$urlDept}");
+            
+            // 1. state 파라미터 없이 호출 (모든 상태)
+            $paramsWithoutState = $params;
+            unset($paramsWithoutState['state']); // state 파라미터 제거
+            
+            log_message('debug', "Insung API: 부서별 오더목록 호출 1/2 - state 파라미터 없음 (모든 상태)");
+            $resultDept1 = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithoutState, $apiIdx);
+            
+            if ($resultDept1) {
+                $ordersDept1 = $this->parseOrderListResponse($resultDept1);
+                if ($ordersDept1 !== false && !empty($ordersDept1)) {
+                    $allOrdersDept = array_merge($allOrdersDept, $ordersDept1);
+                    log_message('debug', "Insung API: 부서별 오더목록 1/2 - " . count($ordersDept1) . "건 수집");
+                }
+            }
+            
+            // 2. state=40 (취소) 호출
+            $paramsWithCancel = $params;
+            $paramsWithCancel['state'] = '40'; // 취소 상태
+            
+            log_message('debug', "Insung API: 부서별 오더목록 호출 2/2 - state=40 (취소)");
+            $resultDept2 = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithCancel, $apiIdx);
+            
+            if ($resultDept2) {
+                $ordersDept2 = $this->parseOrderListResponse($resultDept2);
+                if ($ordersDept2 !== false && !empty($ordersDept2)) {
+                    $allOrdersDept = array_merge($allOrdersDept, $ordersDept2);
+                    log_message('debug', "Insung API: 부서별 오더목록 2/2 - state=40, " . count($ordersDept2) . "건 수집");
+                }
+            }
+            
+            if (empty($allOrdersDept)) {
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => '부서별 오더목록 파싱 실패 또는 데이터 없음'
+                ];
+            }
+            
+            // 중복 제거 (serial_number 기준)
+            $uniqueOrders = [];
+            $seenSerialNumbers = [];
+            foreach ($allOrdersDept as $order) {
+                $serialNumber = null;
+                if (is_object($order)) {
+                    $serialNumber = $order->serial_number ?? $order->SerialNumber ?? null;
+                } elseif (is_array($order)) {
+                    $serialNumber = $order['serial_number'] ?? $order['SerialNumber'] ?? null;
+                }
+                
+                if ($serialNumber && !isset($seenSerialNumbers[$serialNumber])) {
+                    $seenSerialNumbers[$serialNumber] = true;
+                    $uniqueOrders[] = $order;
+                } elseif (!$serialNumber) {
+                    $uniqueOrders[] = $order;
+                }
+            }
+            
+            log_message('info', "Insung API: 부서별 오더목록 - 총 " . count($allOrdersDept) . "건 수집, 중복 제거 후 " . count($uniqueOrders) . "건");
+            
+            // 성공 응답 형식으로 변환
+            $result = [
+                [
+                    'code' => '1000',
+                    'msg' => 'RESULT:OK'
+                ],
+                $uniqueOrders
+            ];
+            
+            return [
+                'success' => true,
+                'data' => $result,
+                'message' => '부서별 오더목록 조회 성공'
+            ];
+        }
         
-        log_message('info', "InsungApiService::getOrderList - API 호출 완료: " . ($result ? '응답 수신' : '응답 없음'));
+        // onlyCancel이 true이면 취소포함 오더목록만 호출
+        // 참고: 취소 API는 본인이 접수한 주문만 조회 가능 (콜센터 관리자 권한으로도 접수한 본인 주문만 조회)
+        if ($onlyCancel) {
+            $urlCancel = $this->baseUrl . "/api/order_list/include_cancel/";
+            log_message('info', "Insung API: 취소포함 오더목록 호출 (onlyCancel=true) - {$urlCancel}");
+            // log_message('debug', "Insung API: 취소포함 오더목록 파라미터: " . json_encode($params, JSON_UNESCAPED_UNICODE));
+            $resultCancel = $this->callApiWithAutoTokenRefresh($urlCancel, $params, $apiIdx);
+            
+            if (!$resultCancel) {
+                // log_message('error', "Insung API: 취소포함 오더목록 API 호출 실패 - 응답 없음");
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => '취소포함 오더목록 API 호출 실패'
+                ];
+            }
+            
+            // 응답 구조 상세 로그 (주석처리)
+            // log_message('debug', "Insung API: 취소포함 오더목록 응답 타입: " . gettype($resultCancel));
+            // if (is_array($resultCancel)) {
+            //     log_message('debug', "Insung API: 취소포함 오더목록 응답 배열 크기: " . count($resultCancel));
+            //     if (isset($resultCancel[0])) {
+            //         $code = $resultCancel[0]->code ?? $resultCancel[0]['code'] ?? '';
+            //         $msg = $resultCancel[0]->msg ?? $resultCancel[0]['msg'] ?? '';
+            //         log_message('debug', "Insung API: 취소포함 오더목록 응답 코드: {$code}, 메시지: {$msg}");
+            //     }
+            //     // 응답 전체 구조 로그 (처음 1000자만)
+            //     $responseJson = json_encode($resultCancel, JSON_UNESCAPED_UNICODE);
+            //     log_message('debug', "Insung API: 취소포함 오더목록 응답 구조 (처음 1000자): " . substr($responseJson, 0, 1000));
+            // }
+            
+            $ordersCancel = $this->parseOrderListResponse($resultCancel);
+            if ($ordersCancel === false || empty($ordersCancel)) {
+                // log_message('warning', "Insung API: 취소포함 오더목록 파싱 실패 또는 데이터 없음 - 파싱 결과: " . ($ordersCancel === false ? 'false' : 'empty array'));
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => '취소포함 오더목록 파싱 실패 또는 데이터 없음'
+                ];
+            }
+            
+            log_message('info', "Insung API: 취소포함 오더목록 파싱 성공 - " . count($ordersCancel) . "건");
+            
+            // 성공 응답 형식으로 변환
+            $result = [
+                [
+                    'code' => '1000',
+                    'msg' => 'RESULT:OK'
+                ],
+                $ordersCancel
+            ];
+            
+            return [
+                'success' => true,
+                'data' => $result,
+                'message' => '취소포함 오더목록 조회 성공'
+            ];
+        }
         
-        // API 응답 전체 로그 출력 (DB 저장 확인용) - 주석처리
-        // log_message('info', "Insung::getOrderList - Full API Response: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        // log_message('info', "Insung::getOrderList - Response Type: " . gettype($result));
-        // if (is_array($result)) {
-        //     log_message('info', "Insung::getOrderList - Response Array Count: " . count($result));
-        //     if (isset($result[0])) {
-        //         log_message('info', "Insung::getOrderList - Response[0] Type: " . gettype($result[0]));
-        //         log_message('info', "Insung::getOrderList - Response[0] Content: " . json_encode($result[0], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        //     }
-        //     if (isset($result[1])) {
-        //         log_message('info', "Insung::getOrderList - Response[1] Type: " . gettype($result[1]));
-        //         if (is_array($result[1])) {
-        //             log_message('info', "Insung::getOrderList - Response[1] Array Count: " . count($result[1]));
-        //             // 첫 번째 주문 항목만 샘플로 로그 출력
-        //             if (isset($result[1][0])) {
-        //                 log_message('info', "Insung::getOrderList - Response[1][0] Sample: " . json_encode($result[1][0], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        //             }
-        //         } elseif (is_object($result[1])) {
-        //             log_message('info', "Insung::getOrderList - Response[1] Object: " . json_encode($result[1], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        //         }
-        //     }
-        // } elseif (is_object($result)) {
-        //     log_message('info', "Insung::getOrderList - Response Object: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        // }
+        // 기본 동작: 두 API 모두 호출
+        // 1. 부서별 오더목록 API 호출 및 파싱
+        $urlDept = $this->baseUrl . "/api/order_list/dept/";
+        log_message('info', "Insung API: 부서별 오더목록 호출 - {$urlDept}");
+        $resultDept = $this->callApiWithAutoTokenRefresh($urlDept, $params, $apiIdx);
         
-        if (!$result) {
+        $allOrders = [];
+        $hasData = false;
+        
+        // 부서별 오더목록 파싱
+        if ($resultDept) {
+            // log_message('debug', "InsungApiService::getOrderList - 부서별 오더목록 응답 구조 확인 시작");
+            $ordersDept = $this->parseOrderListResponse($resultDept);
+            if ($ordersDept !== false && !empty($ordersDept)) {
+                $allOrders = array_merge($allOrders, $ordersDept);
+                $hasData = true;
+                log_message('info', "InsungApiService::getOrderList - 부서별 오더목록: " . count($ordersDept) . "건 파싱 완료");
+            } else {
+                log_message('warning', "InsungApiService::getOrderList - 부서별 오더목록 파싱 실패 또는 데이터 없음 (반환값: " . ($ordersDept === false ? 'false' : 'empty array') . ")");
+            }
+        }
+        
+        // 2. 취소포함 오더목록 API 호출 및 파싱 (부서별 오더목록 처리 후)
+        $urlCancel = $this->baseUrl . "/api/order_list/include_cancel/";
+        log_message('info', "Insung API: 취소포함 오더목록 호출 - {$urlCancel}");
+        $resultCancel = $this->callApiWithAutoTokenRefresh($urlCancel, $params, $apiIdx);
+        
+        // 취소포함 오더목록 파싱 및 합치기
+        if ($resultCancel) {
+            // log_message('debug', "InsungApiService::getOrderList - 취소포함 오더목록 응답 구조 확인 시작");
+            $ordersCancel = $this->parseOrderListResponse($resultCancel);
+            if ($ordersCancel !== false && !empty($ordersCancel)) {
+                $allOrders = array_merge($allOrders, $ordersCancel);
+                $hasData = true;
+                log_message('info', "InsungApiService::getOrderList - 취소포함 오더목록: " . count($ordersCancel) . "건 파싱 완료");
+            } else {
+                log_message('info', "InsungApiService::getOrderList - 취소포함 오더목록: 데이터 없음 (정상 - 취소된 주문이 없을 수 있음)");
+            }
+        }
+        
+        log_message('info', "InsungApiService::getOrderList - API 호출 완료: 부서별=" . ($resultDept ? '응답 수신' : '응답 없음') . ", 취소포함=" . ($resultCancel ? '응답 수신' : '응답 없음'));
+        
+        // 중복 제거 (serial_number 기준)
+        $uniqueOrders = [];
+        $seenSerialNumbers = [];
+        foreach ($allOrders as $order) {
+            $serialNumber = null;
+            if (is_object($order)) {
+                $serialNumber = $order->serial_number ?? $order->SerialNumber ?? null;
+            } elseif (is_array($order)) {
+                $serialNumber = $order['serial_number'] ?? $order['SerialNumber'] ?? null;
+            }
+            
+            if ($serialNumber && !isset($seenSerialNumbers[$serialNumber])) {
+                $seenSerialNumbers[$serialNumber] = true;
+                $uniqueOrders[] = $order;
+            } elseif (!$serialNumber) {
+                // serial_number가 없으면 그냥 추가 (중복 체크 불가)
+                $uniqueOrders[] = $order;
+            }
+        }
+        
+        log_message('info', "InsungApiService::getOrderList - 합계: 총 " . count($allOrders) . "건, 중복 제거 후 " . count($uniqueOrders) . "건");
+        
+        if (!$hasData || empty($uniqueOrders)) {
+            // 두 API 모두 실패하거나 데이터가 없는 경우
             return [
                 'success' => false,
                 'data' => null,
-                'message' => 'API 호출 실패'
+                'message' => '주문 목록 조회 실패 또는 데이터 없음'
             ];
         }
+        
+        // 성공 응답 형식으로 변환 (기존 형식 유지)
+        $result = [
+            [
+                'code' => '1000',
+                'msg' => 'RESULT:OK'
+            ],
+            $uniqueOrders
+        ];
+        
+        return [
+            'success' => true,
+            'data' => $result,
+            'message' => '주문 목록 조회 성공'
+        ];
+    }
+    
+    /**
+     * 주문 목록 API 응답 파싱
+     * 
+     * @param mixed $result API 응답
+     * @return array|false 주문 목록 배열 또는 false
+     */
+    private function parseOrderListResponse($result)
+    {
+        if (!$result) {
+            // log_message('debug', 'parseOrderListResponse - result is empty or false');
+            return false;
+        }
+        
+        // log_message('debug', 'parseOrderListResponse - 시작, result 타입: ' . gettype($result));
         
         // 응답이 배열인 경우 첫 번째 요소 확인
         if (is_array($result) && isset($result[0])) {
             $code = $result[0]->code ?? $result[0]['code'] ?? '';
             $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
             
-            log_message('info', "InsungApiService::getOrderList - 응답 코드: {$code}, 메시지: {$msg}");
+            // log_message('debug', 'parseOrderListResponse - 배열 응답, code: ' . $code . ', msg: ' . $msg);
             
             if ($code === '1000') {
-                log_message('info', "InsungApiService::getOrderList - 성공: 데이터 반환, 배열 크기=" . (is_array($result) ? count($result) : 'N/A'));
-                // 성공 시 주문 목록 데이터 반환
-                // log_message('info', "Insung::getOrderList - Success, returning data. Data structure: " . json_encode([
-                //     'is_array' => is_array($result),
-                //     'count' => is_array($result) ? count($result) : 'N/A',
-                //     'has_index_0' => isset($result[0]),
-                //     'has_index_1' => isset($result[1]),
-                //     'index_1_type' => isset($result[1]) ? gettype($result[1]) : 'N/A',
-                //     'index_1_count' => (isset($result[1]) && is_array($result[1])) ? count($result[1]) : 'N/A'
+                // 주문 목록 데이터 추출
+                // result[1]: 메타 정보 (total_record, total_page 등)
+                // result[2]: 실제 주문 목록 데이터 (items[0]->item 구조)
+                $orders = [];
+                
+                // 디버깅: 응답 구조 확인 (주석처리)
+                // log_message('debug', 'parseOrderListResponse - result 구조 확인: ' . json_encode([
+                //     'result_count' => count($result),
+                //     'has_result_1' => isset($result[1]),
+                //     'has_result_2' => isset($result[2]),
+                //     'result_1_type' => isset($result[1]) ? gettype($result[1]) : 'N/A',
+                //     'result_2_type' => isset($result[2]) ? gettype($result[2]) : 'N/A',
                 // ], JSON_UNESCAPED_UNICODE));
                 
-                return [
-                    'success' => true,
-                    'data' => $result,
-                    'message' => '주문 목록 조회 성공'
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'data' => null,
-                    'message' => "주문 목록 조회 실패: [{$code}] {$msg}"
-                ];
+                // result[2]에서 주문 데이터 추출
+                if (isset($result[2])) {
+                    // result[2]가 객체이고 items 속성이 있는 경우
+                    if (is_object($result[2]) && isset($result[2]->items)) {
+                        // items[0]->item 구조 확인
+                        if (is_array($result[2]->items) && isset($result[2]->items[0])) {
+                            if (isset($result[2]->items[0]->item)) {
+                                $items = is_array($result[2]->items[0]->item) ? $result[2]->items[0]->item : [$result[2]->items[0]->item];
+                                $orders = array_merge($orders, $items);
+                                // log_message('debug', 'parseOrderListResponse - result[2]->items[0]->item에서 ' . count($items) . '건 추출');
+                            }
+                        } elseif (is_object($result[2]->items) && isset($result[2]->items->item)) {
+                            // items->item 구조
+                            $items = is_array($result[2]->items->item) ? $result[2]->items->item : [$result[2]->items->item];
+                            $orders = array_merge($orders, $items);
+                            // log_message('debug', 'parseOrderListResponse - result[2]->items->item에서 ' . count($items) . '건 추출');
+                        } elseif (is_array($result[2]->items)) {
+                            // items가 배열인 경우 (각 itemGroup 순회)
+                            foreach ($result[2]->items as $itemGroup) {
+                                if (isset($itemGroup->item)) {
+                                    $items = is_array($itemGroup->item) ? $itemGroup->item : [$itemGroup->item];
+                                    $orders = array_merge($orders, $items);
+                                }
+                            }
+                            // log_message('debug', 'parseOrderListResponse - result[2]->items 배열에서 ' . count($orders) . '건 추출');
+                        }
+                    } elseif (is_array($result[2])) {
+                        // result[2]가 배열인 경우 (직접 주문 목록)
+                        $orders = $result[2];
+                        // log_message('debug', 'parseOrderListResponse - result[2] 배열에서 ' . count($orders) . '건 추출');
+                    } else {
+                        // result[2]가 객체이지만 items가 없는 경우
+                        // result[2]부터 끝까지가 주문 데이터일 수 있음 (result[2], result[3], ... result[N])
+                        // log_message('debug', 'parseOrderListResponse - result[2] 구조 확인: ' . json_encode([
+                        //     'is_object' => is_object($result[2]),
+                        //     'is_array' => is_array($result[2]),
+                        //     'has_items' => is_object($result[2]) ? (isset($result[2]->items) ? 'yes' : 'no') : 'N/A',
+                        // ], JSON_UNESCAPED_UNICODE));
+                        
+                        // result[2]부터 끝까지 순회하여 주문 데이터 추출
+                        for ($i = 2; $i < count($result); $i++) {
+                            if (isset($result[$i])) {
+                                if (is_object($result[$i]) || is_array($result[$i])) {
+                                    $orders[] = $result[$i];
+                                }
+                            }
+                        }
+                        // if (!empty($orders)) {
+                        //     log_message('debug', 'parseOrderListResponse - result[2]부터 끝까지에서 ' . count($orders) . '건 추출');
+                        // }
+                    }
+                }
+                
+                // result[2]에 데이터가 없고 result[1]에 직접 주문 데이터가 있는 경우 (예외 처리)
+                if (empty($orders) && isset($result[1])) {
+                    // result[1]이 메타 정보가 아닌 주문 배열인 경우
+                    if (is_array($result[1]) && !isset($result[1]['total_record']) && !isset($result[1][0]->total_record)) {
+                        $orders = $result[1];
+                        // log_message('debug', 'parseOrderListResponse - result[1] 배열에서 ' . count($orders) . '건 추출 (예외 처리)');
+                    }
+                }
+                
+                // log_message('info', 'parseOrderListResponse - 최종 추출된 주문 수: ' . count($orders));
+                return $orders;
             }
         }
         
-        return [
-            'success' => false,
-            'data' => null,
-            'message' => '응답 형식 오류'
-        ];
+        // Result 키로 래핑된 경우
+        if (is_object($result) && isset($result->Result)) {
+            $resultArray = is_array($result->Result) ? $result->Result : [$result->Result];
+            if (isset($resultArray[0])) {
+                $code = '';
+                if (is_object($resultArray[0])) {
+                    if (isset($resultArray[0]->result_info) && is_array($resultArray[0]->result_info) && isset($resultArray[0]->result_info[0])) {
+                        $code = $resultArray[0]->result_info[0]->code ?? '';
+                    } elseif (isset($resultArray[0]->code)) {
+                        $code = $resultArray[0]->code;
+                    }
+                } elseif (is_array($resultArray[0])) {
+                    $code = $resultArray[0]['code'] ?? '';
+                }
+                
+                if ($code === '1000') {
+                    // 주문 목록 데이터 추출
+                    $orders = [];
+                    if (isset($resultArray[2]) && isset($resultArray[2]->items)) {
+                        if (is_array($resultArray[2]->items)) {
+                            foreach ($resultArray[2]->items as $itemGroup) {
+                                if (isset($itemGroup->item)) {
+                                    $items = is_array($itemGroup->item) ? $itemGroup->item : [$itemGroup->item];
+                                    $orders = array_merge($orders, $items);
+                                }
+                            }
+                        } elseif (is_object($resultArray[2]->items) && isset($resultArray[2]->items->item)) {
+                            $items = is_array($resultArray[2]->items->item) ? $resultArray[2]->items->item : [$resultArray[2]->items->item];
+                            $orders = array_merge($orders, $items);
+                        }
+                    }
+                    return $orders;
+                }
+            }
+        }
+        
+        return false;
     }
 
     /**
@@ -1323,9 +1782,9 @@ class InsungApiService
      * @param string $token 토큰
      * @param string $address 주소
      * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
-     * @return array|false ['lon' => string, 'lat' => string] 또는 false
+     * @return array|false ['lon' => string, 'lat' => string, 'normal_lon' => string, 'normal_lat' => string] 또는 false
      */
-    private function getAddressCoordinates($mcode, $cccode, $token, $address, $apiIdx = null)
+    public function getAddressCoordinates($mcode, $cccode, $token, $address, $apiIdx = null)
     {
         if (empty($address)) {
             log_message('warning', "Insung::getAddressCoordinates - Address is empty");

@@ -275,6 +275,12 @@ $routes->group('admin', function($routes) {
     $routes->post('order-list-ajax', 'Admin::orderListAjax');
     $routes->get('order-detail', 'Admin::getOrderDetail');
     $routes->get('company-list', 'Admin::companyList');
+    $routes->get('company-list-cc', 'Admin::companyListForCc'); // 콜센터 관리자용 거래처관리
+    $routes->get('company-edit', 'Admin::companyEdit'); // 거래처 수정 폼
+    $routes->post('company-save', 'Admin::companySave'); // 거래처 저장
+    $routes->get('company-customer-list', 'Admin::companyCustomerList'); // 거래처별 고객 리스트
+    $routes->get('company-customer-form', 'Admin::companyCustomerForm'); // 고객 등록/수정 폼
+    $routes->post('company-customer-save', 'Admin::companyCustomerSave'); // 고객 등록/수정 저장
     $routes->post('createServiceType', 'Admin::createServiceType');
     $routes->post('updateServiceType', 'Admin::updateServiceType');
     $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');

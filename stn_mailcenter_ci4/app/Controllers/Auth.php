@@ -238,13 +238,15 @@ class Auth extends BaseController
                 'comp_tel' => $user['comp_tel'] ?? '',
                 'comp_code' => $user['comp_code'] ?? null, // customer_id로 사용
                 'user_company' => $user['user_company'] ?? null, // tbl_users_list.user_company (고객사 코드)
+                'user_cc_idx' => $user['cc_idx'] ?? null, // tbl_company_list.cc_idx (콜센터 관리자용)
                 'cc_code' => $ccCode, // 선택한 API의 cc_code 또는 기존 값
                 'm_code' => $mCode, // 선택한 API의 m_code 또는 기존 값
                 'token' => $token, // 선택한 API의 token 또는 기존 값
                 'ckey' => $ckey, // 선택한 API의 ckey 또는 기존 값
                 'ukey' => $ukey, // ukey
                 'akey' => $akey, // akey
-                'user_type' => $user['user_type'] ?? '5',
+                'user_type' => $user['user_type'] ?? '5', // 메뉴 접근 권한용
+                'user_class' => $user['user_class'] ?? '5', // 주문조회 권한용
                 'login_type' => 'daumdata',
                 'is_logged_in' => true,
                 'company_logo_path' => !empty($user['logo_path']) ? $user['logo_path'] : null // 고객사 로고 경로
@@ -536,4 +538,5 @@ class Auth extends BaseController
             log_message('error', "Exception in syncInsungOrdersViaCLI: " . $e->getMessage());
         }
     }
+    
 }

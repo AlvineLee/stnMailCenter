@@ -28,8 +28,8 @@ class Database extends Config
     public array $default = [
         'DSN'          => '',
         'hostname'     => '192.168.0.130',
-        'username'     => 'coder',
-        'password'     => 'dptmxldps1!',
+        'username'     => 'root',
+        'password'     => 'rbghkd75!@#$',
         'database'     => 'mailcenter',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
@@ -162,6 +162,9 @@ class Database extends Config
      * This database connection is used when running PHPUnit database tests.
      *
      * @var array<string, mixed>
+     * 
+     * 주의: 데이터베이스 테스트를 사용하지 않으므로 이 설정은 사용되지 않습니다.
+     * ExampleDatabaseTest에서 테스트가 스킵됩니다.
      */
     public array $tests = [
         'DSN'         => '',
@@ -196,15 +199,16 @@ class Database extends Config
 
         // 환경변수에서 DB 설정 읽기
         $this->default['hostname'] = getenv('DB_HOSTNAME') ?: 'localhost';
-        $this->default['username'] = getenv('DB_USERNAME') ?: 'coder';
-        $this->default['password'] = getenv('DB_PASSWORD') ?: 'dptmxldps1!';
+        $this->default['username'] = getenv('DB_USERNAME') ?: 'root';
+        $this->default['password'] = getenv('DB_PASSWORD') ?: 'rbghkd75!@#$';
         $this->default['database'] = getenv('DB_DATABASE') ?: 'mailcenter';
 
         // Ensure that we always set the database group to 'tests' if
         // we are currently running an automated test suite, so that
         // we don't overwrite live data on accident.
-        if (ENVIRONMENT === 'testing') {
-            $this->defaultGroup = 'tests';
-        }
+        // 주의: SQLite3를 사용하지 않으므로 테스트 환경에서도 기본 그룹을 유지
+        // if (ENVIRONMENT === 'testing') {
+        //     $this->defaultGroup = 'tests';
+        // }
     }
 }

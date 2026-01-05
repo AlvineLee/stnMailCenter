@@ -49,7 +49,7 @@
                                             $statusText = '완료';
                                             break;
                                         case 'cancelled':
-                                            $statusStyle = 'background: #fee2e2; color: #dc2626';
+                                            $statusStyle = 'background: #fee2e2; color: #dc2626'; // 연한 빨간색 (예약보다 약간 더 연함)
                                             $statusText = '취소';
                                             break;
                                         default:

@@ -77,7 +77,7 @@
                         <option value="">회사 선택</option>
                         <?php foreach ($api_list as $api): ?>
                         <option value="<?= esc($api['idx']) ?>">
-                            <?= esc($api['cccode'] ?? '') ?> - <?= esc($api['api_name'] ?? '') ?>
+                            <?= esc($api['cccode'] ?? '') ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
@@ -96,7 +96,7 @@
                         <?php endif; ?>
                         <?php foreach ($api_list as $api): ?>
                         <option value="<?= esc($api['idx']) ?>" data-api-code="<?= esc($api['api_code'] ?? '') ?>" <?= (isset($api_idx) && $api['idx'] == $api_idx) ? 'selected' : '' ?>>
-                            <?= esc($api['cccode'] ?? '') ?> - <?= esc($api['api_name'] ?? '') ?>
+                            <?= esc($api['cccode'] ?? '') ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
@@ -432,6 +432,62 @@
     </div>
 
     <script>
+        // 쿠키 관련 함수
+        function setCookie(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString() + ';path=/';
+        }
+        
+        function getCookie(name) {
+            const nameEQ = name + '=';
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            }
+            return null;
+        }
+        
+        // 페이지 로드 시 쿠키에서 저장된 API 선택값 복원
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedApiIdx = getCookie('selected_api_idx');
+            if (savedApiIdx) {
+                // 메인 도메인: selectedApiIdx select box
+                const selectedApiIdxElement = document.getElementById('selectedApiIdx');
+                if (selectedApiIdxElement) {
+                    selectedApiIdxElement.value = savedApiIdx;
+                }
+                
+                // 서브도메인: apiSelect select box
+                const apiSelectElement = document.getElementById('apiSelect');
+                if (apiSelectElement) {
+                    apiSelectElement.value = savedApiIdx;
+                }
+            }
+        });
+        
+        // API 선택 변경 시 쿠키에 저장
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectedApiIdxElement = document.getElementById('selectedApiIdx');
+            if (selectedApiIdxElement) {
+                selectedApiIdxElement.addEventListener('change', function() {
+                    if (this.value) {
+                        setCookie('selected_api_idx', this.value, 30); // 30일간 유지
+                    }
+                });
+            }
+            
+            const apiSelectElement = document.getElementById('apiSelect');
+            if (apiSelectElement) {
+                apiSelectElement.addEventListener('change', function() {
+                    if (this.value) {
+                        setCookie('selected_api_idx', this.value, 30); // 30일간 유지
+                    }
+                });
+            }
+        });
         
         function openRegistrationPopup() {
             document.getElementById('registrationPopup').classList.remove('hidden');

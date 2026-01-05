@@ -1,10 +1,10 @@
 <?= $this->extend('layouts/header') ?>
 
-<?= $this->section('content') ?>
+<?= $this->section('content') ?> 
 <?= form_open('service/submitServiceOrder', ['class' => 'order-form w-full', 'id' => 'orderForm', 'style' => 'height: 100%; display: flex; flex-direction: column;']) ?>
-    <input type="hidden" name="service_type" value="life-taxi">
-    <input type="hidden" name="service_name" value="택시">
-    
+        <input type="hidden" name="service_type" value="life-taxi">
+        <input type="hidden" name="service_name" value="택시">
+        
     <!-- 주문자 정보 (숨김 필드) -->
     <?php 
     $loginType = session()->get('login_type');
@@ -34,9 +34,9 @@
                         <input type="hidden" id="departure_lng" name="departure_lng">
                         <input type="hidden" id="departure_zonecode" name="departure_zonecode">
                         <input type="hidden" id="departure_detail" name="departure_detail">
-                    </div>
                 </div>
-                
+            </div>
+        
                 <!-- 도착지 -->
                 <div class="space-y-2 w-full">
                     <label class="block text-sm font-medium text-gray-700">도착지</label>
@@ -52,13 +52,13 @@
                         <input type="hidden" id="destination_lng" name="destination_lng">
                         <input type="hidden" id="destination_zonecode" name="destination_zonecode">
                         <input type="hidden" id="destination_detail" name="destination_detail">
-                    </div>
-                </div>
-                
+                            </div>
+                        </div>
+                        
                 <!-- 경로 정보 (출발지와 도착지가 모두 입력되면 표시) -->
                 <div id="routeInfo" class="hidden bg-white rounded-lg border border-gray-200 p-4">
                     <h3 class="text-sm font-semibold text-gray-700 mb-3">경로 정보</h3>
-                    <div class="space-y-2">
+                        <div class="space-y-2">
                         <div class="flex items-center space-x-2">
                             <span class="text-sm text-gray-600">거리:</span>
                             <span id="routeDistance" class="text-sm font-medium text-blue-600">-</span>
@@ -67,7 +67,7 @@
                             <span class="text-sm text-gray-600">예상요금:</span>
                             <span id="routeFare" class="text-sm font-medium text-green-600">-</span>
                         </div>
-                    </div>
+                        </div>
                     <button type="button" 
                             id="callButton" 
                             disabled
@@ -75,9 +75,9 @@
                             class="w-full mt-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-md font-medium transition-colors">
                         호출하기
                     </button>
-                </div>
-            </div>
-        </div>
+                            </div>
+                        </div>
+                    </div>
         
         <!-- 하단: 지도 영역 -->
         <div class="flex-1 relative min-h-0 flex justify-center p-4">
@@ -88,8 +88,8 @@
                 <div id="dispatch_overlay" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white bg-opacity-98 p-6 rounded-lg shadow-lg text-center z-50 hidden" style="min-width: 250px;">
                     <h4 class="mb-3 text-lg font-semibold">기사님을 배차중입니다.</h4>
                     <button type="button" id="virtual_dispatch_btn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md font-medium" onclick="virtualDispatch(event)">가상 배차</button>
-                </div>
-                
+            </div>
+            
                 <!-- 배차 완료 오버레이 -->
                 <div id="driver_info_overlay" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white bg-opacity-98 p-6 rounded-lg shadow-lg z-50 hidden" style="min-width: 300px; cursor: move;">
                     <div class="bg-gray-100 p-3 mb-4 rounded-t-lg -mx-6 -mt-6 font-bold">배차 완료</div>
@@ -108,19 +108,19 @@
                         </div>
                         <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md font-medium mt-4" onclick="callCustomerService()">
                             <i class="fas fa-phone mr-2"></i> 고객센터 전화하기
-                        </button>
+                            </button>
                         <button type="button" class="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-md font-medium mt-2" onclick="closeDriverInfo(event)">
                             <i class="fas fa-times mr-2"></i> 닫기
-                        </button>
+                            </button>
+                        </div>
                     </div>
-                </div>
-                    </div>
-                </div>
+            </div>
             </div>
         </div>
-    </div>
+            </div>
+        </div> 
     <!-- 라운딩 패널 컨테이너 닫기 -->
-<?= form_close() ?>
+    <?= form_close() ?>
 
 <!-- 다음 주소검색 API -->
 <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>

@@ -1071,27 +1071,20 @@ class Admin extends BaseController
         $fromDate = $this->request->getGet('from_date') ?? date('Y-m-d');
         $toDate = $this->request->getGet('to_date') ?? date('Y-m-d');
 
-        // 거래처 목록 조회 (API)
+        // 거래처 목록 조회 (API - 모든 페이지 순회)
         $companyList = [];
         if ($mCode && $ccCode && $token) {
             $insungApiService = new \App\Libraries\InsungApiService();
             
-            // 콜센터 정보 조회 (cc_code로)
-            $ccCodeForSearch = $ccCode;
-            if ($loginType === 'daumdata' && $userType == '1') {
-                $ccCodeForSearch = session()->get('cc_code') ?? $ccCode;
-            }
+            // 첫 번째 페이지 호출하여 total_page 확인
+            $firstPageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', '', 1, 100, $apiIdx);
             
-            //$compNamePrefix = $ccCodeForSearch . '_';
-            $compNamePrefix = '';
-            $companyListResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', $compNamePrefix, 1, 999999, $apiIdx);
-            
-            if ($companyListResult) {
-                // 응답 구조 파싱 (getCompanyList는 객체/배열을 직접 반환)
-                $companyData = $companyListResult;
-                
-                // 응답 코드 확인
+            if ($firstPageResult) {
+                // 응답 구조 파싱
+                $companyData = $firstPageResult;
                 $code = '';
+                $totalPage = 1;
+                
                 if (is_object($companyData) && isset($companyData->Result)) {
                     $resultArray = is_array($companyData->Result) ? $companyData->Result : [$companyData->Result];
                     if (isset($resultArray[0]->result_info[0]->code)) {
@@ -1099,43 +1092,68 @@ class Admin extends BaseController
                     } elseif (isset($resultArray[0]->code)) {
                         $code = $resultArray[0]->code;
                     }
-                } elseif (is_array($companyData) && isset($companyData[0])) {
-                    if (is_object($companyData[0]) && isset($companyData[0]->code)) {
+                    
+                    if (isset($resultArray[1]->page_info[0]->total_page)) {
+                        $totalPage = (int)$resultArray[1]->page_info[0]->total_page;
+                    } elseif (isset($resultArray[1]->total_page)) {
+                        $totalPage = (int)$resultArray[1]->total_page;
+                    }
+                } elseif (is_array($companyData)) {
+                    if (isset($companyData[0]->code)) {
                         $code = $companyData[0]->code;
-                    } elseif (is_array($companyData[0]) && isset($companyData[0]['code'])) {
+                    } elseif (isset($companyData[0]['code'])) {
                         $code = $companyData[0]['code'];
+                    }
+                    
+                    if (isset($companyData[1]->page_info[0]->total_page)) {
+                        $totalPage = (int)$companyData[1]->page_info[0]->total_page;
+                    } elseif (isset($companyData[1]->total_page)) {
+                        $totalPage = (int)$companyData[1]->total_page;
                     }
                 }
                 
                 // 성공 코드 확인 (1000)
-                if ($code === '1000') {
-                    // 응답 구조 파싱
-                    if (is_object($companyData) && isset($companyData->Result)) {
-                        $resultArray = is_array($companyData->Result) ? $companyData->Result : [$companyData->Result];
-                        if (isset($resultArray[2]->items[0]->item)) {
-                            $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
-                            foreach ($items as $item) {
-                                $companyList[] = [
-                                    'comp_no' => $item->comp_no ?? '',
-                                    'corp_name' => $item->corp_name ?? '',
-                                    'owner' => $item->owner ?? '',
-                                    'tel_no' => $item->tel_no ?? '',
-                                    'cc_code' => $ccCodeForSearch ?? $ccCode ?? ''
-                                ];
-                            }
+                if ($code === '1000' && $totalPage > 0) {
+                    // 모든 페이지 순회
+                    for ($page = 1; $page <= $totalPage; $page++) {
+                        // 첫 번째 페이지는 이미 호출했으므로 재사용
+                        if ($page === 1) {
+                            $pageResult = $firstPageResult;
+                        } else {
+                            $pageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', '', $page, 100, $apiIdx);
                         }
-                    } elseif (is_array($companyData) && isset($companyData[2])) {
-                        // 배열 형태 응답 처리
-                        if (isset($companyData[2]->items[0]->item)) {
-                            $items = is_array($companyData[2]->items[0]->item) ? $companyData[2]->items[0]->item : [$companyData[2]->items[0]->item];
-                            foreach ($items as $item) {
-                                $companyList[] = [
-                                    'comp_no' => $item->comp_no ?? '',
-                                    'corp_name' => $item->corp_name ?? '',
-                                    'owner' => $item->owner ?? '',
-                                    'tel_no' => $item->tel_no ?? '',
-                                    'cc_code' => $ccCodeForSearch ?? $ccCode ?? ''
-                                ];
+                        
+                        if ($pageResult) {
+                            $pageData = $pageResult;
+                            
+                            // 응답 구조 파싱
+                            if (is_object($pageData) && isset($pageData->Result)) {
+                                $resultArray = is_array($pageData->Result) ? $pageData->Result : [$pageData->Result];
+                                if (isset($resultArray[2]->items[0]->item)) {
+                                    $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
+                                    foreach ($items as $item) {
+                                        $companyList[] = [
+                                            'comp_no' => $item->comp_no ?? '',
+                                            'corp_name' => $item->corp_name ?? '',
+                                            'owner' => $item->owner ?? '',
+                                            'tel_no' => $item->tel_no ?? '',
+                                            'cc_code' => $ccCode
+                                        ];
+                                    }
+                                }
+                            } elseif (is_array($pageData) && isset($pageData[2])) {
+                                if (isset($pageData[2]->items[0]->item)) {
+                                    $items = is_array($pageData[2]->items[0]->item) ? $pageData[2]->items[0]->item : [$pageData[2]->items[0]->item];
+                                    foreach ($items as $item) {
+                                        $companyList[] = [
+                                            'comp_no' => $item->comp_no ?? '',
+                                            'corp_name' => $item->corp_name ?? '',
+                                            'owner' => $item->owner ?? '',
+                                            'tel_no' => $item->tel_no ?? '',
+                                            'cc_code' => $ccCode
+                                        ];
+                                    }
+                                }
                             }
                         }
                     }
@@ -1227,122 +1245,57 @@ class Admin extends BaseController
         // 검색 파라미터
         $searchCompName = $this->request->getGet('search_compname') ?? '';
 
-        // 콜센터 코드로 거래처명 prefix 설정 (사용하지 않음)
-        // $ccCodeForSearch = $ccCode;
-        // if ($loginType === 'daumdata' && $userType == '1') {
-        //     $ccCodeForSearch = session()->get('cc_code') ?? $ccCode;
-        // }
-        
-        // $compNamePrefix = $ccCodeForSearch . '_';
-        // comp_name에 prefix를 붙이지 않음
-        // if (!empty($searchCompName)) {
-        //     if ($searchCompName != $compNamePrefix) {
-        //         $searchCompName = str_replace($compNamePrefix, '', $searchCompName);
-        //         $searchCompName = $compNamePrefix . $searchCompName;
-        //     } else {
-        //         $searchCompName = $searchCompName . '_';
-        //     }
-        // } else {
-        //     $searchCompName = $compNamePrefix;
-        // }
-
-        // 거래처 목록 조회 (API) - 모든 페이지 순회
+        // 거래처 목록 조회 (API - 모든 페이지 순회)
         $companyList = [];
         if ($mCode && $ccCode && $token) {
             $insungApiService = new \App\Libraries\InsungApiService();
             
-            // 첫 번째 페이지 호출하여 total_page 확인 (limit을 크게 설정하여 모든 데이터 가져오기 시도)
-            $firstPageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', $searchCompName, 1, 999999, $apiIdx);
+            // 첫 번째 페이지 호출하여 total_page 확인
+            $firstPageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', '', 1, 100, $apiIdx);
             
             if ($firstPageResult) {
+                // 응답 구조 파싱
                 $companyData = $firstPageResult;
-                
-                // 응답 코드 확인
                 $code = '';
                 $totalPage = 1;
-                $totalRecord = 0;
-                
-                // 디버깅: 응답 구조 로그 (Result[1] 구조 확인)
-                if (is_object($companyData) && isset($companyData->Result[1])) {
-                    log_message('debug', "Admin::companyList - Result[1] 구조: " . json_encode($companyData->Result[1], JSON_UNESCAPED_UNICODE));
-                } elseif (is_array($companyData) && isset($companyData[1])) {
-                    log_message('debug', "Admin::companyList - 배열[1] 구조: " . json_encode($companyData[1], JSON_UNESCAPED_UNICODE));
-                }
                 
                 if (is_object($companyData) && isset($companyData->Result)) {
-                    // Result[0]에서 코드 확인
-                    if (isset($companyData->Result[0]->result_info[0]->code)) {
-                        $code = $companyData->Result[0]->result_info[0]->code;
-                    } elseif (isset($companyData->Result[0]->code)) {
-                        $code = $companyData->Result[0]->code;
+                    $resultArray = is_array($companyData->Result) ? $companyData->Result : [$companyData->Result];
+                    if (isset($resultArray[0]->result_info[0]->code)) {
+                        $code = $resultArray[0]->result_info[0]->code;
+                    } elseif (isset($resultArray[0]->code)) {
+                        $code = $resultArray[0]->code;
                     }
-                    // Result[1]에서 total_page 확인 (page_info 배열 안에 있음)
-                    if (isset($companyData->Result[1])) {
-                        $pageInfoData = $companyData->Result[1];
-                        // page_info 배열 확인
-                        if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
-                            $pageInfo = $pageInfoData->page_info[0];
-                            if (isset($pageInfo->total_page)) {
-                                $totalPage = (int)$pageInfo->total_page;
-                            }
-                            if (isset($pageInfo->total_record)) {
-                                $totalRecord = (int)$pageInfo->total_record;
-                            }
-                        } elseif (isset($pageInfoData->total_page)) {
-                            // page_info 배열이 아닌 경우 직접 접근
-                            $totalPage = (int)$pageInfoData->total_page;
-                            if (isset($pageInfoData->total_record)) {
-                                $totalRecord = (int)$pageInfoData->total_record;
-                            }
-                        }
+                    
+                    if (isset($resultArray[1]->page_info[0]->total_page)) {
+                        $totalPage = (int)$resultArray[1]->page_info[0]->total_page;
+                    } elseif (isset($resultArray[1]->total_page)) {
+                        $totalPage = (int)$resultArray[1]->total_page;
                     }
                 } elseif (is_array($companyData)) {
-                    // 배열 형태 응답
-                    if (isset($companyData[0])) {
-                        if (is_object($companyData[0])) {
-                            if (isset($companyData[0]->result_info[0]->code)) {
-                                $code = $companyData[0]->result_info[0]->code;
-                            } elseif (isset($companyData[0]->code)) {
-                                $code = $companyData[0]->code;
-                            }
-                        } elseif (is_array($companyData[0])) {
-                            if (isset($companyData[0]['code'])) {
-                                $code = $companyData[0]['code'];
-                            }
-                        }
+                    if (isset($companyData[0]->code)) {
+                        $code = $companyData[0]->code;
+                    } elseif (isset($companyData[0]['code'])) {
+                        $code = $companyData[0]['code'];
                     }
-                    // 배열 인덱스 [1]에서 total_page 확인 (page_info 배열 안에 있음)
-                    if (isset($companyData[1])) {
-                        $pageInfoData = is_object($companyData[1]) ? $companyData[1] : (object)$companyData[1];
-                        // page_info 배열 확인
-                        if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
-                            $pageInfo = $pageInfoData->page_info[0];
-                            if (isset($pageInfo->total_page)) {
-                                $totalPage = (int)$pageInfo->total_page;
-                            }
-                            if (isset($pageInfo->total_record)) {
-                                $totalRecord = (int)$pageInfo->total_record;
-                            }
-                        } elseif (isset($pageInfoData->total_page)) {
-                            // page_info 배열이 아닌 경우 직접 접근
-                            $totalPage = (int)$pageInfoData->total_page;
-                            if (isset($pageInfoData->total_record)) {
-                                $totalRecord = (int)$pageInfoData->total_record;
-                            }
-                        }
+                    
+                    if (isset($companyData[1]->page_info[0]->total_page)) {
+                        $totalPage = (int)$companyData[1]->page_info[0]->total_page;
+                    } elseif (isset($companyData[1]->total_page)) {
+                        $totalPage = (int)$companyData[1]->total_page;
                     }
                 }
                 
-                log_message('info', "Admin::companyList - totalPage={$totalPage}, totalRecord={$totalRecord}, code={$code}");
-                
                 // 성공 코드 확인 (1000)
-                if ($code === '1000') {
-                    // totalRecord가 0이거나 totalPage가 1이면 첫 페이지 결과만 사용
-                    // 그 외에는 모든 페이지 순회
-                    if ($totalRecord > 0 && $totalPage > 1) {
-                        // 모든 페이지 순회
-                        for ($page = 1; $page <= $totalPage; $page++) {
-                            $pageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', $searchCompName, $page, 100, $apiIdx);
+                if ($code === '1000' && $totalPage > 0) {
+                    // 모든 페이지 순회
+                    for ($page = 1; $page <= $totalPage; $page++) {
+                        // 첫 번째 페이지는 이미 호출했으므로 재사용
+                        if ($page === 1) {
+                            $pageResult = $firstPageResult;
+                        } else {
+                            $pageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', '', $page, 100, $apiIdx);
+                        }
                         
                         if ($pageResult) {
                             $pageData = $pageResult;
@@ -1358,12 +1311,11 @@ class Admin extends BaseController
                                             'corp_name' => $item->corp_name ?? '',
                                             'owner' => $item->owner ?? '',
                                             'tel_no' => $item->tel_no ?? '',
-                                            'address' => $item->adddress ?? ''
+                                            'cc_code' => $ccCode
                                         ];
                                     }
                                 }
                             } elseif (is_array($pageData) && isset($pageData[2])) {
-                                // 배열 형태 응답 처리
                                 if (isset($pageData[2]->items[0]->item)) {
                                     $items = is_array($pageData[2]->items[0]->item) ? $pageData[2]->items[0]->item : [$pageData[2]->items[0]->item];
                                     foreach ($items as $item) {
@@ -1372,42 +1324,9 @@ class Admin extends BaseController
                                             'corp_name' => $item->corp_name ?? '',
                                             'owner' => $item->owner ?? '',
                                             'tel_no' => $item->tel_no ?? '',
-                                            'address' => $item->adddress ?? ''
+                                            'cc_code' => $ccCode
                                         ];
                                     }
-                                }
-                            }
-                        }
-                    }
-                    } else {
-                        // totalRecord가 0이거나 totalPage가 1이면 첫 페이지 결과만 사용
-                        // 첫 페이지 결과 파싱
-                        if (is_object($companyData) && isset($companyData->Result)) {
-                            $resultArray = is_array($companyData->Result) ? $companyData->Result : [$companyData->Result];
-                            if (isset($resultArray[2]->items[0]->item)) {
-                                $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
-                                foreach ($items as $item) {
-                                    $companyList[] = [
-                                        'comp_no' => $item->comp_no ?? '',
-                                        'corp_name' => $item->corp_name ?? '',
-                                        'owner' => $item->owner ?? '',
-                                        'tel_no' => $item->tel_no ?? '',
-                                        'address' => $item->adddress ?? ''
-                                    ];
-                                }
-                            }
-                        } elseif (is_array($companyData) && isset($companyData[2])) {
-                            // 배열 형태 응답 처리
-                            if (isset($companyData[2]->items[0]->item)) {
-                                $items = is_array($companyData[2]->items[0]->item) ? $companyData[2]->items[0]->item : [$companyData[2]->items[0]->item];
-                                foreach ($items as $item) {
-                                    $companyList[] = [
-                                        'comp_no' => $item->comp_no ?? '',
-                                        'corp_name' => $item->corp_name ?? '',
-                                        'owner' => $item->owner ?? '',
-                                        'tel_no' => $item->tel_no ?? '',
-                                        'address' => $item->adddress ?? ''
-                                    ];
                                 }
                             }
                         }
@@ -1431,6 +1350,1370 @@ class Admin extends BaseController
         ];
 
         return view('admin/company-list', $data);
+    }
+
+    /**
+     * 콜센터 관리자용 거래처관리 (user_type = 3)
+     * user_cc_idx를 기반으로 해당 콜센터의 거래처 목록 조회
+     */
+    public function companyListForCc()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: daumdata 로그인 user_type=3 (콜센터 관리자)
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // 권한 체크: daumdata 로그인 user_type=3 (콜센터 관리자)
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // user_cc_idx 조회 (세션 또는 DB에서)
+        $userCcIdx = session()->get('user_cc_idx');
+        
+        // 세션에 없으면 DB에서 조회
+        if (empty($userCcIdx)) {
+            $userId = session()->get('user_id');
+            if ($userId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list u');
+                $userBuilder->select('c.cc_idx');
+                $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
+                $userBuilder->where('u.user_id', (string)$userId); // 문자열로 명시적 변환
+                $userQuery = $userBuilder->get();
+                
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && !empty($userResult['cc_idx'])) {
+                        $userCcIdx = (int)$userResult['cc_idx']; // 정수로 명시적 변환
+                        session()->set('user_cc_idx', $userCcIdx);
+                    }
+                }
+            }
+        }
+        
+        // userCcIdx가 정수인지 확인하고 변환
+        if (empty($userCcIdx) || !is_numeric($userCcIdx)) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        $userCcIdx = (int)$userCcIdx; // 최종적으로 정수로 변환
+        
+        // 검색 조건
+        $searchCompName = $this->request->getGet('search_compname') ?? '';
+        
+        // user_cc_idx로 콜센터 정보 조회 (cc_code 가져오기)
+        $db = \Config\Database::connect();
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('cc_code, cc_name');
+        $ccBuilder->where('idx', $userCcIdx);
+        $ccQuery = $ccBuilder->get();
+        
+        $ccInfo = null;
+        if ($ccQuery !== false) {
+            $ccInfo = $ccQuery->getRowArray();
+        }
+        
+        if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        $ccCode = $ccInfo['cc_code'];
+        
+        // API 정보 조회 (cc_code로)
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        $apiInfo = $insungApiListModel->getApiInfoByCode($ccCode);
+        
+        if (empty($apiInfo)) {
+            return redirect()->to('/')->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+        
+        $mCode = $apiInfo['mcode'] ?? '';
+        $ccCodeApi = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+        $apiIdx = $apiInfo['idx'] ?? null;
+        
+        // 검색어 처리 (c_comp_list.html 참조)
+        // 원본 검색어 저장 (뷰에서 사용)
+        $originalSearchCompName = $searchCompName;
+        
+        // API 호출용 검색어 처리 (cc_code prefix 추가)
+        $apiSearchCompName = $searchCompName;
+        if (!empty($apiSearchCompName)) {
+            // 이미 prefix가 있으면 그대로 사용, 없으면 추가
+            if (strpos($apiSearchCompName, $ccCode . '_') !== 0) {
+                $apiSearchCompName = $ccCode . '_' . $apiSearchCompName;
+            }
+        } else {
+            $apiSearchCompName = $ccCode . '_';
+        }
+        
+        // 거래처 목록 조회 (API - 모든 페이지 순회)
+        $companyList = [];
+        if ($mCode && $ccCodeApi && $token) {
+            $insungApiService = new \App\Libraries\InsungApiService();
+            
+            // 첫 번째 페이지 호출하여 total_page 확인
+            $firstPageResult = $insungApiService->getCompanyList($mCode, $ccCodeApi, $token, '', $apiSearchCompName, 1, 100, $apiIdx);
+            
+            if ($firstPageResult) {
+                // 응답 구조 파싱
+                $companyData = $firstPageResult;
+                $code = '';
+                $totalPage = 1;
+                
+                if (is_object($companyData) && isset($companyData->Result)) {
+                    $resultArray = is_array($companyData->Result) ? $companyData->Result : [$companyData->Result];
+                    if (isset($resultArray[0]->result_info[0]->code)) {
+                        $code = $resultArray[0]->result_info[0]->code;
+                    } elseif (isset($resultArray[0]->code)) {
+                        $code = $resultArray[0]->code;
+                    }
+                    
+                    if (isset($resultArray[1]->page_info[0]->total_page)) {
+                        $totalPage = (int)$resultArray[1]->page_info[0]->total_page;
+                    } elseif (isset($resultArray[1]->total_page)) {
+                        $totalPage = (int)$resultArray[1]->total_page;
+                    }
+                } elseif (is_array($companyData)) {
+                    if (isset($companyData[0]->code)) {
+                        $code = $companyData[0]->code;
+                    } elseif (isset($companyData[0]['code'])) {
+                        $code = $companyData[0]['code'];
+                    }
+                    
+                    if (isset($companyData[1]->page_info[0]->total_page)) {
+                        $totalPage = (int)$companyData[1]->page_info[0]->total_page;
+                    } elseif (isset($companyData[1]->total_page)) {
+                        $totalPage = (int)$companyData[1]->total_page;
+                    }
+                }
+                
+                // 성공 코드 확인 (1000)
+                if ($code === '1000' && $totalPage > 0) {
+                    // 모든 페이지 순회
+                    for ($page = 1; $page <= $totalPage; $page++) {
+                        // 첫 번째 페이지는 이미 호출했으므로 재사용
+                        if ($page === 1) {
+                            $pageResult = $firstPageResult;
+                        } else {
+                            $pageResult = $insungApiService->getCompanyList($mCode, $ccCodeApi, $token, '', $apiSearchCompName, $page, 100, $apiIdx);
+                        }
+                        
+                        if ($pageResult) {
+                            $pageData = $pageResult;
+                            
+                            // 응답 구조 파싱
+                            if (is_object($pageData) && isset($pageData->Result)) {
+                                $resultArray = is_array($pageData->Result) ? $pageData->Result : [$pageData->Result];
+                                if (isset($resultArray[2]->items[0]->item)) {
+                                    $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
+                                    foreach ($items as $item) {
+                                        $companyList[] = [
+                                            'comp_code' => $item->comp_no ?? '',
+                                            'comp_name' => $item->corp_name ?? '',
+                                            'comp_owner' => $item->owner ?? '',
+                                            'comp_tel' => $item->tel_no ?? '',
+                                            'comp_addr' => $item->adddress ?? '',
+                                            'comp_memo' => '' // API에서 제공하지 않음
+                                        ];
+                                    }
+                                }
+                            } elseif (is_array($pageData) && isset($pageData[2])) {
+                                if (isset($pageData[2]->items[0]->item)) {
+                                    $items = is_array($pageData[2]->items[0]->item) ? $pageData[2]->items[0]->item : [$pageData[2]->items[0]->item];
+                                    foreach ($items as $item) {
+                                        $companyList[] = [
+                                            'comp_code' => $item->comp_no ?? '',
+                                            'comp_name' => $item->corp_name ?? '',
+                                            'comp_owner' => $item->owner ?? '',
+                                            'comp_tel' => $item->tel_no ?? '',
+                                            'comp_addr' => $item->adddress ?? '',
+                                            'comp_memo' => '' // API에서 제공하지 않음
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 필드명 매핑 (뷰에서 사용하는 필드명으로)
+        $filteredCompanies = $companyList;
+        
+        $data = [
+            'title' => '거래처관리',
+            'content_header' => [
+                'title' => '거래처관리',
+                'description' => '소속 콜센터의 거래처 목록을 조회하고 관리할 수 있습니다.'
+            ],
+            'company_list' => $filteredCompanies,
+            'search_compname' => $originalSearchCompName, // 원본 검색어
+            'user_cc_idx' => $userCcIdx,
+            'cc_code' => $ccCode
+        ];
+
+        return view('admin/company-list-cc', $data);
+    }
+
+    /**
+     * 거래처 수정 폼 (user_type = 3 접근 가능)
+     */
+    public function companyEdit()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // comp_code 파라미터 필수
+        $compCode = $this->request->getGet('comp_code');
+        if (empty($compCode)) {
+            return redirect()->to('/admin/company-list-cc')->with('error', '거래처 코드가 필요합니다.');
+        }
+        
+        $db = \Config\Database::connect();
+        $userCcIdx = session()->get('user_cc_idx');
+        
+        if (empty($userCcIdx)) {
+            $currentUserId = session()->get('user_id');
+            if ($currentUserId) {
+                $userBuilder = $db->table('tbl_users_list u');
+                $userBuilder->select('c.cc_idx');
+                $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
+                $userBuilder->where('u.user_id', (string)$currentUserId);
+                $userQuery = $userBuilder->get();
+                
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && !empty($userResult['cc_idx'])) {
+                        $userCcIdx = (int)$userResult['cc_idx'];
+                        session()->set('user_cc_idx', $userCcIdx);
+                    }
+                }
+            }
+        }
+        
+        if (empty($userCcIdx)) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        // 콜센터 정보 조회
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('cc_code, cc_name');
+        $ccBuilder->where('idx', $userCcIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        
+        if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        // API 정보 조회
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        $apiInfo = $insungApiListModel->getApiInfoByCode($ccInfo['cc_code']);
+        
+        if (empty($apiInfo)) {
+            return redirect()->to('/')->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+        
+        $mCode = $apiInfo['mcode'] ?? '';
+        $ccCodeApi = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+        $apiIdx = $apiInfo['idx'] ?? null;
+        
+        // 거래처 정보 조회 (인성 API)
+        $insungApiService = new \App\Libraries\InsungApiService();
+        $apiResult = $insungApiService->getCompanyList($mCode, $ccCodeApi, $token, $compCode, '', 1, 1, $apiIdx);
+        
+        $companyInfo = null;
+        $item = null;
+        
+        // API 응답 구조 안전하게 파싱
+        if ($apiResult !== false) {
+            // 응답 코드 확인
+            $code = '';
+            if (is_object($apiResult) && isset($apiResult->Result)) {
+                $resultArray = is_array($apiResult->Result) ? $apiResult->Result : [$apiResult->Result];
+                if (isset($resultArray[0]->result_info[0]->code)) {
+                    $code = $resultArray[0]->result_info[0]->code;
+                } elseif (isset($resultArray[0]->code)) {
+                    $code = $resultArray[0]->code;
+                }
+                
+                // 성공 코드이고 데이터가 있는 경우
+                if ($code === '1000' && isset($resultArray[2])) {
+                    if (isset($resultArray[2]->items[0]->item)) {
+                        $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
+                        if (!empty($items) && isset($items[0])) {
+                            $item = $items[0];
+                        }
+                    }
+                }
+            } elseif (is_array($apiResult)) {
+                if (isset($apiResult[0]->code)) {
+                    $code = $apiResult[0]->code;
+                } elseif (isset($apiResult[0]['code'])) {
+                    $code = $apiResult[0]['code'];
+                }
+                
+                // 성공 코드이고 데이터가 있는 경우
+                if ($code === '1000' && isset($apiResult[2])) {
+                    if (isset($apiResult[2]->items[0]->item)) {
+                        $items = is_array($apiResult[2]->items[0]->item) ? $apiResult[2]->items[0]->item : [$apiResult[2]->items[0]->item];
+                        if (!empty($items) && isset($items[0])) {
+                            $item = $items[0];
+                        }
+                    }
+                }
+            }
+            
+            log_message('debug', "Admin::companyEdit - API response code: {$code}, item found: " . ($item ? 'yes' : 'no') . ", comp_code: {$compCode}");
+        } else {
+            log_message('error', "Admin::companyEdit - API call failed for comp_code: {$compCode}");
+        }
+        
+        if ($item) {
+            // API 응답의 모든 필드를 로깅 (디버깅용) - 객체를 배열로 변환하여 로깅
+            $itemArray = is_object($item) ? (array)$item : $item;
+            log_message('debug', 'Admin::companyEdit - API response item fields: ' . json_encode($itemArray, JSON_UNESCAPED_UNICODE));
+            
+            // credit 필드 확인 (stnlogis 참조: c_comp_list.html 74-86 라인)
+            // API 응답에서 credit 필드가 있는지 확인, 없으면 기본값 "3" 사용
+            $credit = '3'; // 기본값 3 (stnlogis와 동일)
+            if (isset($item->credit) && !empty($item->credit)) {
+                $credit = $item->credit;
+            } elseif (isset($itemArray['credit']) && !empty($itemArray['credit'])) {
+                $credit = $itemArray['credit'];
+            }
+            
+            log_message('debug', 'Admin::companyEdit - credit value from API: ' . $credit);
+            
+            $companyInfo = [
+                'comp_code' => $compCode,
+                'comp_name' => $item->corp_name ?? '',
+                // stnlogis 참조: owner = 대표자명, staff_name = 담당자명
+                'representative_name' => $item->owner ?? '', // 대표자명 (stnlogis: comp_owner)
+                'comp_owner' => $item->staff_name ?? '', // 담당자명 (stnlogis: comp_staff)
+                'comp_tel' => $item->tel_no ?? '',
+                'comp_addr' => $item->adddress ?? $item->address ?? '',
+                'business_number' => $item->business_number ?? '',
+                // API에서 거래구분 필드 (credit) - stnlogis와 동일하게 처리 (기본값 3)
+                'comp_type' => $credit,
+                'comp_gbn' => $credit
+            ];
+        }
+        
+        // 로컬 DB에서 추가 정보 조회 (comp_memo 등)
+        if (!empty($companyInfo)) {
+            // tbl_company_list에서 기본 정보 조회 (거래구분, 대표자명은 API에서 가져왔으므로 제외)
+            // sido, gungu는 tbl_company_list에 없으므로 제외
+            $localBuilder = $db->table('tbl_company_list');
+            $localBuilder->select('comp_memo, comp_dong, comp_addr_detail');
+            $localBuilder->where('comp_code', $compCode);
+            $localQuery = $localBuilder->get();
+            
+            if ($localQuery !== false) {
+                $localInfo = $localQuery->getRowArray();
+                if ($localInfo) {
+                    // 로컬 DB 정보를 병합 (API 정보 우선, 로컬 DB는 보조)
+                    $companyInfo['comp_memo'] = $localInfo['comp_memo'] ?? '';
+                    $companyInfo['comp_dong'] = $localInfo['comp_dong'] ?? '';
+                    $companyInfo['comp_addr_detail'] = $localInfo['comp_addr_detail'] ?? '';
+                }
+            }
+            
+            // sido, gungu는 API 좌표 정보에서 가져오거나 폼에서만 사용 (로컬 DB에 저장하지 않음)
+            // 기본값으로 빈 문자열 설정
+            if (!isset($companyInfo['sido'])) {
+                $companyInfo['sido'] = '';
+            }
+            if (!isset($companyInfo['gungu'])) {
+                $companyInfo['gungu'] = '';
+            }
+            
+            // representative_name은 API에서만 관리하므로 로컬 DB 조회하지 않음
+            // (tbl_company_list에는 comp_owner만 있고 representative_name 필드는 없음)
+            
+            // 거래구분은 API의 credit 값만 사용 (로컬 DB 조회하지 않음)
+            // API에서 가져오지 못한 경우 기본값 설정
+            if (empty($companyInfo['comp_type']) && empty($companyInfo['comp_gbn'])) {
+                $companyInfo['comp_type'] = '';
+                $companyInfo['comp_gbn'] = '';
+            }
+            
+            // tbl_company_env에서 배송조회 제한 정보 조회
+            $envBuilder = $db->table('tbl_company_env');
+            $envBuilder->select('env1, env2, env3, env5');
+            $envBuilder->where('comp_code', $compCode);
+            $envQuery = $envBuilder->get();
+            
+            if ($envQuery !== false) {
+                $envInfo = $envQuery->getRowArray();
+                if ($envInfo) {
+                    // env 필드를 일반 필드명으로 매핑
+                    // env1: 조회권한 (delivery_inquiry_permission) - 값: 1(전체조회), 3(본인오더조회)
+                    // env2: 요금조회 (fee_inquiry) - 값: 1(전체조회), 3(기본요금조회)
+                    // env3: 요금계산방식 (fee_calc_method) - 값: 1(동대동방식), 3(거리요금방식)
+                    // env5: 오더승인여부 (order_approval_type) - 값: 1(일반방식), 3(관리자승인방식)
+                    $companyInfo['delivery_inquiry_permission'] = $envInfo['env1'] ?? '1';
+                    $companyInfo['fee_inquiry'] = $envInfo['env2'] ?? '1';
+                    $companyInfo['fee_calc_method'] = $envInfo['env3'] ?? '1';
+                    $companyInfo['order_approval_type'] = $envInfo['env5'] ?? '1';
+                } else {
+                    // 기본값 설정 (stnlogis와 동일하게 숫자 값 사용)
+                    $companyInfo['delivery_inquiry_permission'] = '1';
+                    $companyInfo['fee_inquiry'] = '1';
+                    $companyInfo['fee_calc_method'] = '1';
+                    $companyInfo['order_approval_type'] = '1';
+                }
+            } else {
+                // 기본값 설정 (stnlogis와 동일하게 숫자 값 사용)
+                $companyInfo['delivery_inquiry_permission'] = '1';
+                $companyInfo['fee_inquiry'] = '1';
+                $companyInfo['fee_calc_method'] = '1';
+                $companyInfo['order_approval_type'] = '1';
+            }
+        }
+        
+        if (empty($companyInfo)) {
+            return redirect()->to('/admin/company-list-cc')->with('error', '거래처를 찾을 수 없습니다.');
+        }
+        
+        $data = [
+            'title' => '거래처 수정',
+            'content_header' => [
+                'title' => '거래처 수정',
+                'description' => '거래처 정보를 수정할 수 있습니다.',
+                'back_button' => [
+                    'label' => '거래처 목록',
+                    'url' => 'admin/company-list-cc'
+                ]
+            ],
+            'company_info' => $companyInfo,
+            'comp_code' => $compCode
+        ];
+        
+        return view('admin/company-edit', $data);
+    }
+
+    /**
+     * 거래처 저장 (user_type = 3 접근 가능)
+     */
+    public function companySave()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // POST 데이터
+        $compCode = $this->request->getPost('comp_code');
+        $compName = $this->request->getPost('comp_name');
+        $compOwner = $this->request->getPost('comp_owner');
+        $compTel = $this->request->getPost('comp_tel');
+        $compAddr = $this->request->getPost('comp_addr');
+        $compAddrDetail = $this->request->getPost('comp_addr_detail');
+        $compMemo = $this->request->getPost('comp_memo');
+        $compType = $this->request->getPost('comp_type');
+        $deliveryInquiryPermission = $this->request->getPost('delivery_inquiry_permission');
+        $feeCalcMethod = $this->request->getPost('fee_calc_method');
+        $orderApprovalType = $this->request->getPost('order_approval_type');
+        $representativeName = $this->request->getPost('representative_name');
+        $feeInquiry = $this->request->getPost('fee_inquiry');
+        $compDong = $this->request->getPost('comp_dong');
+        $sido = $this->request->getPost('sido');
+        $gungu = $this->request->getPost('gungu');
+        $businessNumber = $this->request->getPost('business_number');
+        
+        // 유효성 검사
+        if (empty($compCode)) {
+            return redirect()->back()->with('error', '거래처 코드가 필요합니다.');
+        }
+        
+        if (empty($compName)) {
+            return redirect()->back()->with('error', '업체명이 필요합니다.');
+        }
+        
+        if (empty($representativeName)) {
+            return redirect()->back()->with('error', '대표자명이 필요합니다.');
+        }
+        
+        if (empty($compTel)) {
+            return redirect()->back()->with('error', '전화번호가 필요합니다.');
+        }
+        
+        if (empty($compAddr)) {
+            return redirect()->back()->with('error', '주소가 필요합니다.');
+        }
+        
+        // 로컬 DB에 설정 정보만 저장/업데이트 (기본 정보는 API에서 관리)
+        $db = \Config\Database::connect();
+        
+        // tbl_company_list에 기본 정보 저장/업데이트
+        $checkBuilder = $db->table('tbl_company_list');
+        $checkBuilder->select('comp_code');
+        $checkBuilder->where('comp_code', $compCode);
+        $checkQuery = $checkBuilder->get();
+        $companyExists = ($checkQuery !== false && $checkQuery->getNumRows() > 0);
+        
+        // 기본 정보는 모두 API에서만 관리하므로 로컬 DB에 저장하지 않음
+        // (거래처명, 대표자명, 담당자명, 전화번호, 주소, 거래구분, 사업자번호 등)
+        // 로컬 DB에는 설정 정보만 저장 (comp_memo, comp_dong, comp_addr_detail)
+        $companyUpdateData = [
+            'comp_code' => $compCode, // INSERT 시 필요 (키값)
+            'comp_memo' => $compMemo ?? '', // 메모 (로컬 전용)
+            'comp_dong' => $compDong ?? '', // 동 정보 (로컬 전용)
+            'comp_addr_detail' => $compAddrDetail ?? '' // 상세 주소 (로컬 전용)
+            // comp_type, representative_name, comp_name, comp_tel, comp_addr, business_number 등은 API에서만 관리
+            // sido, gungu는 tbl_company_list에 없으므로 저장하지 않음
+        ];
+        
+        $companyBuilder = $db->table('tbl_company_list');
+        
+        if ($companyExists) {
+            // UPDATE: 설정 정보만 업데이트
+            $companyBuilder->where('comp_code', $compCode);
+            $companyResult = $companyBuilder->update($companyUpdateData);
+        } else {
+            // INSERT: 새 레코드 생성 (comp_code만 필수, 나머지는 설정 정보)
+            $companyResult = $companyBuilder->insert($companyUpdateData);
+        }
+        
+        // tbl_company_env에 배송조회 제한 정보 저장/업데이트
+        $envCheckBuilder = $db->table('tbl_company_env');
+        $envCheckBuilder->select('comp_env_idx, comp_code');
+        $envCheckBuilder->where('comp_code', $compCode);
+        $envCheckQuery = $envCheckBuilder->get();
+        $envExists = ($envCheckQuery !== false && $envCheckQuery->getNumRows() > 0);
+        
+        $envUpdateData = [
+            'comp_code' => $compCode,
+            'env1' => $deliveryInquiryPermission ?? '1',  // 조회권한: 1(전체조회), 3(본인오더조회)
+            'env2' => $feeInquiry ?? '1',                  // 요금조회: 1(전체조회), 3(기본요금조회)
+            'env3' => $feeCalcMethod ?? '1',              // 요금계산방식: 1(동대동방식), 3(거리요금방식)
+            'env5' => $orderApprovalType ?? '1'            // 오더승인여부: 1(일반방식), 3(관리자승인방식)
+        ];
+        
+        $envBuilder = $db->table('tbl_company_env');
+        
+        if ($envExists) {
+            // UPDATE: 배송조회 제한 정보 업데이트
+            $envBuilder->where('comp_code', $compCode);
+            $envResult = $envBuilder->update($envUpdateData);
+        } else {
+            // INSERT: 새 레코드 생성
+            // comp_idx는 0으로 설정 (필요시 나중에 업데이트)
+            $envUpdateData['comp_idx'] = 0;
+            $envResult = $envBuilder->insert($envUpdateData);
+        }
+        
+        if ($companyResult && $envResult) {
+            return redirect()->to('/admin/company-list-cc')->with('success', '거래처 정보가 수정되었습니다.');
+        } else {
+            return redirect()->back()->with('error', '거래처 정보 수정에 실패했습니다.');
+        }
+    }
+
+    /**
+     * 거래처별 고객 리스트 (user_type = 3 접근 가능)
+     */
+    public function companyCustomerList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // comp_code 파라미터 필수
+        $compCode = $this->request->getGet('comp_code');
+        if (empty($compCode)) {
+            return redirect()->to('/admin/company-list-cc')->with('error', '거래처 코드가 필요합니다.');
+        }
+        
+        // user_cc_idx 조회
+        $db = \Config\Database::connect();
+        $userCcIdx = session()->get('user_cc_idx');
+        
+        if (empty($userCcIdx)) {
+            $currentUserId = session()->get('user_id');
+            if ($currentUserId) {
+                $userBuilder = $db->table('tbl_users_list u');
+                $userBuilder->select('c.cc_idx');
+                $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
+                $userBuilder->where('u.user_id', (string)$currentUserId);
+                $userQuery = $userBuilder->get();
+                
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && !empty($userResult['cc_idx'])) {
+                        $userCcIdx = (int)$userResult['cc_idx'];
+                        session()->set('user_cc_idx', $userCcIdx);
+                    }
+                }
+            }
+        }
+        
+        if (empty($userCcIdx)) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        // 콜센터 정보 조회
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('cc_code, cc_name');
+        $ccBuilder->where('idx', $userCcIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        
+        if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        // API 정보 조회
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        $apiInfo = $insungApiListModel->getApiInfoByCode($ccInfo['cc_code']);
+        
+        if (empty($apiInfo)) {
+            return redirect()->to('/')->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+        
+        $mCode = $apiInfo['mcode'] ?? '';
+        $ccCodeApi = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+        $apiIdx = $apiInfo['idx'] ?? null;
+        
+        // 거래처 정보 조회 (인성 API)
+        $insungApiService = new \App\Libraries\InsungApiService();
+        $apiResult = $insungApiService->getCompanyList($mCode, $ccCodeApi, $token, $compCode, '', 1, 1, $apiIdx);
+        
+        $companyInfo = null;
+        $item = null;
+        
+        // API 응답 구조 안전하게 파싱
+        if ($apiResult !== false) {
+            // 응답 코드 확인
+            $code = '';
+            if (is_object($apiResult) && isset($apiResult->Result)) {
+                $resultArray = is_array($apiResult->Result) ? $apiResult->Result : [$apiResult->Result];
+                if (isset($resultArray[0]->result_info[0]->code)) {
+                    $code = $resultArray[0]->result_info[0]->code;
+                } elseif (isset($resultArray[0]->code)) {
+                    $code = $resultArray[0]->code;
+                }
+                
+                // 성공 코드이고 데이터가 있는 경우
+                if ($code === '1000' && isset($resultArray[2])) {
+                    if (isset($resultArray[2]->items[0]->item)) {
+                        $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
+                        if (!empty($items) && isset($items[0])) {
+                            $item = $items[0];
+                        }
+                    }
+                }
+            } elseif (is_array($apiResult)) {
+                if (isset($apiResult[0]->code)) {
+                    $code = $apiResult[0]->code;
+                } elseif (isset($apiResult[0]['code'])) {
+                    $code = $apiResult[0]['code'];
+                }
+                
+                // 성공 코드이고 데이터가 있는 경우
+                if ($code === '1000' && isset($apiResult[2])) {
+                    if (isset($apiResult[2]->items[0]->item)) {
+                        $items = is_array($apiResult[2]->items[0]->item) ? $apiResult[2]->items[0]->item : [$apiResult[2]->items[0]->item];
+                        if (!empty($items) && isset($items[0])) {
+                            $item = $items[0];
+                        }
+                    }
+                }
+            }
+            
+            log_message('debug', "Admin::companyCustomerList - API response code: {$code}, item found: " . ($item ? 'yes' : 'no') . ", comp_code: {$compCode}");
+        } else {
+            log_message('error', "Admin::companyCustomerList - API call failed for comp_code: {$compCode}");
+        }
+        
+        if ($item) {
+            $companyInfo = [
+                'comp_code' => $compCode,
+                'comp_name' => $item->corp_name ?? '',
+                'comp_owner' => $item->owner ?? '',
+                'comp_tel' => $item->tel_no ?? '',
+                'comp_addr' => $item->adddress ?? $item->address ?? '',
+                'comp_addr_detail' => '' // API에서 제공하지 않음
+            ];
+            
+            // 로컬 DB에서 추가 정보 조회 (comp_addr_detail 등)
+            $localBuilder = $db->table('tbl_company_list');
+            $localBuilder->select('comp_addr_detail');
+            $localBuilder->where('comp_code', $compCode);
+            $localQuery = $localBuilder->get();
+            
+            if ($localQuery !== false) {
+                $localInfo = $localQuery->getRowArray();
+                if ($localInfo && !empty($localInfo['comp_addr_detail'])) {
+                    $companyInfo['comp_addr_detail'] = $localInfo['comp_addr_detail'];
+                }
+            }
+        }
+        
+        if (empty($companyInfo)) {
+            log_message('error', "Admin::companyCustomerList - Company not found in API for comp_code: {$compCode}");
+            return redirect()->to('/admin/company-list-cc')->with('error', '거래처를 찾을 수 없습니다.');
+        }
+        
+        // 검색 조건 (단일 검색 필드: 아이디, 이름, 부서, 전화번호)
+        $searchKeyword = $this->request->getGet('search_keyword') ?? '';
+        $page = (int)($this->request->getGet('page') ?? 1);
+        $perPage = 20;
+        
+        // tbl_users_list에서 user_company = comp_code인 사용자 조회
+        $userBuilder = $db->table('tbl_users_list');
+        $userBuilder->select('user_id, user_pass, user_name, user_dept, user_tel1, user_tel2, user_addr, user_addr_detail, user_class, user_memo');
+        $userBuilder->where('user_company', $compCode);
+        
+        // 검색 조건 적용 (아이디, 이름, 부서, 전화번호로 검색)
+        if (!empty($searchKeyword)) {
+            $userBuilder->groupStart()
+                ->like('user_id', $searchKeyword)
+                ->orLike('user_name', $searchKeyword)
+                ->orLike('user_dept', $searchKeyword)
+                ->orLike('user_tel1', $searchKeyword)
+                ->orLike('user_tel2', $searchKeyword)
+                ->groupEnd();
+        }
+        
+        // 전체 개수 조회
+        $totalCount = $userBuilder->countAllResults(false);
+        
+        // 페이징 적용
+        $userBuilder->orderBy('user_id', 'ASC');
+        $userBuilder->limit($perPage, ($page - 1) * $perPage);
+        $userQuery = $userBuilder->get();
+        
+        $userList = [];
+        if ($userQuery !== false) {
+            $userList = $userQuery->getResultArray();
+        }
+        
+        // 페이징 계산
+        helper('pagination');
+        $pagination = calculatePagination($totalCount, $page, $perPage);
+        
+        // user_class 라벨 매핑 (고객 목록용: 일반/부서장/관리자)
+        $userClassLabels = [
+            '1' => '관리자',
+            '3' => '부서장',
+            '5' => '일반'
+        ];
+        
+        // 사용자 데이터 포맷팅
+        $formattedUserList = [];
+        foreach ($userList as $user) {
+            $formattedUser = $user;
+            $userClass = $user['user_class'] ?? '5';
+            $formattedUser['user_class_label'] = $userClassLabels[$userClass] ?? '일반 고객';
+            $formattedUserList[] = $formattedUser;
+        }
+        
+        $data = [
+            'title' => '고객관리 - ' . ($companyInfo['comp_name'] ?? ''),
+            'content_header' => [
+                'title' => '고객관리',
+                'description' => '거래처: ' . ($companyInfo['comp_name'] ?? '') . ' (' . $compCode . ')',
+                'action_button' => [
+                    'label' => '+ 신규고객 등록',
+                    'url' => 'admin/company-customer-form?comp_code=' . urlencode($compCode) . '&mode=add'
+                ]
+            ],
+            'company_info' => $companyInfo,
+            'user_list' => $formattedUserList,
+            'search_keyword' => $searchKeyword,
+            'pagination' => $pagination,
+            'total_count' => $totalCount,
+            'comp_code' => $compCode
+        ];
+        
+        return view('admin/company-customer-list', $data);
+    }
+
+    /**
+     * 고객 등록/수정 폼 (user_type = 3 접근 가능)
+     */
+    public function companyCustomerForm()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // 파라미터
+        $compCode = $this->request->getGet('comp_code');
+        $mode = $this->request->getGet('mode') ?? 'add'; // add 또는 edit
+        $userId = $this->request->getGet('user_id') ?? '';
+        
+        if (empty($compCode)) {
+            return redirect()->to('/admin/company-list-cc')->with('error', '거래처 코드가 필요합니다.');
+        }
+        
+        if ($mode === 'edit' && empty($userId)) {
+            return redirect()->to('/admin/company-customer-list?comp_code=' . urlencode($compCode))->with('error', '사용자 ID가 필요합니다.');
+        }
+        
+        // 거래처 정보 조회 (인성 API)
+        $db = \Config\Database::connect();
+        $userCcIdx = session()->get('user_cc_idx');
+        
+        if (empty($userCcIdx)) {
+            $currentUserId = session()->get('user_id');
+            if ($currentUserId) {
+                $userBuilder = $db->table('tbl_users_list u');
+                $userBuilder->select('c.cc_idx');
+                $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
+                $userBuilder->where('u.user_id', (string)$currentUserId);
+                $userQuery = $userBuilder->get();
+                
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && !empty($userResult['cc_idx'])) {
+                        $userCcIdx = (int)$userResult['cc_idx'];
+                        session()->set('user_cc_idx', $userCcIdx);
+                    }
+                }
+            }
+        }
+        
+        if (empty($userCcIdx)) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        // 콜센터 정보 조회
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('cc_code, cc_name');
+        $ccBuilder->where('idx', $userCcIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        
+        if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
+            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        // API 정보 조회
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        $apiInfo = $insungApiListModel->getApiInfoByCode($ccInfo['cc_code']);
+        
+        if (empty($apiInfo)) {
+            return redirect()->to('/')->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+        
+        $mCode = $apiInfo['mcode'] ?? '';
+        $ccCodeApi = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+        $apiIdx = $apiInfo['idx'] ?? null;
+        
+        // 거래처 정보 조회 (인성 API)
+        $insungApiService = new \App\Libraries\InsungApiService();
+        $apiResult = $insungApiService->getCompanyList($mCode, $ccCodeApi, $token, $compCode, '', 1, 1, $apiIdx);
+        
+        $companyInfo = null;
+        if ($apiResult !== false && isset($apiResult->Result[2]->items[0]->item[0])) {
+            $item = $apiResult->Result[2]->items[0]->item[0];
+            $companyInfo = [
+                'comp_code' => $compCode,
+                'comp_name' => $item->corp_name ?? ''
+            ];
+        }
+        
+        if (empty($companyInfo)) {
+            return redirect()->to('/admin/company-list-cc')->with('error', '거래처를 찾을 수 없습니다.');
+        }
+        
+        // 고객 정보 (수정 모드일 때)
+        $customerInfo = null;
+        if ($mode === 'edit' && !empty($userId)) {
+            // DB에서 기본 정보 조회
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_id, user_pass, user_name, user_dept, user_tel1, user_tel2, user_addr, user_addr_detail, user_class, user_memo, user_ccode, user_sido, user_gungu, user_dong');
+            $userBuilder->where('user_id', $userId);
+            $userBuilder->where('user_company', $compCode);
+            $userQuery = $userBuilder->get();
+            
+            if ($userQuery !== false) {
+                $customerInfo = $userQuery->getRowArray();
+            }
+            
+            // 인성 API로 상세 정보 조회
+            if (!empty($customerInfo)) {
+                // DB에서 조회한 주소 정보를 기본값으로 설정
+                $customerInfo['user_addr1'] = $customerInfo['user_addr'] ?? '';
+                $customerInfo['user_addr2'] = $customerInfo['user_addr_detail'] ?? '';
+                
+                // DB에서 조회한 시도, 군구, 동 정보도 포함
+                $customerInfo['sido'] = $customerInfo['user_sido'] ?? '';
+                $customerInfo['gungu'] = $customerInfo['user_gungu'] ?? '';
+                $customerInfo['user_dong'] = $customerInfo['user_dong'] ?? '';
+                
+                $memberResult = $insungApiService->getMemberDetail($mCode, $ccCodeApi, $token, $userId, $apiIdx);
+                
+                if ($memberResult !== false && isset($memberResult->Result[1])) {
+                    $member = $memberResult->Result[1];
+                    $customerInfo['user_dept'] = $member->dept_name ?? $customerInfo['user_dept'];
+                    $customerInfo['user_name'] = $member->charge_name ?? $customerInfo['user_name'];
+                    $customerInfo['user_tel1'] = $member->tel_number ?? $customerInfo['user_tel1'];
+                    
+                    // 인성 API에서 주소 정보가 있으면 우선 사용
+                    $apiAddr1 = trim(($member->sido ?? '') . ' ' . ($member->gugun ?? '') . ' ' . ($member->dong_name ?? '') . ' ' . ($member->ri ?? ''));
+                    if (!empty($apiAddr1)) {
+                        $customerInfo['user_addr1'] = $apiAddr1;
+                    }
+                    if (!empty($member->location)) {
+                        $customerInfo['user_addr2'] = $member->location;
+                    }
+                    if (!empty($member->dong_name)) {
+                        $customerInfo['user_dong'] = $member->dong_name;
+                    }
+                    if (!empty($member->sido)) {
+                        $customerInfo['sido'] = $member->sido;
+                    }
+                    if (!empty($member->gugun)) {
+                        $customerInfo['gungu'] = $member->gugun;
+                    }
+                }
+            }
+        }
+        
+        $data = [
+            'title' => ($mode === 'edit' ? '고객수정' : '고객등록'),
+            'content_header' => [
+                'title' => ($mode === 'edit' ? '고객수정' : '고객등록'),
+                'description' => '거래처: ' . ($companyInfo['comp_name'] ?? '')
+            ],
+            'company_info' => $companyInfo,
+            'customer_info' => $customerInfo,
+            'mode' => $mode,
+            'comp_code' => $compCode,
+            'user_id' => $userId
+        ];
+        
+        return view('admin/company-customer-form', $data);
+    }
+
+    /**
+     * 고객 등록/수정 저장 (user_type = 3 접근 가능)
+     */
+    public function companyCustomerSave()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+        
+        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+        
+        if ($loginType !== 'daumdata' || $userType != '3') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+        
+        // POST 데이터
+        $mode = $this->request->getPost('mode') ?? 'add';
+        $compCode = $this->request->getPost('comp_code');
+        $userId = $this->request->getPost('user_id');
+        $userPass = $this->request->getPost('user_pass');
+        $userPass2 = $this->request->getPost('user_pass2');
+        $userName = $this->request->getPost('user_name');
+        $userDept = $this->request->getPost('user_dept');
+        $userTel1 = $this->request->getPost('user_tel1');
+        $userTel2 = $this->request->getPost('user_tel2');
+        $userAddr1 = $this->request->getPost('user_addr1');
+        $userAddr2 = $this->request->getPost('user_addr2');
+        $userDong = $this->request->getPost('user_dong');
+        $userMemo = $this->request->getPost('user_memo');
+        $userClass = $this->request->getPost('user_class') ?? '5';
+        $sido = $this->request->getPost('sido');
+        $gungu = $this->request->getPost('gungu');
+        
+        // mode가 'editok'인 경우 'edit'로 변환 (폼에서 editok로 전송됨)
+        $isEditMode = ($mode === 'edit' || $mode === 'editok');
+        
+        // 유효성 검사
+        if (empty($compCode)) {
+            return redirect()->back()->with('error', '거래처 코드가 필요합니다.');
+        }
+        
+        if (empty($userId)) {
+            return redirect()->back()->with('error', '아이디가 필요합니다.');
+        }
+        
+        if (empty($userName)) {
+            return redirect()->back()->with('error', '담당자명이 필요합니다.');
+        }
+        
+        if (empty($userTel1)) {
+            return redirect()->back()->with('error', '전화번호1이 필요합니다.');
+        }
+        
+        if (empty($userAddr1)) {
+            return redirect()->back()->with('error', '주소가 필요합니다.');
+        }
+        
+        // 비밀번호 검사
+        if (!$isEditMode) {
+            if (empty($userPass)) {
+                return redirect()->back()->with('error', '비밀번호가 필요합니다.');
+            }
+            if (strlen($userPass) < 5 || strlen($userPass) > 30) {
+                return redirect()->back()->with('error', '비밀번호는 5자리 이상 30자리 이하로 입력하세요.');
+            }
+        } else {
+            if (!empty($userPass) && (strlen($userPass) < 5 || strlen($userPass) > 30)) {
+                return redirect()->back()->with('error', '비밀번호는 5자리 이상 30자리 이하로 입력하세요.');
+            }
+        }
+        
+        if ($userPass !== $userPass2) {
+            return redirect()->back()->with('error', '입력된 두 비밀번호가 일치하지 않습니다.');
+        }
+        
+        if ($userName === $userPass) {
+            return redirect()->back()->with('error', '고객명과 비밀번호를 다르게 입력하세요.');
+        }
+        
+        if ($userId === $userPass) {
+            return redirect()->back()->with('error', '아이디와 비밀번호를 다르게 입력하세요.');
+        }
+        
+        // API 정보 조회
+        $db = \Config\Database::connect();
+        $userCcIdx = session()->get('user_cc_idx');
+        
+        if (empty($userCcIdx)) {
+            $currentUserId = session()->get('user_id');
+            if ($currentUserId) {
+                $userBuilder = $db->table('tbl_users_list u');
+                $userBuilder->select('c.cc_idx');
+                $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
+                $userBuilder->where('u.user_id', (string)$currentUserId);
+                $userQuery = $userBuilder->get();
+                
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && !empty($userResult['cc_idx'])) {
+                        $userCcIdx = (int)$userResult['cc_idx'];
+                        session()->set('user_cc_idx', $userCcIdx);
+                    }
+                }
+            }
+        }
+        
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('cc_code');
+        $ccBuilder->where('idx', $userCcIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        
+        if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
+            return redirect()->back()->with('error', '콜센터 정보를 찾을 수 없습니다.');
+        }
+        
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        $apiInfo = $insungApiListModel->getApiInfoByCode($ccInfo['cc_code']);
+        
+        if (empty($apiInfo)) {
+            return redirect()->back()->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+        
+        $mCode = $apiInfo['mcode'] ?? '';
+        $ccCodeApi = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+        $apiIdx = $apiInfo['idx'] ?? null;
+        
+        $insungApiService = new \App\Libraries\InsungApiService();
+        
+        // 거래처 정보 조회 (거래처명에서 cc_code prefix 제거)
+        $companyBuilder = $db->table('tbl_company_list');
+        $companyBuilder->select('comp_name');
+        $companyBuilder->where('comp_code', $compCode);
+        $companyQuery = $companyBuilder->get();
+        $companyRow = $companyQuery !== false ? $companyQuery->getRowArray() : null;
+        
+        $compName = $companyRow['comp_name'] ?? '';
+        // cc_code prefix 제거 (예: "ROD_구찌" -> "구찌")
+        if (!empty($compName) && strpos($compName, $ccInfo['cc_code'] . '_') === 0) {
+            $compName = substr($compName, strlen($ccInfo['cc_code'] . '_'));
+        }
+        
+        // 동명이 없으면 "미지정"으로 설정
+        if (empty($userDong)) {
+            $userDong = '미지정';
+        }
+        
+        // 좌표 추출 (주소가 있을 경우)
+        $extLon = '';
+        $extLat = '';
+        $userAddrCk = 0;
+        
+        if (!empty($userAddr1)) {
+            $coordResult = $insungApiService->getAddressCoordinates($mCode, $ccCodeApi, $token, $userAddr1, $apiIdx);
+            if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
+                $extLon = $coordResult['lon'];
+                $extLat = $coordResult['lat'];
+                
+                // 좌표로 주소 분리
+                if (!empty($coordResult['normal_lon']) && !empty($coordResult['normal_lat'])) {
+                    $addrFromCoord = $insungApiService->getAddressFromCoordinates($mCode, $ccCodeApi, $token, $coordResult['normal_lat'], $coordResult['normal_lon'], $apiIdx);
+                    if ($addrFromCoord) {
+                        $sido = $addrFromCoord['sido'] ?? $sido;
+                        $gungu = $addrFromCoord['gugun'] ?? $gungu;
+                        $userDong = $addrFromCoord['dong'] ?? $userDong;
+                        $userAddrDetail = $addrFromCoord['detail'] ?? $userAddr2;
+                        $userAddrCk = 1;
+                    }
+                }
+            }
+        }
+        
+        // credit 값 (기본값 3, 추후 거래처 정보에서 가져올 수 있음)
+        $credit = '3';
+        
+        if ($isEditMode) {
+            // 수정 모드: 기존 회원 정보 조회하여 credit 값 가져오기
+            $existingUserBuilder = $db->table('tbl_users_list');
+            $existingUserBuilder->select('user_ccode');
+            $existingUserBuilder->where('user_id', $userId);
+            $existingUserBuilder->where('user_company', $compCode);
+            $existingUserQuery = $existingUserBuilder->get();
+            $existingUser = $existingUserQuery !== false ? $existingUserQuery->getRowArray() : null;
+            
+            $userCcode = $existingUser['user_ccode'] ?? '';
+            
+            // 기존 회원 정보 조회
+            $memberDetailResult = $insungApiService->getMemberDetail($mCode, $ccCodeApi, $token, $userId, $apiIdx);
+            $custName = $compName;
+            $email = '';
+            $location = $userAddr2 ?? '';
+            
+            $member = null;
+            if ($memberDetailResult !== false) {
+                // 응답 구조 확인: Result[1] 또는 직접 [1] 형태
+                if (isset($memberDetailResult->Result) && isset($memberDetailResult->Result[1])) {
+                    $member = $memberDetailResult->Result[1];
+                } elseif (isset($memberDetailResult[1])) {
+                    $member = $memberDetailResult[1];
+                } elseif (is_array($memberDetailResult) && isset($memberDetailResult[1])) {
+                    $member = (object)$memberDetailResult[1];
+                }
+                
+                if ($member) {
+                    $custName = $member->cust_name ?? $compName;
+                    $credit = $member->credit_customer_code ?? $credit;
+                    $email = $member->email ?? '';
+                    $location = $member->location ?? $userAddr2 ?? '';
+                }
+            }
+            
+            // 비밀번호 설정
+            $setPass = !empty($userPass) ? $userPass : ($existingUser['user_pass'] ?? '');
+            
+            // 인성 API 회원 수정
+            $modifyResult = $insungApiService->modifyMember(
+                $mCode, $ccCodeApi, $token, $userId, $setPass, $custName, $userDong, $userTel1, 
+                $credit, $userDept ?? '', $userName, $email, $location, $extLon, $extLat, 
+                $userAddr1, $compCode, $apiIdx
+            );
+            
+            if ($modifyResult === false) {
+                return redirect()->back()->with('error', '인성 API 회원 수정에 실패했습니다.');
+            }
+            
+            // 응답 코드 확인
+            $code = '';
+            if (is_object($modifyResult) && isset($modifyResult->code)) {
+                $code = $modifyResult->code;
+            } elseif (is_array($modifyResult) && isset($modifyResult[0]->code)) {
+                $code = $modifyResult[0]->code;
+            }
+            
+            if ($code !== '1000') {
+                $msg = '';
+                if (is_object($modifyResult) && isset($modifyResult->msg)) {
+                    $msg = $modifyResult->msg;
+                } elseif (is_array($modifyResult) && isset($modifyResult[0]->msg)) {
+                    $msg = $modifyResult[0]->msg;
+                }
+                return redirect()->back()->with('error', '인성 API 회원 수정 실패: [' . $code . '] ' . $msg);
+            }
+            
+            // 수정 후 c_code 조회하여 업데이트
+            $memberDetailResult = $insungApiService->getMemberDetail($mCode, $ccCodeApi, $token, $userId, $apiIdx);
+            if ($memberDetailResult !== false) {
+                // 응답 구조 확인: Result[1] 또는 직접 [1] 형태
+                if (isset($memberDetailResult->Result) && isset($memberDetailResult->Result[1]) && isset($memberDetailResult->Result[1]->c_code)) {
+                    $userCcode = $memberDetailResult->Result[1]->c_code;
+                } elseif (isset($memberDetailResult[1]) && isset($memberDetailResult[1]->c_code)) {
+                    $userCcode = $memberDetailResult[1]->c_code;
+                } elseif (is_array($memberDetailResult) && isset($memberDetailResult[1]) && isset($memberDetailResult[1]['c_code'])) {
+                    $userCcode = $memberDetailResult[1]['c_code'];
+                }
+            }
+            
+            // DB 업데이트
+            $userData = [
+                'user_id' => $userId,
+                'user_name' => $userName,
+                'user_dept' => $userDept ?? '',
+                'user_tel1' => $userTel1,
+                'user_tel2' => $userTel2 ?? '',
+                'user_addr' => $userAddr1,
+                'user_addr_detail' => $userAddr2 ?? '',
+                'user_company' => $compCode,
+                'user_class' => $userClass,
+                'user_memo' => $userMemo ?? '',
+                'user_sido' => $sido ?? '',
+                'user_gungu' => $gungu ?? '',
+                'user_dong' => $userDong ?? '',
+                'user_ccode' => $userCcode
+            ];
+            
+            if (!empty($userPass)) {
+                $userData['user_pass'] = $userPass;
+            }
+            
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->where('user_id', $userId);
+            $userBuilder->where('user_company', $compCode);
+            $userBuilder->update($userData);
+            
+        } else {
+            // 등록 모드: 아이디 중복 확인
+            $checkExistResult = $insungApiService->checkMemberExist($mCode, $ccCodeApi, $token, $userId, $apiIdx);
+            if ($checkExistResult !== false) {
+                $code = '';
+                if (is_object($checkExistResult) && isset($checkExistResult->code)) {
+                    $code = $checkExistResult->code;
+                } elseif (is_array($checkExistResult) && isset($checkExistResult[0]->code)) {
+                    $code = $checkExistResult[0]->code;
+                }
+                
+                if ($code !== '1000') {
+                    return redirect()->back()->with('error', '이미 등록된 아이디이거나 조회 오류입니다.');
+                }
+            }
+            
+            // 인성 API 회원 등록
+            $registerResult = $insungApiService->registerMember(
+                $mCode, $ccCodeApi, $token, $compCode, $userId, $userPass, $compName, $userDong, 
+                $userTel1, $credit, $userDept ?? '', $userName, '', $userAddr2 ?? '', 
+                $extLon, $extLat, $userAddr1, $apiIdx
+            );
+            
+            if ($registerResult === false) {
+                return redirect()->back()->with('error', '인성 API 회원 등록에 실패했습니다.');
+            }
+            
+            // 응답 코드 확인
+            $code = '';
+            if (is_object($registerResult) && isset($registerResult->code)) {
+                $code = $registerResult->code;
+            } elseif (is_array($registerResult) && isset($registerResult[0]->code)) {
+                $code = $registerResult[0]->code;
+            }
+            
+            if ($code !== '1000') {
+                $msg = '';
+                if (is_object($registerResult) && isset($registerResult->msg)) {
+                    $msg = $registerResult->msg;
+                } elseif (is_array($registerResult) && isset($registerResult[0]->msg)) {
+                    $msg = $registerResult[0]->msg;
+                }
+                return redirect()->back()->with('error', '인성 API 회원 등록 실패: [' . $code . '] ' . $msg);
+            }
+            
+            // 등록 후 c_code 조회
+            $userCcode = '';
+            $memberDetailResult = $insungApiService->getMemberDetail($mCode, $ccCodeApi, $token, $userId, $apiIdx);
+            if ($memberDetailResult !== false) {
+                // 응답 구조 확인: Result[1] 또는 직접 [1] 형태
+                if (isset($memberDetailResult->Result) && isset($memberDetailResult->Result[1]) && isset($memberDetailResult->Result[1]->c_code)) {
+                    $userCcode = $memberDetailResult->Result[1]->c_code;
+                } elseif (isset($memberDetailResult[1]) && isset($memberDetailResult[1]->c_code)) {
+                    $userCcode = $memberDetailResult[1]->c_code;
+                } elseif (is_array($memberDetailResult) && isset($memberDetailResult[1]) && isset($memberDetailResult[1]['c_code'])) {
+                    $userCcode = $memberDetailResult[1]['c_code'];
+                }
+            }
+            
+            // DB 저장
+            $userData = [
+                'user_id' => $userId,
+                'user_pass' => $userPass,
+                'user_name' => $userName,
+                'user_dept' => $userDept ?? '',
+                'user_tel1' => $userTel1,
+                'user_tel2' => $userTel2 ?? '',
+                'user_addr' => $userAddr1,
+                'user_addr_detail' => $userAddr2 ?? '',
+                'user_company' => $compCode,
+                'user_class' => $userClass,
+                'user_memo' => $userMemo ?? '',
+                'user_sido' => $sido ?? '',
+                'user_gungu' => $gungu ?? '',
+                'user_dong' => $userDong ?? '',
+                'user_ccode' => $userCcode,
+                'user_cc_idx' => $userCcIdx
+            ];
+            
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->insert($userData);
+        }
+        
+        return redirect()->to('/admin/company-customer-list?comp_code=' . urlencode($compCode))->with('success', ($isEditMode ? '고객 정보가 수정되었습니다.' : '고객이 등록되었습니다.'));
     }
 
     /**
@@ -2423,4 +3706,5 @@ class Admin extends BaseController
             ])->setStatusCode(500);
         }
     }
+
 }

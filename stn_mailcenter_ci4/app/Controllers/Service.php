@@ -479,8 +479,24 @@ class Service extends BaseController
                 $customerId = (int)(session()->get('customer_id') ?? 1);
             }
             
+            // insung_user_id 조회 (tbl_users_list에서 user_id 문자열 조회)
+            $insungUserId = null;
+            if ($userId) {
+                $userListBuilder = $this->db->table('tbl_users_list');
+                $userListBuilder->select('user_id');
+                $userListBuilder->where('idx', $userId);
+                $userListQuery = $userListBuilder->get();
+                if ($userListQuery !== false) {
+                    $userListResult = $userListQuery->getRowArray();
+                    if ($userListResult && !empty($userListResult['user_id'])) {
+                        $insungUserId = $userListResult['user_id'];
+                    }
+                }
+            }
+            
             $orderData = [
                 'user_id' => $userId ?? 1,
+                'insung_user_id' => $insungUserId,
                 'customer_id' => $customerId ?? 1,
                 'department_id' => 1, // 기본값
                 'service_type_id' => $serviceTypeId,
@@ -566,7 +582,10 @@ class Service extends BaseController
                 try {
                     $insungApiService = new \App\Libraries\InsungApiService();
                     $insungApiListModel = new \App\Models\InsungApiListModel();
-
+                    
+                    // 로그인 타입 확인 (STN 로그인 여부)
+                    $isStnLogin = ($loginType !== 'daumdata');
+                    
                     // 세션에서 API 정보 가져오기
                     $mCode = session()->get('m_code');
                     $ccCode = session()->get('cc_code');
@@ -667,13 +686,34 @@ class Service extends BaseController
                         $insungResult = $insungApiService->registerOrder($mCode, $ccCode, $token, $userId, $insungOrderData, $apiIdx);
                         
                         if ($insungResult['success'] && !empty($insungResult['serial_number'])) {
-                            // 인성 주문번호 저장 및 order_number 업데이트 (daumdata 로그인은 INSUNG- 형식 사용)
-                            $orderModel->update($orderId, [
+                            // 인성 주문번호 저장 및 order_number, user_id 업데이트 (daumdata 로그인은 INSUNG- 형식 사용)
+                            $updateData = [
                                 'insung_order_number' => $insungResult['serial_number'],
                                 'order_number' => 'INSUNG-' . $insungResult['serial_number']
-                            ]);
+                            ];
                             
-                            log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}");
+                            // user_id도 함께 업데이트 (인터넷 접수 시 인성 API에 전달한 user_id)
+                            if (!empty($userId)) {
+                                $updateData['user_id'] = $userId;
+                            
+                            // insung_user_id도 함께 저장 (tbl_users_list에서 user_id 문자열 조회)
+                            if ($userId) {
+                                $userListBuilder = $this->db->table('tbl_users_list');
+                                $userListBuilder->select('user_id');
+                                $userListBuilder->where('idx', $userId);
+                                $userListQuery = $userListBuilder->get();
+                                if ($userListQuery !== false) {
+                                    $userListResult = $userListQuery->getRowArray();
+                                    if ($userListResult && !empty($userListResult['user_id'])) {
+                                        $updateData['insung_user_id'] = $userListResult['user_id'];
+                                    }
+                                }
+                            }
+                            }
+                            
+                            $orderModel->update($orderId, $updateData);
+                            
+                            log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}, User ID: {$userId}");
                         } else {
                             log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: {$insungResult['message']}");
                             // 인성 API 실패 시 주문 상태를 'api_failed'로 변경

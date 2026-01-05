@@ -52,7 +52,7 @@ $todayFormatted = date('Y년 m월 d일');
     </div>
     
     <!-- 통계 카드 -->
-    <div class="grid grid-cols-7 gap-4">
+    <div class="grid grid-cols-8 gap-4">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div class="flex items-center">
                 <div class="p-3 bg-gray-100 rounded-lg">
@@ -147,6 +147,20 @@ $todayFormatted = date('Y년 m월 d일');
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-600">대기</p>
                     <p class="text-2xl font-bold text-gray-900"><?= $stats['waiting_orders'] ?? 0 ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 rounded-lg" style="background-color: #fee2e2;">
+                    <svg class="w-6 h-6" style="color: #dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">취소</p>
+                    <p class="text-2xl font-bold text-gray-900"><?= $stats['cancelled_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>

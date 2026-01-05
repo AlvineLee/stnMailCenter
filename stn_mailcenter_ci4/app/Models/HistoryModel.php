@@ -336,6 +336,11 @@ class HistoryModel extends Model
             $builder->where('st.service_category', $filters['service']);
         }
         
+        // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
+        if (isset($filters['insung_user_id']) && $filters['insung_user_id']) {
+            $builder->where('o.insung_user_id', $filters['insung_user_id']);
+        }
+        
         // 총 개수 조회 (페이징용)
         $countBuilder = clone $builder;
         $totalCount = $countBuilder->countAllResults();

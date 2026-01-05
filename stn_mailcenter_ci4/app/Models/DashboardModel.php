@@ -58,7 +58,7 @@ class DashboardModel extends Model
     /**
      * 주문 통계 조회
      */
-    public function getOrderStats($customerId, $userRole, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null)
+    public function getOrderStats($customerId, $userRole, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null)
     {
         $today = date('Y-m-d');
         $builder = $this->db->table('tbl_orders o');
@@ -96,6 +96,20 @@ class DashboardModel extends Model
             }
         }
         
+        // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
+        if ($compCodeForEnv && $loginUserId) {
+            $envBuilder = $this->db->table('tbl_company_env');
+            $envBuilder->select('env1');
+            $envBuilder->where('comp_code', $compCodeForEnv);
+            $envQuery = $envBuilder->get();
+            if ($envQuery !== false) {
+                $envResult = $envQuery->getRowArray();
+                if ($envResult && isset($envResult['env1']) && $envResult['env1'] == '3') {
+                    $builder->where('o.insung_user_id', $loginUserId);
+                }
+            }
+        }
+        
         // 전체 주문 수 (오늘 날짜 기준)
         $totalOrders = $builder->countAllResults(false);
         
@@ -106,7 +120,21 @@ class DashboardModel extends Model
         $statusBuilder->where('DATE(o.order_date) >=', $today);
         
         // 필터 적용
-        $this->applyFilters($statusBuilder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode);
+        $this->applyFilters($statusBuilder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
+        
+        // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
+        if ($compCodeForEnv && $loginUserId) {
+            $envBuilder = $this->db->table('tbl_company_env');
+            $envBuilder->select('env1');
+            $envBuilder->where('comp_code', $compCodeForEnv);
+            $envQuery = $envBuilder->get();
+            if ($envQuery !== false) {
+                $envResult = $envQuery->getRowArray();
+                if ($envResult && isset($envResult['env1']) && $envResult['env1'] == '3') {
+                    $statusBuilder->where('o.insung_user_id', $loginUserId);
+                }
+            }
+        }
         
         // CASE WHEN으로 상태를 정규화하여 GROUP BY
         // 인성 API 주문의 state와 일반 주문의 status를 통합
@@ -118,10 +146,12 @@ class DashboardModel extends Model
                 WHEN o.order_system = 'insung' AND (o.state = '운행' OR o.state = '12') THEN '운행'
                 WHEN o.order_system = 'insung' AND (o.state = '완료' OR o.state = '30') THEN '완료'
                 WHEN o.order_system = 'insung' AND (o.state = '대기' OR o.state = '20' OR o.state = 'A대기') THEN '대기'
+                WHEN o.order_system = 'insung' AND (o.state = '취소' OR o.state = '40') THEN '취소'
                 WHEN o.order_system != 'insung' AND o.status = 'pending' THEN '예약'
                 WHEN o.order_system != 'insung' AND o.status = 'processing' THEN '접수'
                 WHEN o.order_system != 'insung' AND o.status = 'completed' THEN '운행'
                 WHEN o.order_system != 'insung' AND o.status = 'delivered' THEN '완료'
+                WHEN o.order_system != 'insung' AND o.status = 'cancelled' THEN '취소'
                 ELSE '기타'
             END as status_category,
             COUNT(*) as count
@@ -137,7 +167,8 @@ class DashboardModel extends Model
             '배차' => 0,
             '운행' => 0,
             '완료' => 0,
-            '대기' => 0
+            '대기' => 0,
+            '취소' => 0
         ];
         
         foreach ($statusResults as $result) {
@@ -156,6 +187,7 @@ class DashboardModel extends Model
             'driving_orders' => $statusCounts['운행'],
             'completed_orders' => $statusCounts['완료'],
             'waiting_orders' => $statusCounts['대기'],
+            'cancelled_orders' => $statusCounts['취소'],
             'today_orders' => 0
         ];
         
@@ -195,7 +227,7 @@ class DashboardModel extends Model
     /**
      * 최근 주문 조회
      */
-    public function getRecentOrders($customerId, $userRole, $limit = 10, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null)
+    public function getRecentOrders($customerId, $userRole, $limit = 10, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null)
     {
         $builder = $this->db->table('tbl_orders o');
         
@@ -319,6 +351,20 @@ class DashboardModel extends Model
         $today = date('Y-m-d');
         $builder->where('DATE(o.order_date) >=', $today);
         
+        // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
+        if ($compCodeForEnv && $loginUserId) {
+            $envBuilder = $this->db->table('tbl_company_env');
+            $envBuilder->select('env1');
+            $envBuilder->where('comp_code', $compCodeForEnv);
+            $envQuery = $envBuilder->get();
+            if ($envQuery !== false) {
+                $envResult = $envQuery->getRowArray();
+                if ($envResult && isset($envResult['env1']) && $envResult['env1'] == '3') {
+                    $builder->where('o.insung_user_id', $loginUserId);
+                }
+            }
+        }
+        
         // 서브도메인 필터링 (배송조회와 동일)
         $subdomainConfig = config('Subdomain');
         $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
@@ -413,7 +459,7 @@ class DashboardModel extends Model
     /**
      * 통계 조회 시 필터링 적용 (공통 메서드)
      */
-    private function applyFilters($builder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode)
+    private function applyFilters($builder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode, $compCodeForEnv = null, $loginUserId = null)
     {
         if ($loginType === 'daumdata') {
             $builder->join('tbl_company_list c', 'o.customer_id = c.comp_code', 'left');
@@ -436,6 +482,20 @@ class DashboardModel extends Model
                 $builder->where('o.customer_id', $customerId);
             } elseif ($customerId) {
                 $builder->where('o.customer_id', $customerId);
+            }
+        }
+        
+        // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
+        if ($compCodeForEnv && $loginUserId) {
+            $envBuilder = $this->db->table('tbl_company_env');
+            $envBuilder->select('env1');
+            $envBuilder->where('comp_code', $compCodeForEnv);
+            $envQuery = $envBuilder->get();
+            if ($envQuery !== false) {
+                $envResult = $envQuery->getRowArray();
+                if ($envResult && isset($envResult['env1']) && $envResult['env1'] == '3') {
+                    $builder->where('o.insung_user_id', $loginUserId);
+                }
             }
         }
     }

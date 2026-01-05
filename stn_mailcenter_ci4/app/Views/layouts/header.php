@@ -458,8 +458,9 @@
                 }
                 // 관리자설정 페이지인 경우
                 else if (currentPath.includes('/admin/')) {
+                    // 관리자 설정 메뉴 또는 관리자 메뉴 활성화
                     const $adminMenu = $('.nav-item.has-submenu').filter(function() {
-                        return $(this).find('.nav-text').text() === '관리자 설정';
+                        return $(this).find('.nav-text').text() === '관리자 설정' || $(this).find('.nav-text').text() === '관리자';
                     });
                     
                     if ($adminMenu.length) {
@@ -574,9 +575,30 @@
         <main class="main-content">
             <?php if (isset($content_header)): ?>
             <div class="bg-white rounded-lg shadow-sm border-2 border-gray-300 py-6 px-6 mb-3 w-full">
-                <div class="flex items-center">
-                    <h1 class="text-xl font-bold text-gray-900"><?= $content_header['title'] ?></h1>
-                    <p class="text-sm text-gray-900 ml-3"><?= $content_header['description'] ?></p>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <h1 class="text-xl font-bold text-gray-900"><?= $content_header['title'] ?></h1>
+                        <p class="text-sm text-gray-900 ml-3"><?= $content_header['description'] ?></p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <?php if (isset($content_header['action_button']) && !empty($content_header['action_button'])): ?>
+                        <a href="<?= base_url($content_header['action_button']['url']) ?>" 
+                           class="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors whitespace-nowrap">
+                            <?= esc($content_header['action_button']['label']) ?>
+                        </a>
+                        <?php endif; ?>
+                        <?php if (isset($content_header['back_button']) && !empty($content_header['back_button'])): ?>
+                        <a href="<?= base_url($content_header['back_button']['url']) ?>" 
+                           class="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded whitespace-nowrap"
+                           style="height: 24px; font-size: 12px; padding: 4px 12px; font-weight: 600; border: 1px solid #e2e8f0;">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="11" cy="11" r="7" fill="#7DD3FC" stroke="#7DD3FC" stroke-width="1.5"/>
+                                <path d="M20 20l-4-4" stroke="#92400E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <?= esc($content_header['back_button']['label']) ?>
+                        </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
             <?php endif; ?>

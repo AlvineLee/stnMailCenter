@@ -324,6 +324,11 @@ class DeliveryModel extends Model
             $builder->where('st.service_category', $filters['service']);
         }
         
+        // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
+        if (isset($filters['insung_user_id']) && $filters['insung_user_id']) {
+            $builder->where('o.insung_user_id', $filters['insung_user_id']);
+        }
+        
         // 날짜 필터: order_date가 오늘 날짜보다 같거나 큰 경우만 조회
         $today = date('Y-m-d');
         $builder->where('DATE(o.order_date) >=', $today);

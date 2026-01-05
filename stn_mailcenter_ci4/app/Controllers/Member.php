@@ -520,4 +520,62 @@ class Member extends BaseController
             ])->setStatusCode(500);
         }
     }
+
+    /**
+     * 고객 목록 (user_type = 3 접근 가능)
+     * Admin::companyCustomerList()의 래퍼
+     */
+    public function customerList()
+    {
+        $adminController = new \App\Controllers\Admin();
+        $result = $adminController->companyCustomerList();
+        
+        // 뷰 데이터 수정 (경로 변경)
+        if (is_string($result) || (is_object($result) && method_exists($result, 'getBody'))) {
+            return $result;
+        }
+        
+        // 리다이렉트 경로 변경
+        if (is_object($result) && method_exists($result, 'getHeader')) {
+            $location = $result->getHeader('Location');
+            if ($location) {
+                $location = str_replace('/admin/company-customer-list', '/member/customers', $location);
+                $location = str_replace('/admin/company-list-cc', '/admin/company-list-cc', $location);
+                return redirect()->to($location);
+            }
+        }
+        
+        return $result;
+    }
+
+    /**
+     * 고객 등록/수정 폼 (user_type = 3 접근 가능)
+     * Admin::companyCustomerForm()의 래퍼
+     */
+    public function customerForm()
+    {
+        $adminController = new \App\Controllers\Admin();
+        return $adminController->companyCustomerForm();
+    }
+
+    /**
+     * 고객 등록/수정 저장 (user_type = 3 접근 가능)
+     * Admin::companyCustomerSave()의 래퍼
+     */
+    public function customerSave()
+    {
+        $adminController = new \App\Controllers\Admin();
+        $result = $adminController->companyCustomerSave();
+        
+        // 리다이렉트 경로 변경
+        if (is_object($result) && method_exists($result, 'getHeader')) {
+            $location = $result->getHeader('Location');
+            if ($location) {
+                $location = str_replace('/admin/company-customer-list', '/member/customers', $location);
+                return redirect()->to($location);
+            }
+        }
+        
+        return $result;
+    }
 }

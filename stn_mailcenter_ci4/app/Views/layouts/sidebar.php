@@ -165,8 +165,8 @@
             <?php
             // daumdata 로그인 메뉴
             if ($loginType === 'daumdata'):
-                // 고객 관리 메뉴 (user_type = 1 또는 3)
-                if ($userType == '1' || $userType == '3'):
+                // 고객 관리 메뉴 (user_type = 1만)
+                if ($userType == '1'):
             ?>
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
@@ -175,14 +175,8 @@
                     <span class="nav-arrow">v</span>
                 </a>
                 <ul class="submenu">
-                    <?php if ($userType == '1'): ?>
-                        <!-- user_type = 1: 전체 메뉴 -->
-                        <li><a href="<?= base_url('insung/company-list') ?>">고객사 관리</a></li>
-                        <li><a href="<?= base_url('insung/user-list') ?>">고객사 회원정보</a></li>
-                    <?php else: ?>
-                        <!-- user_type = 3: 고객사회원정보만 -->
-                        <li><a href="<?= base_url('insung/user-list') ?>">고객사 회원정보</a></li>
-                    <?php endif; ?>
+                    <li><a href="<?= base_url('insung/company-list') ?>">고객사 관리</a></li>
+                    <li><a href="<?= base_url('insung/user-list') ?>">고객사 회원정보</a></li>
                 </ul>
             </li>
             <?php
@@ -218,6 +212,22 @@
                     <li><a href="<?= base_url('admin/pricing') ?>">요금설정</a></li>
                     <li><a href="<?= base_url('admin/order-list') ?>">전체내역조회</a></li>
                     <li><a href="<?= base_url('admin/company-list') ?>">거래처관리</a></li>
+                </ul>
+            </li>
+            <?php
+                endif;
+                
+                // 콜센터 관리자 메뉴 (user_type = 3) - 거래처관리만
+                if ($userType == '3'):
+            ?>
+            <li class="nav-item has-submenu">
+                <a href="#" class="nav-link" data-toggle="submenu">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">관리자</span>
+                    <span class="nav-arrow">v</span>
+                </a>
+                <ul class="submenu">
+                    <li><a href="<?= base_url('admin/company-list-cc') ?>">거래처관리</a></li>
                 </ul>
             </li>
             <?php

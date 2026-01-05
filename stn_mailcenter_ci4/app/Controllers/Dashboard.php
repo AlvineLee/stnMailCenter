@@ -42,6 +42,8 @@ class Dashboard extends BaseController
         $customerId = session()->get('customer_id');
         $compCode = session()->get('comp_code');
         $ccCode = session()->get('cc_code');
+        $userCompany = session()->get('user_company'); // tbl_users_list.user_company
+        $loginUserId = session()->get('user_id'); // tbl_users_list.user_id (문자열)
         
         // 고객사 선택 (슈퍼관리자용)
         $selectedCustomerId = $this->request->getGet('customer_id') ?: $customerId;
@@ -52,11 +54,46 @@ class Dashboard extends BaseController
             $customers = $this->dashboardModel->getActiveCustomers();
         }
         
+        // 서브도메인 comp_code 확인
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $subdomainCompCode = null;
+        if ($currentSubdomain !== 'default') {
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+        }
+        $userCompany = session()->get('user_company');
+        $loginUserId = session()->get('user_id'); // tbl_users_list.user_id (문자열)
+        
+        // 본인주문조회(env1=3) 필터링: 일반 등급(user_class=5)일 때만 적용
+        // user_class는 세션에서 가져오거나 DB에서 조회
+        $userClass = session()->get('user_class');
+        if (empty($userClass) && $loginType === 'daumdata') {
+            $userId = session()->get('user_id');
+            if ($userId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_class');
+                $userBuilder->where('user_id', $userId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                }
+            }
+        }
+        
+        $compCodeForEnv = null;
+        if ($userClass == '5') {
+            $compCodeForEnv = $subdomainCompCode ?? $userCompany;
+        }
+        
         // 통계 데이터 조회
-        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode);
+        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
         
         // 최근 주문 조회
-        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode);
+        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
         
         // 선택된 고객사 정보
         $selectedCustomer = null;

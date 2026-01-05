@@ -404,11 +404,13 @@ class OrderModel extends Model
      * 주문 상세 API와 동일한 응답 구조로 파싱
      * 
      * @param array $orders 인성 API에서 받은 주문 목록 (주문 상세와 동일한 구조)
-     * @param int $userId 사용자 ID (tbl_users_list.idx)
+     * @param int $userId 사용자 ID (tbl_users_list.idx) - 참고용 (더 이상 사용하지 않음)
      * @param int $customerId 고객사 ID
+     * @param bool $isSelfOrderOnly 본인오더조회 모드 여부 (env1=3)
+     * @param string $loginUserId 로그인한 사용자의 user_id (본인오더조회 필터링 및 기본값용)
      * @return array ['inserted' => int, 'updated' => int, 'errors' => array]
      */
-    public function insertOrUpdateInsungOrders($orders, $userId, $customerId)
+    public function insertOrUpdateInsungOrders($orders, $userId, $customerId, $isSelfOrderOnly = false, $loginUserId = null)
     {
         $inserted = 0;
         $updated = 0;
@@ -589,6 +591,55 @@ class OrderModel extends Model
                     continue;
                 }
                 
+                // API 응답에서 user_id 추출 (DB 저장용)
+                // 필터링은 하지 않고 모든 주문을 저장 (나중에 DB에서 조회 시 필터링)
+                $orderUserId = null;
+                
+                if ($isArray) {
+                    // 배열인 경우: 직접 키로 접근 또는 $orderItem[1]에서 추출
+                    $orderUserId = $orderItem['user_id'] ?? $orderItem['user_code'] ?? null;
+                    if (empty($orderUserId) && isset($orderItem[1])) {
+                        $customerInfo = $orderItem[1];
+                        if (is_array($customerInfo)) {
+                            $orderUserId = $customerInfo['user_id'] ?? $customerInfo['user_code'] ?? null;
+                        } elseif (is_object($customerInfo)) {
+                            $orderUserId = $customerInfo->user_id ?? $customerInfo->user_code ?? null;
+                        }
+                    }
+                } elseif ($isObject) {
+                    // 객체인 경우: 직접 속성 접근 또는 $orderItem->Result[1]에서 추출
+                    $orderUserId = $orderItem->user_id ?? $orderItem->user_code ?? null;
+                    if (empty($orderUserId) && isset($orderItem->Result) && isset($orderItem->Result[1])) {
+                        $customerInfo = $orderItem->Result[1];
+                        $orderUserId = $customerInfo->user_id ?? $customerInfo->user_code ?? null;
+                    }
+                }
+                
+                // API 응답의 user_id를 insung_user_id 필드에 저장
+                // user_id는 tbl_users_list에서 idx를 찾아서 저장 (숫자 타입)
+                $insungUserIdForDb = !empty($orderUserId) ? $orderUserId : $loginUserId;
+                
+                // user_id 문자열로 tbl_users_list에서 idx 조회
+                $userIdxForDb = null;
+                if (!empty($insungUserIdForDb)) {
+                    $userListBuilder = $this->db->table('tbl_users_list');
+                    $userListBuilder->select('idx');
+                    $userListBuilder->where('user_id', $insungUserIdForDb);
+                    $userListQuery = $userListBuilder->get();
+                    if ($userListQuery !== false) {
+                        $userListResult = $userListQuery->getRowArray();
+                        if ($userListResult && !empty($userListResult['idx'])) {
+                            $userIdxForDb = (int)$userListResult['idx'];
+                        }
+                    }
+                }
+                
+                if (!empty($orderUserId)) {
+                    // log_message('debug', "OrderModel::insertOrUpdateInsungOrders - 주문 {$serialNumber}의 insung_user_id({$orderUserId})를 저장합니다. user_id(idx): " . ($userIdxForDb ?? '없음'));
+                } else {
+                    // log_message('debug', "OrderModel::insertOrUpdateInsungOrders - 주문 {$serialNumber}의 insung_user_id가 없어 기본값({$loginUserId})을 사용합니다. user_id(idx): " . ($userIdxForDb ?? '없음'));
+                }
+                
                 $isTargetOrder = false; // 로그 비활성화
                 
                 // 기존 주문 확인 (insung_order_number로만 확인 - INSERT ON DUPLICATE KEY UPDATE에서 사용)
@@ -597,8 +648,11 @@ class OrderModel extends Model
                 
                 
                 // 주문 데이터 구성 (주문 상세와 동일한 방식으로 파싱)
+                // insung_user_id: API 응답의 user_id 문자열 저장
+                // user_id: tbl_users_list.idx (숫자) 저장
                 $orderRecord = [
-                    'user_id' => $userId,
+                    'insung_user_id' => $insungUserIdForDb, // API 응답의 user_id 문자열 저장
+                    'user_id' => $userIdxForDb, // tbl_users_list.idx (숫자)
                     'customer_id' => $customerId,
                     'service_type_id' => 1, // 기본값
                     'order_system' => 'insung',
@@ -847,11 +901,11 @@ class OrderModel extends Model
                 $orderRecord['order_regist_type'] = $getOrderItemValue(null, 'order_regist_type') ?? $getValue($getOrderItemValue(9), 'order_regist_type');
                 $orderRecord['item_type'] = $getOrderItemValue(null, 'delivery_item') ?? $getOrderItemValue(null, 'delivery_item_text') ?? $getValue($getOrderItemValue(9), 'item_type');
                 
-                // NULL 값 제거 (기존 값 유지, 단 updated_at은 항상 포함)
+                // NULL 값 제거 (기존 값 유지, 단 updated_at, user_id, insung_user_id는 항상 포함)
                 $updatedAtValue = date('Y-m-d H:i:s');
                 foreach ($orderRecord as $key => $value) {
-                    // updated_at은 제거하지 않음
-                    if ($key === 'updated_at') {
+                    // updated_at, user_id, insung_user_id는 제거하지 않음 (항상 업데이트)
+                    if ($key === 'updated_at' || $key === 'user_id' || $key === 'insung_user_id') {
                         continue;
                     }
                     if ($value === null || $value === '') {
@@ -860,6 +914,14 @@ class OrderModel extends Model
                 }
                 // updated_at은 항상 포함 (타임스탬프 업데이트)
                 $orderRecord['updated_at'] = $updatedAtValue;
+                // insung_user_id도 항상 포함 (API 응답의 user_id로 업데이트)
+                if (!isset($orderRecord['insung_user_id'])) {
+                    $orderRecord['insung_user_id'] = $insungUserIdForDb;
+                }
+                // user_id도 항상 포함 (tbl_users_list.idx로 업데이트)
+                if (!isset($orderRecord['user_id'])) {
+                    $orderRecord['user_id'] = $userIdxForDb;
+                }
                 
                 // INSERT ON DUPLICATE KEY UPDATE 실행 (실제 MySQL 구문 사용)
                 // 검증을 건너뛰고 직접 DB에 저장 (인성 API 데이터는 이미 검증됨)
