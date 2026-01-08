@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Controllers\BaseController;
 use App\Models\BookmarkModel;
 use App\Models\RecentListModel;
+use App\Models\OrderModel;
 use App\Libraries\InsungApiService;
 use App\Models\InsungApiListModel;
 
@@ -91,6 +92,7 @@ class Bookmark extends BaseController
                             'c_telno' => $item->tel_no1 ?? '',
                             'c_dong' => $item->basic_dong ?? '',
                             'c_addr' => $item->location ?? '',
+                            'addr_road' => $item->location ?? '', // 도로명 주소 (location 필드 사용)
                             'address2' => $result[$i]->address_detail ?? '',
                             'c_sido' => $item->sido ?? '',
                             'c_gungu' => $item->gugun ?? '',
@@ -118,7 +120,7 @@ class Bookmark extends BaseController
     }
 
     /**
-     * 최근 사용 기록 팝업 화면
+     * 최근 사용 기록 팝업 화면 (tbl_orders에서 조회)
      * 
      * @return string
      */
@@ -132,13 +134,116 @@ class Bookmark extends BaseController
         $type = $this->request->getGet('type') ?? 'S';
         $keyword = $this->request->getGet('keyword') ?? '';
 
-        $userId = session()->get('user_id');
-        $recentList = $this->recentListModel->getUserRecentList($userId, $keyword);
+        $loginType = session()->get('login_type');
+        
+        // 로그인 타입에 따라 user_id 결정
+        if ($loginType === 'daumdata') {
+            // daumdata 로그인: tbl_users_list의 idx를 user_id로 사용
+            $userId = session()->get('user_idx');
+            $insungUserId = session()->get('user_id'); // insung_user_id 비교용 (문자열)
+        } else {
+            // STN 로그인: user_id 사용
+            $userId = session()->get('user_id');
+            $insungUserId = null; // STN 로그인은 insung_user_id 비교 불필요
+        }
+        
+        if (!$userId) {
+            $data = [
+                'type' => $type,
+                'keyword' => $keyword,
+                'orders' => []
+            ];
+            return view('recent/popup', $data);
+        }
+        
+        // tbl_orders에서 본인이 등록한 주문만 조회 (접수자 이름 포함)
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_orders o');
+        
+        // 접수자 이름을 위해 tbl_users_list와 조인 (collation 충돌 해결)
+        // insung_user_id가 실제 접수자를 나타내므로 이것으로만 조인
+        $builder->select('o.*, u.user_name as receiver_name');
+        $builder->join('tbl_users_list u', "CONVERT(o.insung_user_id USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(u.user_id USING utf8mb4) COLLATE utf8mb4_general_ci", 'left', false);
+        
+        // 본인 주문만 필터링: user_id로 필터링 (daumdata는 user_idx, STN은 user_id)
+        $builder->where('o.user_id', $userId);
+        
+        // daumdata 로그인 시 insung_user_id로도 필터링하여 본인 주문만 확실히 가져오기
+        // AND 조건으로 둘 다 만족하는 경우만 가져오기
+        if ($loginType === 'daumdata' && $insungUserId) {
+            // insung_user_id 직접 비교 (collation 문제가 있으면 PHP에서 필터링)
+            $builder->where('o.insung_user_id', $insungUserId);
+        }
+        
+        // 최근 1개월 데이터만 조회
+        $oneMonthAgo = date('Y-m-d H:i:s', strtotime('-1 month'));
+        $builder->where('o.save_date >=', $oneMonthAgo);
+        
+        // 검색 키워드가 있으면 출발지/도착지 정보로 검색
+        if (!empty($keyword)) {
+            $builder->groupStart();
+            $builder->like('o.departure_company_name', $keyword);
+            $builder->orLike('o.departure_contact', $keyword);
+            $builder->orLike('o.departure_address', $keyword);
+            $builder->orLike('o.destination_company_name', $keyword);
+            $builder->orLike('o.destination_contact', $keyword);
+            $builder->orLike('o.destination_address', $keyword);
+            $builder->groupEnd();
+        }
+        
+        // 정렬: 접수날짜 최신순
+        $builder->orderBy('o.save_date', 'DESC');
+        $builder->limit(50); // 최근 50개만 (성능 개선)
+        
+        $query = $builder->get();
+        
+        if ($query === false) {
+            log_message('error', 'Bookmark::recentPopup - Query failed');
+            $orders = [];
+        } else {
+            $orders = $query->getResultArray();
+            
+            // 전화번호 필드 및 receiver_name 복호화 처리
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+            foreach ($orders as &$order) {
+                // 전화번호 필드 복호화
+                $order = $encryptionHelper->decryptFields($order, $phoneFields);
+                
+                // receiver_name 복호화 (tbl_users_list.user_name이 암호화되어 있을 수 있음)
+                if (isset($order['receiver_name']) && !empty($order['receiver_name'])) {
+                    $decrypted = $encryptionHelper->decrypt($order['receiver_name']);
+                    // 복호화 결과가 원본과 다르면 복호화 성공
+                    if ($decrypted !== $order['receiver_name']) {
+                        $order['receiver_name'] = $decrypted;
+                    }
+                }
+            }
+            unset($order); // 참조 해제
+            
+            // insung_user_id가 본인과 같은 항목을 우선 정렬 (PHP에서 정렬)
+            if ($loginType === 'daumdata' && $insungUserId && !empty($orders)) {
+                usort($orders, function($a, $b) use ($insungUserId) {
+                    $aIsMine = (!empty($a['insung_user_id']) && $a['insung_user_id'] === $insungUserId) ? 0 : 1;
+                    $bIsMine = (!empty($b['insung_user_id']) && $b['insung_user_id'] === $insungUserId) ? 0 : 1;
+                    
+                    // 본인 주문 우선
+                    if ($aIsMine !== $bIsMine) {
+                        return $aIsMine - $bIsMine;
+                    }
+                    
+                    // 같은 우선순위면 접수날짜 최신순
+                    $aDate = strtotime($a['save_date'] ?? '1970-01-01');
+                    $bDate = strtotime($b['save_date'] ?? '1970-01-01');
+                    return $bDate - $aDate;
+                });
+            }
+        }
 
         $data = [
             'type' => $type,
             'keyword' => $keyword,
-            'recentList' => $recentList
+            'orders' => $orders
         ];
 
         return view('recent/popup', $data);
@@ -412,21 +517,23 @@ class Bookmark extends BaseController
         
         $postData = $this->request->getPost();
         
-        // 즐겨찾기 데이터 준비
+        // 즐겨찾기 데이터 준비 (테이블 구조에 맞게 필드명 매핑)
+        // 좌표는 INT 타입이므로 숫자로 변환 (0이면 빈 값으로 처리)
+        $lon = !empty($postData['lon']) ? (int)$postData['lon'] : 0;
+        $lat = !empty($postData['lat']) ? (int)$postData['lat'] : 0;
+        if ($lon == 0) $lon = '';
+        if ($lat == 0) $lat = '';
+        
         $bookmarkData = [
             'user_id' => $userId,
             'company_name' => $postData['c_name'] ?? '',
             'c_telno' => $postData['c_tel'] ?? '',
             'dept_name' => $postData['c_dept'] ?? '',
             'charge_name' => $postData['c_charge'] ?? '',
-            'c_dong' => $postData['c_dong'] ?? '',
-            'c_addr' => $postData['c_addr'] ?? '',
-            'address2' => $postData['c_addr2'] ?? '',
-            'c_sido' => $postData['c_sido'] ?? '',
-            'gungu' => $postData['c_gungu'] ?? '',
-            'lon' => $postData['lon'] ?? '',
-            'lat' => $postData['lat'] ?? '',
-            'c_code' => $postData['c_code'] ?? ''
+            'lon' => $lon,
+            'lat' => $lat,
+            'addr_jibun' => $postData['c_addr'] ?? '', // 지번 주소
+            'addr_road' => $postData['c_addr2'] ?? ''  // 도로명 주소
         ];
 
         // 필수 필드 검증
@@ -435,6 +542,94 @@ class Bookmark extends BaseController
                 'success' => false,
                 'message' => '상호명과 연락처는 필수 항목입니다.'
             ]);
+        }
+        
+        // 좌표가 없고 주소가 있으면 인성 API로 좌표 조회
+        if ((empty($bookmarkData['lon']) || empty($bookmarkData['lat'])) && (!empty($bookmarkData['addr_jibun']) || !empty($bookmarkData['addr_road']))) {
+            log_message('info', "Bookmark::add - 좌표 조회 시작. 현재 좌표: lon={$bookmarkData['lon']}, lat={$bookmarkData['lat']}");
+            log_message('info', "Bookmark::add - 주소 정보: addr_jibun={$bookmarkData['addr_jibun']}, addr_road={$bookmarkData['addr_road']}");
+            
+            // daumdata 로그인 시에만 인성 API 사용
+            if ($loginType === 'daumdata') {
+                $mCode = session()->get('m_code');
+                $ccCode = session()->get('cc_code');
+                log_message('info', "Bookmark::add - daumdata 로그인 확인. m_code={$mCode}, cc_code={$ccCode}");
+                
+                // m_code와 cc_code로 API 정보 조회
+                if (!empty($mCode) && !empty($ccCode)) {
+                    $apiInfo = $this->apiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                } else {
+                    // m_code가 없으면 cc_code만으로 조회 시도 (하위 호환성)
+                    log_message('warning', "Bookmark::add - m_code가 없어 cc_code만으로 조회 시도. cc_code={$ccCode}");
+                    $apiInfo = $this->apiListModel->getApiInfoByCcCode($ccCode);
+                }
+                
+                if ($apiInfo) {
+                    $mcode = $apiInfo['mcode'] ?? '';
+                    $cccode = $apiInfo['cccode'] ?? '';
+                    $token = $this->insungApiService->getTokenKey($apiInfo['idx']);
+                    
+                    log_message('info', "Bookmark::add - API 정보 조회 성공. mcode={$mcode}, cccode={$cccode}, api_idx={$apiInfo['idx']}");
+                    
+                    // 주소 조합 (지번 주소 우선, 없으면 도로명 주소)
+                    $addressForCoord = !empty($bookmarkData['addr_jibun']) ? $bookmarkData['addr_jibun'] : $bookmarkData['addr_road'];
+                    
+                    // 주소 정리 (강원특별자치도 → 강원도, 지하 제거)
+                    if (!empty($addressForCoord)) {
+                        $originalAddress = $addressForCoord;
+                        $addressForCoord = str_replace("강원특별자치도", "강원도", $addressForCoord);
+                        $addressForCoord = preg_replace('/\s*지하\s*/i', ' ', $addressForCoord);
+                        $addressForCoord = preg_replace('/\s+/', ' ', $addressForCoord);
+                        $addressForCoord = trim($addressForCoord);
+                        
+                        log_message('info', "Bookmark::add - 주소 정리 완료. 원본: {$originalAddress}, 정리 후: {$addressForCoord}");
+                        log_message('info', "Bookmark::add - 인성 API 좌표 조회 호출 시작. 주소: {$addressForCoord}");
+                        
+                        $coordResult = $this->insungApiService->getAddressCoordinates($mcode, $cccode, $token, $addressForCoord, $apiInfo['idx']);
+                        
+                        log_message('info', "Bookmark::add - 인성 API 좌표 조회 응답: " . json_encode($coordResult, JSON_UNESCAPED_UNICODE));
+                        
+                        if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
+                            $lon = $coordResult['lon'];
+                            $lat = $coordResult['lat'];
+                            
+                            log_message('info', "Bookmark::add - 좌표 추출 성공. 원본 값: lon={$lon}, lat={$lat}");
+                            
+                            // 좌표가 0이 아니고 유효한 값인지 확인
+                            $lonNum = floatval($lon);
+                            $latNum = floatval($lat);
+                            
+                            log_message('info', "Bookmark::add - 좌표 숫자 변환: lonNum={$lonNum}, latNum={$latNum}");
+                            
+                            if (!empty($lon) && !empty($lat) && $lonNum > 0 && $latNum > 0) {
+                                // INT 타입이므로 문자열을 정수로 변환
+                                $bookmarkData['lon'] = (int)$lonNum;
+                                $bookmarkData['lat'] = (int)$latNum;
+                                log_message('info', "Bookmark::add - 유효한 좌표 저장 완료. lon={$bookmarkData['lon']}, lat={$bookmarkData['lat']}");
+                            } else {
+                                log_message('warning', "Bookmark::add - 유효하지 않은 좌표 (0 또는 음수). 주소: {$addressForCoord}, lon={$lon}, lat={$lat}, lonNum={$lonNum}, latNum={$latNum}");
+                                // 좌표가 유효하지 않으면 빈 값으로 설정 (0 대신)
+                                $bookmarkData['lon'] = '';
+                                $bookmarkData['lat'] = '';
+                            }
+                        } else {
+                            log_message('warning', "Bookmark::add - 좌표 조회 실패 또는 응답 형식 오류. 주소: {$addressForCoord}, 응답: " . json_encode($coordResult, JSON_UNESCAPED_UNICODE));
+                            // 좌표 조회 실패 시 빈 값으로 설정
+                            $bookmarkData['lon'] = '';
+                            $bookmarkData['lat'] = '';
+                        }
+                    } else {
+                        log_message('warning', "Bookmark::add - 주소가 비어있어 좌표 조회 불가");
+                    }
+                } else {
+                    log_message('warning', "Bookmark::add - API 정보 조회 실패. m_code={$mCode}, cc_code={$ccCode}");
+                    log_message('warning', "Bookmark::add - 세션 정보 확인 필요. m_code 존재: " . (!empty($mCode) ? 'Y' : 'N') . ", cc_code 존재: " . (!empty($ccCode) ? 'Y' : 'N'));
+                }
+            } else {
+                log_message('info', "Bookmark::add - daumdata 로그인이 아니어서 좌표 조회 건너뜀. login_type={$loginType}");
+            }
+        } else {
+            log_message('info', "Bookmark::add - 좌표 조회 조건 불만족. lon={$bookmarkData['lon']}, lat={$bookmarkData['lat']}, addr_jibun={$bookmarkData['addr_jibun']}, addr_road={$bookmarkData['addr_road']}");
         }
         
         // 인성 API에 등록 (daumdata 로그인 시)
@@ -452,12 +647,12 @@ class Bookmark extends BaseController
                     'dept_name' => $bookmarkData['dept_name'],
                     'staff_name' => $bookmarkData['charge_name'],
                     'tel_no' => $bookmarkData['c_telno'],
-                    'sido' => $bookmarkData['c_sido'],
-                    'gugun' => $bookmarkData['gungu'],
-                    'dong' => $bookmarkData['c_dong'],
-                    'address_detail' => ($bookmarkData['c_addr'] . ' ' . $bookmarkData['address2']),
-                    'location' => $bookmarkData['c_addr'],
-                    'c_code' => $bookmarkData['c_code']
+                    'sido' => $postData['c_sido'] ?? '',
+                    'gugun' => $postData['c_gungu'] ?? '',
+                    'dong' => $postData['c_dong'] ?? '',
+                    'address_detail' => trim(($bookmarkData['addr_jibun'] ?? '') . ' ' . ($bookmarkData['addr_road'] ?? '')),
+                    'location' => $bookmarkData['addr_jibun'] ?? $bookmarkData['addr_road'] ?? '',
+                    'c_code' => $postData['c_code'] ?? ''
                 ];
                 
                 $apiResult = $this->insungApiService->registerCustomer(

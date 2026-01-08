@@ -63,36 +63,72 @@ class DashboardModel extends Model
         $today = date('Y-m-d');
         $builder = $this->db->table('tbl_orders o');
         
-        // 오늘 날짜보다 같거나 큰 조건 (배송조회와 동일)
-        $builder->where('DATE(o.order_date) >=', $today);
+        // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
+        // updated_at >= 오늘날짜 조건으로 통일
+        $builder->where('DATE(o.updated_at) >=', $today);
         
         if ($loginType === 'daumdata') {
             // daumdata 로그인: 인성 시스템 주문 통계
-            $builder->join('tbl_company_list c', 'o.customer_id = c.comp_code', 'left');
-            
-            // 권한에 따른 필터링
-            if ($userType == '1') {
-                // 메인 사이트 관리자: 전체 주문
-                // 필터 없음
-            } elseif ($userType == '3') {
-                // 콜센터 관리자: 소속 콜센터의 고객사 주문만
-                if ($ccCode) {
-                    $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
-                    $builder->where('cc.cc_code', $ccCode);
+            // 배송조회와 동일한 JOIN 구조 사용
+            $builder->join('tbl_users_list u_list', 'o.user_id = u_list.idx', 'left');
+            $builder->join('tbl_company_list cl_ch', 'u_list.user_company = cl_ch.comp_code', 'left');
+        }
+        
+        // 서브도메인 필터링 (최우선, 배송조회와 동일)
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $hasSubdomainFilter = false;
+        
+        if ($currentSubdomain && $currentSubdomain !== 'default') {
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+            if ($subdomainCompCode) {
+                $hasSubdomainFilter = true;
+                // comp_code로 comp_name 조회
+                $compNameBuilder = $this->db->table('tbl_company_list');
+                $compNameBuilder->select('comp_name');
+                $compNameBuilder->where('comp_code', $subdomainCompCode);
+                $compNameQuery = $compNameBuilder->get();
+                $subdomainCompName = null;
+                if ($compNameQuery !== false) {
+                    $compNameResult = $compNameQuery->getRowArray();
+                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                        $subdomainCompName = $compNameResult['comp_name'];
+                    }
                 }
-            } elseif ($userType == '5') {
-                // 일반 고객: 본인 고객사의 주문만
-                if ($compCode) {
-                    $builder->where('c.comp_code', $compCode);
-                }
+                
+                // 서브도메인 필터 적용 (인성 API 주문만)
+                $builder->where('o.order_system', 'insung');
+                $builder->where('u_list.user_company', $subdomainCompCode);
             }
-        } else {
-            // STN 로그인: 기존 로직
+        }
+        
+        // 서브도메인 필터가 없을 때만 일반 필터 적용 (배송조회와 동일)
+        if (!$hasSubdomainFilter) {
             // 권한에 따른 필터링
-            if ($userRole !== 'super_admin') {
-                $builder->where('o.customer_id', $customerId);
-            } elseif ($customerId) {
-                $builder->where('o.customer_id', $customerId);
+            if ($loginType === 'daumdata') {
+                if ($userType == '1') {
+                    // 메인 사이트 관리자: 전체 주문
+                    // 필터 없음
+                } elseif ($userType == '3') {
+                    // 콜센터 관리자: 소속 콜센터의 고객사 주문만
+                    if ($ccCode) {
+                        $builder->join('tbl_cc_list cc', 'cl_ch.cc_idx = cc.idx', 'left');
+                        $builder->where('cc.cc_code', $ccCode);
+                    }
+                } elseif ($userType == '5') {
+                    // 일반 고객: 본인 고객사의 주문만
+                    if ($compCode) {
+                        $builder->where('u_list.user_company', $compCode);
+                    }
+                }
+            } else {
+                // STN 로그인: 기존 로직
+                // 권한에 따른 필터링
+                if ($userRole !== 'super_admin') {
+                    $builder->where('o.customer_id', $customerId);
+                } elseif ($customerId) {
+                    $builder->where('o.customer_id', $customerId);
+                }
             }
         }
         
@@ -117,10 +153,49 @@ class DashboardModel extends Model
         // 인성 API 주문: state 컬럼 (한글 상태값: '예약', '접수', '배차', '운행', '완료' 또는 숫자 코드: '90', '10', '11', '12', '30')
         // 일반 주문: status 컬럼을 state로 매핑
         $statusBuilder = $this->db->table('tbl_orders o');
-        $statusBuilder->where('DATE(o.order_date) >=', $today);
+        // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
+        // updated_at >= 오늘날짜 조건으로 통일
+        $statusBuilder->where('DATE(o.updated_at) >=', $today);
         
-        // 필터 적용
-        $this->applyFilters($statusBuilder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
+        // daumdata 로그인일 때 필요한 JOIN 추가 (배송조회와 동일한 구조)
+        if ($loginType === 'daumdata') {
+            $statusBuilder->join('tbl_users_list u_list', 'o.user_id = u_list.idx', 'left');
+            $statusBuilder->join('tbl_company_list cl_ch', 'u_list.user_company = cl_ch.comp_code', 'left');
+        }
+        
+        // 서브도메인 필터링 (최우선, 배송조회와 동일)
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $hasSubdomainFilter = false;
+        
+        if ($currentSubdomain && $currentSubdomain !== 'default') {
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+            if ($subdomainCompCode) {
+                $hasSubdomainFilter = true;
+                // comp_code로 comp_name 조회
+                $compNameBuilder = $this->db->table('tbl_company_list');
+                $compNameBuilder->select('comp_name');
+                $compNameBuilder->where('comp_code', $subdomainCompCode);
+                $compNameQuery = $compNameBuilder->get();
+                $subdomainCompName = null;
+                if ($compNameQuery !== false) {
+                    $compNameResult = $compNameQuery->getRowArray();
+                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                        $subdomainCompName = $compNameResult['comp_name'];
+                    }
+                }
+                
+                // 서브도메인 필터 적용 (인성 API 주문만)
+                $statusBuilder->where('o.order_system', 'insung');
+                $statusBuilder->where('u_list.user_company', $subdomainCompCode);
+            }
+        }
+        
+        // 서브도메인 필터가 없을 때만 일반 필터 적용 (배송조회와 동일)
+        if (!$hasSubdomainFilter) {
+            // 필터 적용 (applyFilters는 JOIN을 추가하지 않음, 이미 위에서 추가됨)
+            $this->applyFilters($statusBuilder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
+        }
         
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
         if ($compCodeForEnv && $loginUserId) {
@@ -191,31 +266,70 @@ class DashboardModel extends Model
             'today_orders' => 0
         ];
         
-        // 오늘 주문 수 (order_date 기준, 배송조회와 동일하게 >= 조건 사용)
+        // 오늘 주문 수 (updated_at 기준, 배송조회와 동일하게 >= 조건 사용)
+        // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
+        // updated_at >= 오늘날짜 조건으로 통일
         $todayBuilder = $this->db->table('tbl_orders o')
-                              ->where('DATE(o.order_date) >=', $today);
+                              ->where('DATE(o.updated_at) >=', $today);
         
         if ($loginType === 'daumdata') {
-            $todayBuilder->join('tbl_company_list c', 'o.customer_id = c.comp_code', 'left');
-            
-            // 권한에 따른 필터링
-            if ($userType == '1') {
-                // 필터 없음
-            } elseif ($userType == '3') {
-                if ($ccCode) {
-                    $todayBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
-                    $todayBuilder->where('cc.cc_code', $ccCode);
+            // 배송조회와 동일한 JOIN 구조 사용
+            $todayBuilder->join('tbl_users_list u_list', 'o.user_id = u_list.idx', 'left');
+            $todayBuilder->join('tbl_company_list cl_ch', 'u_list.user_company = cl_ch.comp_code', 'left');
+        }
+        
+        // 서브도메인 필터링 (최우선, 배송조회와 동일)
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $hasSubdomainFilter = false;
+        
+        if ($currentSubdomain && $currentSubdomain !== 'default') {
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+            if ($subdomainCompCode) {
+                $hasSubdomainFilter = true;
+                // comp_code로 comp_name 조회
+                $compNameBuilder = $this->db->table('tbl_company_list');
+                $compNameBuilder->select('comp_name');
+                $compNameBuilder->where('comp_code', $subdomainCompCode);
+                $compNameQuery = $compNameBuilder->get();
+                $subdomainCompName = null;
+                if ($compNameQuery !== false) {
+                    $compNameResult = $compNameQuery->getRowArray();
+                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                        $subdomainCompName = $compNameResult['comp_name'];
+                    }
                 }
-            } elseif ($userType == '5') {
-                if ($compCode) {
-                    $todayBuilder->where('c.comp_code', $compCode);
-                }
+                
+                // 서브도메인 필터 적용 (인성 API 주문만)
+                $todayBuilder->where('o.order_system', 'insung');
+                $todayBuilder->where('u_list.user_company', $subdomainCompCode);
             }
-        } else {
-            if ($userRole !== 'super_admin') {
-                $todayBuilder->where('o.customer_id', $customerId);
-            } elseif ($customerId) {
-                $todayBuilder->where('o.customer_id', $customerId);
+        }
+        
+        // 서브도메인 필터가 없을 때만 일반 필터 적용 (배송조회와 동일)
+        if (!$hasSubdomainFilter) {
+            // 권한에 따른 필터링
+            if ($loginType === 'daumdata') {
+                if ($userType == '1') {
+                    // 필터 없음
+                } elseif ($userType == '3') {
+                    // 콜센터 관리자: 소속 콜센터의 고객사 주문만
+                    if ($ccCode) {
+                        $todayBuilder->join('tbl_cc_list cc', 'cl_ch.cc_idx = cc.idx', 'left');
+                        $todayBuilder->where('cc.cc_code', $ccCode);
+                    }
+                } elseif ($userType == '5') {
+                    // 일반 고객: 본인 고객사의 주문만
+                    if ($compCode) {
+                        $todayBuilder->where('u_list.user_company', $compCode);
+                    }
+                }
+            } else {
+                if ($userRole !== 'super_admin') {
+                    $todayBuilder->where('o.customer_id', $customerId);
+                } elseif ($customerId) {
+                    $todayBuilder->where('o.customer_id', $customerId);
+                }
             }
         }
         
@@ -262,7 +376,62 @@ class DashboardModel extends Model
             $builder->join('tbl_company_list cl_ch', 'u_list.user_company = cl_ch.comp_code', 'left');
             $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
             $builder->join('tbl_orders_quick oq', 'o.id = oq.order_id', 'left');
+        } else {
+            // STN 로그인: 기존 로직
+            $builder->select('
+                o.id,
+                o.order_number,
+                o.status,
+                o.order_date,
+                o.order_time,
+                o.created_at,
+                o.total_amount,
+                st.service_name as service,
+                ch.customer_name as customer,
+                u.real_name as user_name,
+                DATE_FORMAT(o.created_at, "%Y-%m-%d %H:%i") as date
+            ');
             
+            $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+            $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
+            $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
+        }
+        
+        // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
+        // updated_at >= 오늘날짜 조건으로 통일
+        $today = date('Y-m-d');
+        $builder->where('DATE(o.updated_at) >=', $today);
+        
+        // 서브도메인 필터링 (최우선, 배송조회와 동일)
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $hasSubdomainFilter = false;
+        
+        if ($currentSubdomain && $currentSubdomain !== 'default') {
+            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+            if ($subdomainCompCode) {
+                $hasSubdomainFilter = true;
+                // comp_code로 comp_name 조회
+                $compNameBuilder = $this->db->table('tbl_company_list');
+                $compNameBuilder->select('comp_name');
+                $compNameBuilder->where('comp_code', $subdomainCompCode);
+                $compNameQuery = $compNameBuilder->get();
+                $subdomainCompName = null;
+                if ($compNameQuery !== false) {
+                    $compNameResult = $compNameQuery->getRowArray();
+                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                        $subdomainCompName = $compNameResult['comp_name'];
+                    }
+                }
+                
+                // 서브도메인 필터 적용 (인성 API 주문만)
+                $builder->where('o.order_system', 'insung');
+                $builder->where('u_list.user_company', $subdomainCompCode);
+            }
+        }
+        
+        // 서브도메인 필터가 없을 때만 일반 필터 적용 (배송조회와 동일)
+        if (!$hasSubdomainFilter && $loginType === 'daumdata') {
             // 권한에 따른 필터링 (배송조회와 동일한 로직)
             if ($userType == '1') {
                 // 메인 사이트 관리자: 전체 주문
@@ -283,73 +452,25 @@ class DashboardModel extends Model
                         }
                     }
                     
-                    if ($userCompName) {
-                        $builder->groupStart()
-                            ->groupStart()
-                                ->where('o.order_system', 'insung')
-                                ->where('u_list.user_company', $compCode)
-                            ->groupEnd()
-                            ->orGroupStart()
-                                ->groupStart()
-                                    ->where('o.order_system IS NULL', null, true)
-                                    ->orWhere('o.order_system !=', 'insung')
-                                ->groupEnd()
-                                ->where('o.company_name', $userCompName)
-                            ->groupEnd()
-                        ->groupEnd();
-                    } else {
-                        $builder->where('u_list.user_company', $compCode);
-                    }
+                    // 인성 API 주문만 필터링
+                    $builder->where('o.order_system', 'insung');
+                    $builder->where('u_list.user_company', $compCode);
                 }
             } elseif ($userType == '5') {
-                // 일반 고객: 본인 고객사의 주문만
+                // 일반 고객: 본인 고객사의 주문만 (인성 API 주문만)
                 if ($compCode) {
-                    $builder->groupStart()
-                        ->groupStart()
-                            ->where('o.order_system', 'insung')
-                            ->where('u_list.user_company', $compCode)
-                        ->groupEnd()
-                        ->orGroupStart()
-                            ->groupStart()
-                                ->where('o.order_system IS NULL', null, true)
-                                ->orWhere('o.order_system !=', 'insung')
-                            ->groupEnd()
-                            ->where('u_list.user_company', $compCode)
-                        ->groupEnd()
-                    ->groupEnd();
+                    $builder->where('o.order_system', 'insung');
+                    $builder->where('u_list.user_company', $compCode);
                 }
             }
-        } else {
-            // STN 로그인: 기존 로직
-            $builder->select('
-                o.id,
-                o.order_number,
-                o.status,
-                o.order_date,
-                o.order_time,
-                o.created_at,
-                o.total_amount,
-                st.service_name as service,
-                ch.customer_name as customer,
-                u.real_name as user_name,
-                DATE_FORMAT(o.created_at, "%Y-%m-%d %H:%i") as date
-            ');
-            
-            $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
-            $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
-            $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
-            
-            // 권한에 따른 필터링
+        } elseif (!$hasSubdomainFilter && $loginType !== 'daumdata') {
+            // STN 로그인: 권한에 따른 필터링
             if ($userRole !== 'super_admin') {
                 $builder->where('o.customer_id', $customerId);
             } elseif ($customerId) {
                 $builder->where('o.customer_id', $customerId);
             }
         }
-        
-        // 오늘 날짜보다 같거나 큰 조건 (배송조회와 동일)
-        $today = date('Y-m-d');
-        $builder->where('DATE(o.order_date) >=', $today);
         
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
         if ($compCodeForEnv && $loginUserId) {
@@ -361,46 +482,6 @@ class DashboardModel extends Model
                 $envResult = $envQuery->getRowArray();
                 if ($envResult && isset($envResult['env1']) && $envResult['env1'] == '3') {
                     $builder->where('o.insung_user_id', $loginUserId);
-                }
-            }
-        }
-        
-        // 서브도메인 필터링 (배송조회와 동일)
-        $subdomainConfig = config('Subdomain');
-        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
-        if ($currentSubdomain && $currentSubdomain !== 'default') {
-            $subdomainCompCode = $subdomainConfig->getCompCodeBySubdomain($currentSubdomain);
-            if ($subdomainCompCode) {
-                // comp_code로 comp_name 조회
-                $compNameBuilder = $this->db->table('tbl_company_list');
-                $compNameBuilder->select('comp_name');
-                $compNameBuilder->where('comp_code', $subdomainCompCode);
-                $compNameQuery = $compNameBuilder->get();
-                $subdomainCompName = null;
-                if ($compNameQuery !== false) {
-                    $compNameResult = $compNameQuery->getRowArray();
-                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
-                        $subdomainCompName = $compNameResult['comp_name'];
-                    }
-                }
-                
-                // 서브도메인 필터 적용
-                if ($subdomainCompName) {
-                    $builder->groupStart()
-                        ->groupStart()
-                            ->where('o.order_system', 'insung')
-                            ->where('u_list.user_company', $subdomainCompCode)
-                        ->groupEnd()
-                        ->orGroupStart()
-                            ->groupStart()
-                                ->where('o.order_system IS NULL', null, true)
-                                ->orWhere('o.order_system !=', 'insung')
-                            ->groupEnd()
-                            ->where('o.company_name', $subdomainCompName)
-                        ->groupEnd()
-                    ->groupEnd();
-                } else {
-                    $builder->where('u_list.user_company', $subdomainCompCode);
                 }
             }
         }
@@ -417,7 +498,28 @@ class DashboardModel extends Model
             return [];
         }
         
-        return $query->getResultArray();
+        $orders = $query->getResultArray();
+        
+        // user_name 복호화 처리 (tbl_users_list.user_name이 암호화되어 있을 수 있음)
+        if ($loginType === 'daumdata' && !empty($orders)) {
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            foreach ($orders as &$order) {
+                // user_name이 u_list.user_name에서 온 경우 복호화 필요
+                // COALESCE(u.real_name, u_list.user_name)이므로 u_list.user_name이 사용된 경우만 복호화
+                // 하지만 실제로는 u_list.user_name이 암호화되어 있으므로 복호화 시도
+                if (isset($order['user_name']) && !empty($order['user_name'])) {
+                    // 복호화 시도 (실패하면 원본 반환)
+                    $decrypted = $encryptionHelper->decrypt($order['user_name']);
+                    // 복호화 결과가 원본과 다르면 복호화 성공
+                    if ($decrypted !== $order['user_name']) {
+                        $order['user_name'] = $decrypted;
+                    }
+                }
+            }
+            unset($order);
+        }
+        
+        return $orders;
     }
 
     /**
@@ -462,19 +564,22 @@ class DashboardModel extends Model
     private function applyFilters($builder, $loginType, $userRole, $userType, $customerId, $compCode, $ccCode, $compCodeForEnv = null, $loginUserId = null)
     {
         if ($loginType === 'daumdata') {
-            $builder->join('tbl_company_list c', 'o.customer_id = c.comp_code', 'left');
+            // daumdata 로그인: 인성 API 주문은 u_list.user_company로 필터링
+            // JOIN은 이미 호출 전에 추가되어 있음 (u_list, cl_ch)
             
             // 권한에 따른 필터링
             if ($userType == '1') {
                 // 필터 없음
             } elseif ($userType == '3') {
+                // 콜센터 관리자: 소속 콜센터의 고객사 주문만
                 if ($ccCode) {
-                    $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
+                    $builder->join('tbl_cc_list cc', 'cl_ch.cc_idx = cc.idx', 'left');
                     $builder->where('cc.cc_code', $ccCode);
                 }
             } elseif ($userType == '5') {
+                // 일반 고객: 본인 고객사의 주문만
                 if ($compCode) {
-                    $builder->where('c.comp_code', $compCode);
+                    $builder->where('u_list.user_company', $compCode);
                 }
             }
         } else {
@@ -500,3 +605,5 @@ class DashboardModel extends Model
         }
     }
 }
+
+

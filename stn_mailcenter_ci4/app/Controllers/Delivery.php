@@ -233,8 +233,14 @@ class Delivery extends BaseController
         }
         
         // 주문 데이터 포맷팅 (뷰 로직을 컨트롤러로 이동)
+        // 전화번호 필드 복호화 처리
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+        
         $formattedOrders = [];
         foreach ($orders as $order) {
+            // 전화번호 필드 복호화
+            $order = $encryptionHelper->decryptFields($order, $phoneFields);
             $formattedOrder = $order;
             
             // 상태 라벨 및 맵 표시 조건 처리
@@ -472,6 +478,11 @@ class Delivery extends BaseController
                     'message' => '주문 정보를 찾을 수 없습니다.'
                 ])->setStatusCode(404);
             }
+            
+            // 전화번호 필드 복호화 처리
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno', 'waypoint_contact', 'driver_contact'];
+            $order = $encryptionHelper->decryptFields($order, $phoneFields);
             
             // 라벨 매핑
             $statusLabels = [
@@ -1136,6 +1147,17 @@ class Delivery extends BaseController
                             $updateData['departure_manager'] = $startDuty;
                         }
                         
+                        // 출발지 연락처
+                        $startTel = $getValue($addressInfo, 'start_tel_number');
+                        if ($startTel && $startTel !== ($order['departure_contact'] ?? '')) {
+                            $updateData['departure_contact'] = $startTel;
+                        }
+                        
+                        // departure_detail: dong 값이 있으면 dong 값을 사용
+                        if ($departureDong && $departureDong !== ($order['departure_detail'] ?? '')) {
+                            $updateData['departure_detail'] = $departureDong;
+                        }
+                        
                         // 도착지 정보
                         $destDong = $getValue($addressInfo, 'destination_dong_name');
                         if ($destDong && $destDong !== ($order['destination_dong'] ?? '')) {
@@ -1183,6 +1205,11 @@ class Delivery extends BaseController
                         $destDuty = $getValue($addressInfo, 'dest_duty');
                         if ($destDuty && $destDuty !== ($order['destination_manager'] ?? '')) {
                             $updateData['destination_manager'] = $destDuty;
+                        }
+                        
+                        // detail_address: dong 값이 있으면 dong 값을 사용
+                        if ($destDong && $destDong !== ($order['detail_address'] ?? '')) {
+                            $updateData['detail_address'] = $destDong;
                         }
                         
                         // 거리 정보
@@ -1358,6 +1385,11 @@ class Delivery extends BaseController
                     
                     // 업데이트할 데이터가 있으면 DB 업데이트
                     if (!empty($updateData)) {
+                        // 전화번호 필드 암호화 처리
+                        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+                        $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+                        $updateData = $encryptionHelper->encryptFields($updateData, $phoneFields);
+                        
                         $orderModel->update($order['id'], $updateData);
                         $syncedCount++;
                         

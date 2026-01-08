@@ -894,6 +894,10 @@ class Insung extends BaseController
             // tbl_users_list에 insert duplicate update 처리
             $db = \Config\Database::connect();
             
+            // 암호화 헬퍼 인스턴스 생성
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
+            
             // user_id를 기준으로 중복 체크 (user_id가 unique key라고 가정)
             $userData = [
                 'user_ccode' => $userCcode,
@@ -910,6 +914,9 @@ class Insung extends BaseController
             if (!empty($userTel2)) {
                 $userData['user_tel2'] = $userTel2;
             }
+            
+            // 암호화 처리
+            $userData = $encryptionHelper->encryptFields($userData, $encryptedFields);
             
             // INSERT ... ON DUPLICATE KEY UPDATE 처리
             $builder = $db->table('tbl_users_list');
@@ -932,6 +939,9 @@ class Insung extends BaseController
                 if (!empty($userTel2)) {
                     $updateData['user_tel2'] = $userTel2;
                 }
+                
+                // 암호화 처리
+                $updateData = $encryptionHelper->encryptFields($updateData, $encryptedFields);
                 
                 $result = $builder->where('user_id', $userId)->update($updateData);
                 

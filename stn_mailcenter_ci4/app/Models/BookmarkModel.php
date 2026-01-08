@@ -18,15 +18,11 @@ class BookmarkModel extends Model
         'c_telno',
         'dept_name',
         'charge_name',
-        'c_dong',
-        'c_addr',
-        'address2',
-        'c_sido',
-        'gungu',
         'lon',
         'lat',
-        'c_code',
-        'bn'
+        'bn',
+        'addr_jibun',
+        'addr_road'
     ];
 
     protected $useTimestamps = false; // created_at 컬럼이 없을 수 있으므로 비활성화
@@ -71,7 +67,8 @@ class BookmarkModel extends Model
             $builder->orLike('c_telno', $keyword);
             $builder->orLike('dept_name', $keyword);
             $builder->orLike('charge_name', $keyword);
-            $builder->orLike('c_dong', $keyword);
+            $builder->orLike('addr_jibun', $keyword);
+            $builder->orLike('addr_road', $keyword);
             $builder->groupEnd();
         }
         
@@ -115,14 +112,10 @@ class BookmarkModel extends Model
             $updateData = [
                 'dept_name' => $data['dept_name'] ?? '',
                 'charge_name' => $data['charge_name'] ?? '',
-                'c_dong' => $data['c_dong'] ?? '',
-                'c_addr' => $data['c_addr'] ?? '',
-                'address2' => $data['address2'] ?? '',
-                'c_sido' => $data['c_sido'] ?? '',
-                'gungu' => $data['gungu'] ?? '',
                 'lon' => $data['lon'] ?? '',
                 'lat' => $data['lat'] ?? '',
-                'c_code' => $data['c_code'] ?? '',
+                'addr_jibun' => $data['addr_jibun'] ?? '',
+                'addr_road' => $data['addr_road'] ?? '',
                 'bn' => 1
             ];
             return $this->update($existing['idx'], $updateData);

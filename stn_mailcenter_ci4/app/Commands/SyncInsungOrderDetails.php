@@ -275,6 +275,14 @@ class SyncInsungOrderDetails extends BaseCommand
                         if ($startDuty && $startDuty !== ($order['departure_manager'] ?? '')) {
                             $updateData['departure_manager'] = $startDuty;
                         }
+                        $startTel = $getValue($addressInfo, 'start_tel_number');
+                        if ($startTel && $startTel !== ($order['departure_contact'] ?? '')) {
+                            $updateData['departure_contact'] = $startTel;
+                        }
+                        // departure_detail: dong 값이 있으면 dong 값을 사용
+                        if ($departureDong && $departureDong !== ($order['departure_detail'] ?? '')) {
+                            $updateData['departure_detail'] = $departureDong;
+                        }
                         $destDong = $getValue($addressInfo, 'destination_dong_name');
                         if ($destDong && $destDong !== ($order['destination_dong'] ?? '')) {
                             $updateData['destination_dong'] = $destDong;
@@ -310,6 +318,10 @@ class SyncInsungOrderDetails extends BaseCommand
                         $destDuty = $getValue($addressInfo, 'dest_duty');
                         if ($destDuty && $destDuty !== ($order['destination_manager'] ?? '')) {
                             $updateData['destination_manager'] = $destDuty;
+                        }
+                        // detail_address: dong 값이 있으면 dong 값을 사용
+                        if ($destDong && $destDong !== ($order['detail_address'] ?? '')) {
+                            $updateData['detail_address'] = $destDong;
                         }
                         $distance = $getValue($addressInfo, 'distince');
                         if ($distance) {
@@ -440,6 +452,11 @@ class SyncInsungOrderDetails extends BaseCommand
 
                     // 업데이트할 데이터가 있으면 DB 업데이트
                     if (!empty($updateData)) {
+                        // 전화번호 필드 암호화 처리
+                        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+                        $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+                        $updateData = $encryptionHelper->encryptFields($updateData, $phoneFields);
+                        
                         $updateData['updated_at'] = date('Y-m-d H:i:s');
                         $orderModel->update($order['id'], $updateData);
                         $syncedCount++;

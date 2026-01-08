@@ -449,11 +449,6 @@ class Service extends BaseController
             $serviceTypeId = $this->getServiceTypeId($serviceType);
             log_message('debug', 'Service type ID: ' . $serviceTypeId . ' for service: ' . $serviceType);
             
-            // 2. 주문번호 생성 (간단한 방식)
-            $today = date('Ymd');
-            $timestamp = time(); // 타임스탬프 사용으로 중복 방지
-            $orderNumber = sprintf('ORD-%s-%s', $today, substr($timestamp, -4));
-            
             // 3. 주문 기본 정보 저장 (tbl_orders) - Model 사용
             $orderModel = new \App\Models\OrderModel();
             
@@ -461,6 +456,17 @@ class Service extends BaseController
             $loginType = session()->get('login_type');
             $userId = null;
             $customerId = null;
+            
+            // 2. 주문번호 생성
+            // daumdata 로그인: 인성 API 등록 후 받은 serial_number로 생성 (나중에 업데이트)
+            // STN 로그인: ORD- 형식으로 생성
+            $orderNumber = null;
+            if ($loginType !== 'daumdata') {
+                $today = date('Ymd');
+                $timestamp = time(); // 타임스탬프 사용으로 중복 방지
+                $orderNumber = sprintf('ORD-%s-%s', $today, substr($timestamp, -4));
+            }
+            // daumdata 로그인 시 orderNumber는 인성 API 등록 후 설정됨
             
             if ($loginType === 'daumdata') {
                 // daumdata 로그인: tbl_users_list의 idx를 user_id로 사용
@@ -482,7 +488,7 @@ class Service extends BaseController
             // insung_user_id 조회 (tbl_users_list에서 user_id 문자열 조회)
             $insungUserId = null;
             if ($userId) {
-                $userListBuilder = $this->db->table('tbl_users_list');
+                $userListBuilder = $db->table('tbl_users_list');
                 $userListBuilder->select('user_id');
                 $userListBuilder->where('idx', $userId);
                 $userListQuery = $userListBuilder->get();
@@ -500,7 +506,7 @@ class Service extends BaseController
                 'customer_id' => $customerId ?? 1,
                 'department_id' => 1, // 기본값
                 'service_type_id' => $serviceTypeId,
-                'order_number' => $orderNumber,
+                'order_number' => $orderNumber ?? 'TEMP-' . date('YmdHis') . '-' . substr(time(), -4), // daumdata는 임시 번호, 인성 API 등록 후 업데이트
                 'order_system' => ($loginType === 'daumdata') ? 'insung' : 'stn',
                 'company_name' => $this->request->getPost('company_name'),
                 'contact' => $this->request->getPost('contact'),
@@ -538,7 +544,7 @@ class Service extends BaseController
                 'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
                 'quantity' => $this->request->getPost('quantity') ?? 1,
                 'unit' => $this->request->getPost('unit') ?? '개',
-                'delivery_content' => $this->request->getPost('delivery_content'),
+                'delivery_content' => $this->request->getPost('delivery_content') ?? $this->request->getPost('special_instructions') ?? '',
                 'box_medium_overload' => $this->request->getPost('box_medium_overload') ? 1 : 0,
                 'pouch_medium_overload' => $this->request->getPost('pouch_medium_overload') ? 1 : 0,
                 'bag_medium_overload' => ($serviceType === 'parcel-bag' && $this->request->getPost('bag_medium_overload')) ? 1 : 0,
@@ -590,7 +596,8 @@ class Service extends BaseController
                     $mCode = session()->get('m_code');
                     $ccCode = session()->get('cc_code');
                     $token = session()->get('token');
-                    $userId = session()->get('user_id');
+                    // $userId는 이미 위에서 설정되었으므로 재사용 (tbl_users_list.idx)
+                    // 인성 API에는 user_id 문자열을 전달해야 하므로 $insungApiUserId 사용
                     
                     // m_code, cc_code가 없는 경우 처리 (슈퍼유저 또는 서브도메인 접근)
                     if (empty($mCode) || empty($ccCode)) {
@@ -622,19 +629,39 @@ class Service extends BaseController
                         $token = $apiInfo['token'] ?? '';
                     }
                     
-                    // daumdata 로그인인 경우 user_id가 없으면 세션에서 가져오기
-                    if (!$isStnLogin && empty($userId)) {
-                        $userId = session()->get('user_id') ?? '1';
+                    // daumdata 로그인인 경우 인성 API에 전달할 user_id (문자열) 조회
+                    // $userId는 tbl_users_list.idx (숫자)이므로, 인성 API에는 user_id 문자열을 전달해야 함
+                    $insungApiUserId = null;
+                    if (!$isStnLogin) {
+                        // 이미 위에서 $insungUserId를 조회했으므로 재사용
+                        if (!empty($insungUserId)) {
+                            $insungApiUserId = $insungUserId;
+                        } else {
+                            // $insungUserId가 없으면 세션에서 user_id 문자열 가져오기
+                            $insungApiUserId = session()->get('user_id');
+                        }
+                    } else {
+                        // STN 로그인: 고정 user_id 사용
+                        $insungApiUserId = '에스티엔온라인접수';
                     }
                     
-                    if ($mCode && $ccCode && $token && $userId && $apiIdx) {
+                    if ($mCode && $ccCode && $token && $insungApiUserId && $apiIdx) {
+                        // 과적 옵션 확인 (박스 또는 행낭 중형 선택 시)
+                        $isOverload = false;
+                        $boxOverload = $this->request->getPost('box_medium_overload_check_other') ?? $this->request->getPost('box_medium_overload_check') ?? '';
+                        $pouchOverload = $this->request->getPost('pouch_medium_overload_check_other') ?? $this->request->getPost('pouch_medium_overload_check') ?? '';
+                        if ($boxOverload === '1' || $pouchOverload === '1') {
+                            $isOverload = true;
+                        }
+                        
                         // 인성 API에 전달할 주문 데이터 구성
                         $insungOrderData = [
                             'service_type' => $serviceType,
                             'delivery_method' => $this->request->getPost('delivery_method') ?? 'motorcycle',
-                            'deliveryMethod' => $this->request->getPost('deliveryMethod') ?? $this->request->getPost('delivery_method') ?? 'one_way', // 배송방법 (편도/왕복/경유)
-                            'deliveryType' => $this->request->getPost('deliveryType') ?? $this->request->getPost('delivery_type') ?? 'normal', // 배송형태 (일반/급송)
+                            'deliveryMethod' => $this->request->getPost('deliveryMethod') ?? $this->request->getPost('delivery_method') ?? $this->request->getPost('doc') ?? 'one_way', // 배송방법 (편도/왕복/경유)
+                            'deliveryType' => $this->request->getPost('deliveryType') ?? $this->request->getPost('delivery_type') ?? $this->request->getPost('sfast') ?? 'normal', // 배송형태 (일반/급송)
                             'urgency_level' => $this->request->getPost('urgency_level') ?? 'normal', // 긴급도
+                            'is_overload' => $isOverload, // 과적 옵션
                             'company_name' => $this->request->getPost('company_name'),
                             'contact' => $this->request->getPost('contact'),
                             'sms_telno' => $this->request->getPost('sms_telno') ?? $this->request->getPost('contact'),
@@ -665,7 +692,7 @@ class Service extends BaseController
                             // 루비 버전 참조: destination_fulladdr (지번 주소, 좌표 조회용)
                             'destination_fulladdr' => $this->request->getPost('destination_fulladdr') ?? '',
                             'd_c_code' => $this->request->getPost('d_c_code') ?? '',
-                            'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
+                            'item_type' => $this->request->getPost('item_type') ?? $this->request->getPost('itemType') ?? $this->getDefaultItemType($serviceType),
                             'delivery_content' => $this->request->getPost('delivery_content') ?? $this->request->getPost('special_instructions') ?? $this->request->getPost('deliveryInstructions') ?? '',
                             'notes' => $this->request->getPost('notes') ?? $this->request->getPost('special_instructions') ?? $this->request->getPost('deliveryInstructions') ?? '',
                             'payment_type' => $this->request->getPost('payment_type'),
@@ -683,7 +710,7 @@ class Service extends BaseController
                             'distance' => $this->request->getPost('distance') ?? ''
                         ];
                         
-                        $insungResult = $insungApiService->registerOrder($mCode, $ccCode, $token, $userId, $insungOrderData, $apiIdx);
+                        $insungResult = $insungApiService->registerOrder($mCode, $ccCode, $token, $insungApiUserId, $insungOrderData, $apiIdx);
                         
                         if ($insungResult['success'] && !empty($insungResult['serial_number'])) {
                             // 인성 주문번호 저장 및 order_number, user_id 업데이트 (daumdata 로그인은 INSUNG- 형식 사용)
@@ -693,12 +720,12 @@ class Service extends BaseController
                             ];
                             
                             // user_id도 함께 업데이트 (인터넷 접수 시 인성 API에 전달한 user_id)
+                            // $userId는 tbl_users_list.idx (숫자)이므로 그대로 저장
                             if (!empty($userId)) {
                                 $updateData['user_id'] = $userId;
-                            
-                            // insung_user_id도 함께 저장 (tbl_users_list에서 user_id 문자열 조회)
-                            if ($userId) {
-                                $userListBuilder = $this->db->table('tbl_users_list');
+                                
+                                // insung_user_id도 함께 저장 (tbl_users_list에서 user_id 문자열 조회)
+                                $userListBuilder = $db->table('tbl_users_list');
                                 $userListBuilder->select('user_id');
                                 $userListBuilder->where('idx', $userId);
                                 $userListQuery = $userListBuilder->get();
@@ -709,13 +736,12 @@ class Service extends BaseController
                                     }
                                 }
                             }
-                            }
                             
                             $orderModel->update($orderId, $updateData);
                             
                             log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}, User ID: {$userId}");
                         } else {
-                            log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: {$insungResult['message']}");
+                            log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: " . ($insungResult['message'] ?? 'Unknown error'));
                             // 인성 API 실패 시 주문 상태를 'api_failed'로 변경
                             try {
                                 $orderModel->update($orderId, [
@@ -1332,5 +1358,55 @@ class Service extends BaseController
         ];
         
         return $defaultItemTypes[$serviceType] ?? '일반';
+    }
+    
+    /**
+     * 상차방법/하차방법을 delivery_content에 추가
+     */
+    private function buildDeliveryContentWithLoadingUnloading($deliveryContent, $deliveryMethod, $loadingMethod, $unloadingMethod, $loadingMethodTruck = null, $unloadingMethodTruck = null)
+    {
+        $content = $deliveryContent ?? '';
+        $loadingUnloadingParts = [];
+        
+        // 배송수단이 다마스, 라보, 트럭일 때만 처리
+        if (in_array($deliveryMethod, ['damas', 'labo', 'truck'])) {
+            // 트럭인 경우 (라디오버튼 - 단일 값)
+            if ($deliveryMethod === 'truck') {
+                if (!empty($loadingMethodTruck)) {
+                    // 배열이 아닌 단일 값으로 처리
+                    $loadingValue = is_array($loadingMethodTruck) ? (isset($loadingMethodTruck[0]) ? $loadingMethodTruck[0] : '') : $loadingMethodTruck;
+                    if (!empty($loadingValue)) {
+                        $loadingUnloadingParts[] = '상차: ' . $loadingValue;
+                    }
+                }
+                if (!empty($unloadingMethodTruck)) {
+                    // 배열이 아닌 단일 값으로 처리
+                    $unloadingValue = is_array($unloadingMethodTruck) ? (isset($unloadingMethodTruck[0]) ? $unloadingMethodTruck[0] : '') : $unloadingMethodTruck;
+                    if (!empty($unloadingValue)) {
+                        $loadingUnloadingParts[] = '하차: ' . $unloadingValue;
+                    }
+                }
+            } else {
+                // 다마스/라보인 경우
+                if (!empty($loadingMethod)) {
+                    $loadingUnloadingParts[] = '상차: ' . $loadingMethod;
+                }
+                if (!empty($unloadingMethod)) {
+                    $loadingUnloadingParts[] = '하차: ' . $unloadingMethod;
+                }
+            }
+        }
+        
+        // 상차/하차 내용이 있으면 기존 delivery_content 뒤에 추가
+        if (!empty($loadingUnloadingParts)) {
+            $loadingUnloadingText = implode(' ', $loadingUnloadingParts);
+            if (!empty($content)) {
+                $content = $content . ' ' . $loadingUnloadingText;
+            } else {
+                $content = $loadingUnloadingText;
+            }
+        }
+        
+        return $content;
     }
 }

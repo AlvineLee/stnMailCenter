@@ -329,9 +329,11 @@ class DeliveryModel extends Model
             $builder->where('o.insung_user_id', $filters['insung_user_id']);
         }
         
-        // 날짜 필터: order_date가 오늘 날짜보다 같거나 큰 경우만 조회
+        // 날짜 필터
+        // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
+        // updated_at >= 오늘날짜 조건으로 통일
         $today = date('Y-m-d');
-        $builder->where('DATE(o.order_date) >=', $today);
+        $builder->where('DATE(o.updated_at) >=', $today);
         
         // 총 개수 조회 (페이징용)
         $countBuilder = clone $builder;
@@ -379,7 +381,8 @@ class DeliveryModel extends Model
                 $builder->orderBy($sortField, $orderDir);
             }
         } else {
-            // 기본 정렬
+            // 기본 정렬: 인성주문번호 내림차순 (인성 API 주문의 경우), 없으면 접수일자 내림차순
+            $builder->orderBy('o.insung_order_number', 'DESC');
             $builder->orderBy('o.order_date', 'DESC');
             $builder->orderBy('o.order_time', 'DESC');
         }

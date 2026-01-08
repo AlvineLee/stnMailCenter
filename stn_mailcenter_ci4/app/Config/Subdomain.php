@@ -396,5 +396,61 @@ class Subdomain extends BaseConfig
         // 설정에 없으면 DB에서 조회 (이미 캐싱 포함)
         return $this->getCompCodeBySubdomain($subdomain);
     }
+    
+    /**
+     * 서브도메인별 API 정보 조회 (m_code, cc_code, token, api_idx)
+     * 
+     * @param string $subdomain 서브도메인 이름
+     * @return array|null ['m_code' => string, 'cc_code' => string, 'token' => string, 'api_idx' => int] 또는 null
+     */
+    public function getApiInfoForSubdomain($subdomain): ?array
+    {
+        if (!$subdomain || !isset($this->configs[$subdomain])) {
+            return null;
+        }
+        
+        try {
+            $db = \Config\Database::connect();
+            
+            // comp_code 조회
+            $compCode = $this->getCompCodeBySubdomain($subdomain);
+            if (!$compCode) {
+                return null;
+            }
+            
+            // comp_code로 API 정보 조회 (tbl_company_list -> tbl_cc_list -> tbl_api_list)
+            $apiBuilder = $db->table('tbl_company_list c');
+            $apiBuilder->select('
+                d.idx as api_idx,
+                d.mcode as m_code,
+                d.cccode as cc_code,
+                d.token
+            ');
+            $apiBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+            $apiBuilder->join('tbl_api_list d', 'cc.cc_apicode = d.idx', 'inner');
+            $apiBuilder->where('c.comp_code', $compCode);
+            $apiQuery = $apiBuilder->get();
+            
+            if ($apiQuery === false) {
+                return null;
+            }
+            
+            $apiResult = $apiQuery->getRowArray();
+            if (!$apiResult || empty($apiResult['m_code']) || empty($apiResult['cc_code'])) {
+                return null;
+            }
+            
+            return [
+                'api_idx' => (int)$apiResult['api_idx'],
+                'm_code' => $apiResult['m_code'],
+                'cc_code' => $apiResult['cc_code'],
+                'token' => $apiResult['token'] ?? ''
+            ];
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Subdomain::getApiInfoForSubdomain - Error: ' . $e->getMessage());
+            return null;
+        }
+    }
 }
 

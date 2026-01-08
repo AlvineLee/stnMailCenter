@@ -22,6 +22,9 @@ $routes->group('search-company', function($routes) {
     $routes->post('getCompanyInfo', 'SearchCompany::getCompanyInfo');
     $routes->post('search', 'SearchCompany::search');
     $routes->post('doRegister', 'SearchCompany::doRegister');
+    // 직원검색 관련 라우트
+    $routes->get('employee-search', 'SearchCompany::employeeSearch');
+    $routes->get('searchEmployee', 'SearchCompany::searchEmployee');
 });
 
 // 입점신청 관련 라우트

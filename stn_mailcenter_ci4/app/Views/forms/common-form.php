@@ -15,8 +15,15 @@ if (session()->get('is_logged_in')) {
 <!-- 주문자 정보 -->
 <div class="mb-1">
     <section class="bg-blue-50 rounded-lg shadow-sm border border-blue-200 p-3">
-        <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">주문자 정보</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="flex items-center justify-between mb-2 pb-1 border-b border-gray-300">
+            <h2 class="text-sm font-semibold text-gray-700">주문자 정보</h2>
+            <?php if (session()->get('login_type') === 'daumdata'): ?>
+            <button type="button" id="employeeSearchBtn" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                직원검색
+            </button>
+            <?php endif; ?>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             <div class="space-y-1">
                 <?php 
                 // daumdata 로그인 시 comp_name, STN 로그인 시 customer_name 사용
@@ -31,6 +38,8 @@ if (session()->get('is_logged_in')) {
                 <input type="text" id="company_name" name="company_name" value="<?= old('company_name', $companyName) ?>" required
                        placeholder="회사명" lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
+                <!-- STN_LOGIS 호환 필드 -->
+                <input type="hidden" id="c_name" name="c_name" value="<?= old('company_name', $companyName) ?>">
             </div>
             <div class="space-y-1">
                 <?php 
@@ -45,15 +54,38 @@ if (session()->get('is_logged_in')) {
                 <input type="tel" id="contact" name="contact" value="<?= old('contact', $contact) ?>" required
                        placeholder="연락처"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
+                <!-- STN_LOGIS 호환 필드 -->
+                <input type="hidden" id="c_telno" name="c_telno" value="<?= old('contact', $contact) ?>">
             </div>
-            <div class="space-y-1 flex items-center">
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" id="notification_service" name="notification_service" value="1" <?= old('notification_service') ? 'checked' : '' ?> class="text-blue-600 focus:ring-blue-500">
-                    <span class="text-sm font-medium text-gray-700">알림서비스</span>
-                    <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
-                    </svg>
-                </label>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <div class="space-y-1">
+                <?php 
+                // daumdata 로그인 시 user_dept 사용
+                $dept = '';
+                if ($loginType === 'daumdata') {
+                    $dept = session()->get('user_dept', '');
+                }
+                ?>
+                <input type="text" id="dept" name="dept" value="<?= old('dept', $dept) ?>" 
+                       placeholder="부서" lang="ko"
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
+                <!-- STN_LOGIS 호환 필드 -->
+                <input type="hidden" id="c_dept" name="c_dept" value="<?= old('dept', $dept) ?>">
+            </div>
+            <div class="space-y-1">
+                <?php 
+                // daumdata 로그인 시 user_name 사용
+                $charge = '';
+                if ($loginType === 'daumdata') {
+                    $charge = session()->get('user_name', '');
+                }
+                ?>
+                <input type="text" id="charge" name="charge" value="<?= old('charge', $charge) ?>" 
+                       placeholder="담당" lang="ko"
+                       class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white">
+                <!-- STN_LOGIS 호환 필드 -->
+                <input type="hidden" id="c_charge" name="c_charge" value="<?= old('charge', $charge) ?>">
             </div>
         </div>
     </section>
@@ -61,8 +93,21 @@ if (session()->get('is_logged_in')) {
 
 <!-- 출발지 정보 -->
 <div class="mb-1">
-    <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
-        <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">출발지</h2>
+    <section class="bg-red-50/30 rounded-lg shadow-sm border border-red-200/50 p-3">
+        <div class="flex items-center justify-between mb-3 pb-1 border-b border-gray-300">
+            <h2 class="text-sm font-semibold text-gray-700">출발지</h2>
+            <button type="button" id="swapAddressesBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors flex items-center space-x-1" onclick="swapDepartureDestination()" title="출발지와 도착지 정보 교환">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <!-- 위쪽 원형 화살표 (시계 방향) - 출발지 (빨간색) -->
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" stroke="#ff4444" d="M 12 4 A 8 8 0 0 1 20 12" fill="none"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" stroke="#ff4444" d="M 20 12 L 16 8 M 20 12 L 16 16" fill="none"/>
+                    <!-- 아래쪽 원형 화살표 (반시계 방향) - 도착지 (초록색) -->
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" stroke="#44ff44" d="M 12 20 A 8 8 0 0 1 4 12" fill="none"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" stroke="#44ff44" d="M 4 12 L 8 8 M 4 12 L 8 16" fill="none"/>
+                </svg>
+                <span>출도착지 교환</span>
+            </button>
+        </div>
         
         <!-- 상단 버튼들 -->
         <div class="flex items-center justify-between mb-3">
@@ -76,7 +121,7 @@ if (session()->get('is_logged_in')) {
                 </label>
             </div>
             <div class="flex space-x-2">
-                <button type="button" id="recent_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=S') ?>', 'RECENT_S', 750, 500)">
+                <button type="button" id="recent_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=S') ?>', 'RECENT_S', 1363, 919)">
                     최근접수내역
                 </button>
                 <button type="button" id="bookmark_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/popup?type=S') ?>', 'BOOKMARK_S', 750, 500)">
@@ -110,7 +155,7 @@ if (session()->get('is_logged_in')) {
         
         <div class="space-y-2">
             <div class="flex space-x-2">
-                <input type="text" id="departure_dong" name="departure_dong" value="<?= old('departure_dong') ?>" placeholder="기준동" lang="ko"
+                <input type="text" id="departure_detail" name="departure_detail" value="<?= old('departure_detail') ?>" placeholder="상세주소" required lang="ko"
                        class="flex-1 px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
                 <button type="button" id="departure_address_search" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
                     주소검색
@@ -118,8 +163,8 @@ if (session()->get('is_logged_in')) {
             </div>
             <input type="text" id="departure_address" name="departure_address" value="<?= old('departure_address') ?>" placeholder="주소" required lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-            <input type="text" id="departure_detail" name="departure_detail" value="<?= old('departure_detail') ?>" placeholder="상세주소" required lang="ko"
-                   class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <!-- 기준동 필드 (hidden) -->
+            <input type="hidden" id="departure_dong" name="departure_dong" value="<?= old('departure_dong') ?>">
             <!-- 루비 버전 참조: s_dong2 필드 (data.bname1 값) -->
             <input type="hidden" id="departure_dong2" name="departure_dong2" value="<?= old('departure_dong2') ?>">
             <!-- 루비 버전 참조: s_fulladdr 필드 (지번 주소, 좌표 조회용) -->
@@ -153,7 +198,7 @@ if (session()->get('is_logged_in')) {
 
 <!-- 도착지 정보 -->
 <div class="mb-1">
-    <section class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-3">
+    <section class="bg-green-50/30 rounded-lg shadow-sm border border-green-200/50 p-3">
         <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b border-gray-300">도착지</h2>
         
         <!-- 상단 버튼들 -->
@@ -168,7 +213,7 @@ if (session()->get('is_logged_in')) {
                 </label>
             </div>
             <div class="flex space-x-2">
-                <button type="button" id="recent_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=D') ?>', 'RECENT_D', 750, 500)">
+                <button type="button" id="recent_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=D') ?>', 'RECENT_D', 1363, 919)">
                     최근접수내역
                 </button>
                 <button type="button" id="bookmark_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/popup?type=D') ?>', 'BOOKMARK_D', 750, 500)">
@@ -202,7 +247,7 @@ if (session()->get('is_logged_in')) {
         
         <div class="space-y-2">
             <div class="flex space-x-2">
-                <input type="text" id="destination_dong" name="destination_dong" value="<?= old('destination_dong') ?>" placeholder="기준동" lang="ko"
+                <input type="text" id="destination_detail" name="destination_detail" value="<?= old('destination_detail') ?>" placeholder="상세주소" required lang="ko"
                        class="flex-1 px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
                 <button type="button" id="destination_address_search" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
                     주소검색
@@ -210,8 +255,8 @@ if (session()->get('is_logged_in')) {
             </div>
             <input type="text" id="destination_address" name="destination_address" value="<?= old('destination_address') ?>" placeholder="주소" required lang="ko"
                    class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
-            <input type="text" id="destination_detail" name="destination_detail" value="<?= old('destination_detail') ?>" placeholder="상세주소" required lang="ko"
-                   class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
+            <!-- 기준동 필드 (hidden) -->
+            <input type="hidden" id="destination_dong" name="destination_dong" value="<?= old('destination_dong') ?>">
             <!-- 루비 버전 참조: d_dong2 필드 (data.bname1 값) -->
             <input type="hidden" id="destination_dong2" name="destination_dong2" value="<?= old('destination_dong2') ?>">
             <!-- 루비 버전 참조: d_fulladdr 필드 (지번 주소, 좌표 조회용) -->
@@ -227,6 +272,61 @@ if (session()->get('is_logged_in')) {
 </div>
 
 <script>
+// 출발지와 도착지 정보 교환
+function swapDepartureDestination() {
+    // 교환할 필드 목록
+    const fieldsToSwap = [
+        { departure: 'departure_company_name', destination: 'destination_company_name' },
+        { departure: 'departure_contact', destination: 'destination_contact' },
+        { departure: 'departure_department', destination: 'destination_department' },
+        { departure: 'departure_manager', destination: 'destination_manager' },
+        { departure: 'departure_dong', destination: 'destination_dong' },
+        { departure: 'departure_address', destination: 'destination_address' },
+        { departure: 'departure_detail', destination: 'destination_detail' },
+        { departure: 'departure_dong2', destination: 'destination_dong2' },
+        { departure: 'departure_fulladdr', destination: 'destination_fulladdr' },
+        { departure: 'use_orderer_info_departure', destination: 'use_orderer_info_destination' }
+    ];
+    
+    // 해외특송인 경우 국가 필드도 교환
+    const departureCountry = document.getElementById('departure_country');
+    const destinationCountry = document.getElementById('destination_country');
+    if (departureCountry && destinationCountry) {
+        const tempCountry = departureCountry.value;
+        departureCountry.value = destinationCountry.value;
+        destinationCountry.value = tempCountry;
+    }
+    
+    // 각 필드 교환
+    fieldsToSwap.forEach(function(fieldPair) {
+        const departureField = document.getElementById(fieldPair.departure);
+        const destinationField = document.getElementById(fieldPair.destination);
+        
+        if (departureField && destinationField) {
+            // 체크박스인 경우
+            if (departureField.type === 'checkbox') {
+                const tempChecked = departureField.checked;
+                departureField.checked = destinationField.checked;
+                destinationField.checked = tempChecked;
+            } else {
+                // 일반 입력 필드인 경우
+                const tempValue = departureField.value;
+                departureField.value = destinationField.value;
+                destinationField.value = tempValue;
+            }
+        }
+    });
+    
+    // detail_address 필드도 확인 (STN_LOGIS 호환)
+    const detailAddress = document.getElementById('detail_address');
+    const destinationDetail = document.getElementById('destination_detail');
+    if (detailAddress && destinationDetail) {
+        const tempDetail = detailAddress.value;
+        detailAddress.value = destinationDetail.value;
+        destinationDetail.value = tempDetail;
+    }
+}
+
 // 다음 주소 검색 API
 function openDaumAddressSearch(type) {
     new daum.Postcode({
@@ -395,7 +495,17 @@ function copyOrdererInfo(type) {
             document.getElementById('departure_address').value = address;
         }
         if (document.getElementById('departure_detail')) {
-            document.getElementById('departure_detail').value = addressDetail;
+            // addressDetail이 있으면 사용, 없으면 dongName 사용 (슬래시 처리 포함)
+            let detailValue = addressDetail;
+            if (!detailValue && dongName) {
+                // dongName에서 슬래시가 있으면 슬래시 뒤의 값만 사용
+                if (dongName.indexOf('/') !== -1) {
+                    detailValue = dongName.split('/').pop().trim();
+                } else {
+                    detailValue = dongName;
+                }
+            }
+            document.getElementById('departure_detail').value = detailValue || '';
         }
     } else if (type === 'destination') {
         document.getElementById('destination_company_name').value = companyName;
@@ -413,7 +523,29 @@ function copyOrdererInfo(type) {
             document.getElementById('destination_address').value = address;
         }
         if (document.getElementById('destination_detail')) {
-            document.getElementById('destination_detail').value = addressDetail;
+            // addressDetail이 있으면 사용, 없으면 dongName 사용 (슬래시 처리 포함)
+            let detailValue = addressDetail;
+            if (!detailValue && dongName) {
+                // dongName에서 슬래시가 있으면 슬래시 뒤의 값만 사용
+                if (dongName.indexOf('/') !== -1) {
+                    detailValue = dongName.split('/').pop().trim();
+                } else {
+                    detailValue = dongName;
+                }
+            }
+            document.getElementById('destination_detail').value = detailValue || '';
+        } else if (document.getElementById('detail_address')) {
+            // detail_address 필드도 확인 (STN_LOGIS 호환)
+            let detailValue = addressDetail;
+            if (!detailValue && dongName) {
+                // dongName에서 슬래시가 있으면 슬래시 뒤의 값만 사용
+                if (dongName.indexOf('/') !== -1) {
+                    detailValue = dongName.split('/').pop().trim();
+                } else {
+                    detailValue = dongName;
+                }
+            }
+            document.getElementById('detail_address').value = detailValue || '';
         }
     }
 }
@@ -686,7 +818,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.innerWidth < w) {
             w = window.innerWidth - 20;
         }
-        var options = 'top=10, left=10, width=' + w + ', height=' + h + ', status=no, menubar=no, toolbar=no, resizable=no, scrollbars=yes';
+        // 팝업 크기 확인용 로그 (개발 후 제거 가능)
+        console.log('Opening popup:', name, 'Size:', w + 'x' + h);
+        var options = 'top=10, left=10, width=' + w + ', height=' + h + ', status=no, menubar=no, toolbar=no, resizable=yes, scrollbars=yes';
         window.open(url, name, options);
     }
     
@@ -782,6 +916,61 @@ document.addEventListener('DOMContentLoaded', function() {
         inputObserver.observe(orderForm, {
             childList: true,
             subtree: true
+        });
+    }
+    
+    // 직원검색 버튼 이벤트
+    const employeeSearchBtn = document.getElementById('employeeSearchBtn');
+    if (employeeSearchBtn) {
+        employeeSearchBtn.addEventListener('click', function() {
+            const url = '<?= base_url('search-company/employee-search') ?>';
+            const width = 850;
+            const height = 700;
+            const left = (window.screen.width / 2) - (width / 2);
+            const top = (window.screen.height / 2) - (height / 2);
+            window.open(url, 'employeeSearch', `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+        });
+    }
+    
+    // 우리쪽 변수명 필드 변경 시 STN_LOGIS 호환 필드도 자동 업데이트
+    const companyNameField = document.getElementById('company_name');
+    const contactField = document.getElementById('contact');
+    const deptField = document.getElementById('dept');
+    const chargeField = document.getElementById('charge');
+    
+    if (companyNameField) {
+        companyNameField.addEventListener('input', function() {
+            const cNameField = document.getElementById('c_name');
+            if (cNameField) {
+                cNameField.value = this.value;
+            }
+        });
+    }
+    
+    if (contactField) {
+        contactField.addEventListener('input', function() {
+            const cTelnoField = document.getElementById('c_telno');
+            if (cTelnoField) {
+                cTelnoField.value = this.value;
+            }
+        });
+    }
+    
+    if (deptField) {
+        deptField.addEventListener('input', function() {
+            const cDeptField = document.getElementById('c_dept');
+            if (cDeptField) {
+                cDeptField.value = this.value;
+            }
+        });
+    }
+    
+    if (chargeField) {
+        chargeField.addEventListener('input', function() {
+            const cChargeField = document.getElementById('c_charge');
+            if (cChargeField) {
+                cChargeField.value = this.value;
+            }
         });
     }
 });

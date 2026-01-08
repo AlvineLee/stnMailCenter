@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use CodeIgniter\Model;
+use App\Libraries\EncryptionHelper;
 
 class InsungUsersListModel extends Model
 {
@@ -31,7 +32,7 @@ class InsungUsersListModel extends Model
         'user_lat'
     ];
 
-    protected $useTimestamps = false; // tbl_users_list에 created_at, updated_at 컬럼이 없음
+    protected $useTimestamps = true; // created_at, updated_at 컬럼 사용
     protected $dateFormat = 'datetime';
     protected $createdField = 'created_at';
     protected $updatedField = 'updated_at';
@@ -40,9 +41,69 @@ class InsungUsersListModel extends Model
     protected $validationMessages = [];
     protected $skipValidation = false;
 
+    // 암호화 대상 필드
+    protected $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
+
+    // Callbacks
+    protected $allowCallbacks = true;
+    protected $beforeInsert = ['encryptUserData'];
+    protected $beforeUpdate = ['encryptUserData'];
+    protected $afterFind = ['decryptUserData'];
+
+    /**
+     * 데이터 암호화 (beforeInsert, beforeUpdate)
+     */
+    protected function encryptUserData(array $data)
+    {
+        if (!isset($data['data'])) {
+            return $data;
+        }
+
+        $encryptionHelper = new EncryptionHelper();
+        
+        foreach ($this->encryptedFields as $field) {
+            if (isset($data['data'][$field]) && !empty($data['data'][$field])) {
+                $encrypted = $encryptionHelper->encrypt($data['data'][$field]);
+                if ($encrypted !== false) {
+                    $data['data'][$field] = $encrypted;
+                }
+            }
+        }
+        
+        return $data;
+    }
+
+    /**
+     * 데이터 복호화 (afterFind)
+     */
+    protected function decryptUserData(array $data)
+    {
+        if (!isset($data['data'])) {
+            return $data;
+        }
+
+        $encryptionHelper = new EncryptionHelper();
+        
+        // 단일 레코드인 경우
+        if (isset($data['data'][$this->primaryKey])) {
+            $data['data'] = $encryptionHelper->decryptFields($data['data'], $this->encryptedFields);
+        } else {
+            // 여러 레코드인 경우
+            foreach ($data['data'] as &$row) {
+                if (is_array($row)) {
+                    $row = $encryptionHelper->decryptFields($row, $this->encryptedFields);
+                }
+            }
+            unset($row);
+        }
+        
+        return $data;
+    }
+
     /**
      * daumdata 로그인 인증
      * user_id와 user_pass로 인증하고, company_list와 cc_list 정보를 함께 조회
+     * 기존 평문 데이터와 암호화된 데이터 모두 지원
      */
     public function authenticate($userId, $password)
     {
@@ -67,7 +128,8 @@ class InsungUsersListModel extends Model
         // collation 충돌 해결: CONVERT를 사용하여 collation 통일
         $builder->join('tbl_api_list d', 'CONVERT(c.cc_code USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(d.api_code USING utf8mb4) COLLATE utf8mb4_general_ci', 'left', false);
         $builder->where('a.user_id', $userId);
-        $builder->where('a.user_pass', $password); // 비밀번호는 평문으로 저장되어 있다고 가정
+        // 비밀번호는 암호화되어 저장되므로 WHERE 절에서 직접 비교 불가
+        // 모든 사용자를 조회한 후 복호화하여 비교
         
         $query = $builder->get();
         
@@ -79,7 +141,30 @@ class InsungUsersListModel extends Model
         $user = $query->getRowArray();
         
         if ($user) {
-            return $user;
+            $encryptionHelper = new EncryptionHelper();
+            $storedPassword = $user['user_pass'];
+            
+            // 비밀번호 비교: 암호화된 데이터와 평문 데이터 모두 지원
+            $passwordMatch = false;
+            
+            // 1. 먼저 암호화된 데이터로 복호화 시도
+            $decryptedPassword = $encryptionHelper->decrypt($storedPassword);
+            
+            // 복호화가 성공했고 결과가 원본과 다르면 암호화된 데이터
+            if ($decryptedPassword !== $storedPassword && $decryptedPassword === $password) {
+                $passwordMatch = true;
+            }
+            // 복호화 결과가 원본과 같으면 평문 데이터 (기존 데이터)
+            elseif ($decryptedPassword === $storedPassword && $storedPassword === $password) {
+                $passwordMatch = true;
+            }
+            
+            if ($passwordMatch) {
+                // 인증 성공 시 모든 암호화된 필드 복호화 (평문인 경우 그대로 유지)
+                // decryptFields는 복호화 실패 시 원본을 반환하므로 안전
+                $user = $encryptionHelper->decryptFields($user, $this->encryptedFields);
+                return $user;
+            }
         }
         
         return false;
@@ -119,7 +204,15 @@ class InsungUsersListModel extends Model
             return null;
         }
         
-        return $query->getRowArray();
+        $user = $query->getRowArray();
+        
+        if ($user) {
+            // 암호화된 필드 복호화
+            $encryptionHelper = new EncryptionHelper();
+            $user = $encryptionHelper->decryptFields($user, $this->encryptedFields);
+        }
+        
+        return $user;
     }
 
     /**
@@ -232,12 +325,21 @@ class InsungUsersListModel extends Model
             ];
         }
         
+        $users = $query->getResultArray();
+        
+        // 암호화된 필드 복호화
+        $encryptionHelper = new EncryptionHelper();
+        foreach ($users as &$user) {
+            $user = $encryptionHelper->decryptFields($user, $this->encryptedFields);
+        }
+        unset($user);
+        
         // 페이징 정보 계산 (공통 헬퍼 함수 사용)
         helper('pagination');
         $pagination = calculatePagination($totalCount, $page, $perPage);
         
         return [
-            'users' => $query->getResultArray(),
+            'users' => $users,
             'total_count' => $totalCount,
             'pagination' => $pagination
         ];

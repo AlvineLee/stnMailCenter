@@ -899,13 +899,19 @@ class InsungApiService
         }
         
         // item_type 변환 (물품 종류에 따라 숫자로 변환)
-        $itemType = $this->convertItemType($orderData['item_type'] ?? '');
+        // 여러 변수명 시도: item_type, itemType
+        $itemTypeForConvert = $orderData['item_type'] ?? $orderData['itemType'] ?? '';
+        $itemType = $this->convertItemType($itemTypeForConvert);
         
         // doc 변환 (배송방법: 1:편도, 3:왕복, 5:경유)
-        $doc = $this->convertDoc($orderData['deliveryMethod'] ?? $orderData['delivery_method'] ?? '');
+        // 여러 변수명 시도: deliveryMethod, delivery_method, doc
+        $deliveryMethodForDoc = $orderData['deliveryMethod'] ?? $orderData['delivery_method'] ?? $orderData['doc'] ?? '';
+        $doc = $this->convertDoc($deliveryMethodForDoc);
         
         // sfast 변환 (배송선택: 1:일반, 3:급송 등)
-        $sfast = $this->convertSfast($orderData['deliveryType'] ?? $orderData['delivery_type'] ?? '', $orderData['urgency_level'] ?? '');
+        // 여러 변수명 시도: deliveryType, delivery_type, sfast
+        $deliveryTypeForSfast = $orderData['deliveryType'] ?? $orderData['delivery_type'] ?? $orderData['sfast'] ?? '';
+        $sfast = $this->convertSfast($deliveryTypeForSfast, $orderData['urgency_level'] ?? '', $orderData['is_overload'] ?? false);
         
         // state 변환 (처리상태: 10:접수, 20:대기, 50:문의)
         // PHP 버전에서는 state=& (빈 값)으로 보내지만, 주문 접수 시에는 10(접수)로 설정하는 것이 명확함
@@ -990,6 +996,7 @@ class InsungApiService
             'sfast' => $sfast,
             'item_type' => $itemType,
             // 루비 버전 참조: & 문자 오류로인한 특수문자로 치환
+            // delivery_content에 이미 상차방법/하차방법이 포함되어 있으므로 그대로 사용
             'memo' => preg_replace("/&/", "＆", $orderData['delivery_content'] ?? ($orderData['notes'] ?? '')),
             'sms_telno' => $orderData['sms_telno'] ?? ($orderData['contact'] ?? ''),
             // 예약 정보 (PHP 버전: use_check=$sel_reserve, pickup_date=$reserve_date, pick_hour=$reserve_hour, pick_min=$reserve_min, pick_sec=0)
@@ -1189,6 +1196,11 @@ class InsungApiService
             return '1'; // 기본값: 서류봉투
         }
         
+        // 이미 인성 API 형식인 경우 (예: '1', '2', '3', '4')
+        if (strlen($itemType) === 1 && in_array($itemType, ['1', '2', '3', '4'])) {
+            return $itemType;
+        }
+        
         // 한글 물품명을 숫자로 변환
         $itemTypeLower = mb_strtolower($itemType, 'UTF-8');
         
@@ -1197,7 +1209,16 @@ class InsungApiService
             return '1'; // 서류봉투
         }
         
-        // 소/중/대 구분
+        // 박스 관련 (소박스, 중박스, 대박스)
+        if (strpos($itemTypeLower, '소박스') !== false || (strpos($itemTypeLower, '소') !== false && strpos($itemTypeLower, '박스') !== false)) {
+            return '2'; // 소박스
+        } elseif (strpos($itemTypeLower, '중박스') !== false || (strpos($itemTypeLower, '중') !== false && strpos($itemTypeLower, '박스') !== false)) {
+            return '3'; // 중박스
+        } elseif (strpos($itemTypeLower, '대박스') !== false || (strpos($itemTypeLower, '대') !== false && strpos($itemTypeLower, '박스') !== false)) {
+            return '4'; // 대박스
+        }
+        
+        // 소/중/대 구분 (박스가 없는 경우도 처리)
         if (strpos($itemTypeLower, '소') !== false) {
             return '2'; // 소박스
         } elseif (strpos($itemTypeLower, '중') !== false) {
@@ -1234,10 +1255,18 @@ class InsungApiService
      */
     private function convertDoc($deliveryMethod)
     {
+        // 이미 인성 API 형식인 경우 (예: '1', '3', '5')
+        if (!empty($deliveryMethod) && strlen($deliveryMethod) === 1 && in_array($deliveryMethod, ['1', '3', '5'])) {
+            return $deliveryMethod;
+        }
+        
         $map = [
             'one_way' => '1',      // 편도 → 1
             'round_trip' => '3',   // 왕복 → 3
             'via' => '5',          // 경유 → 5
+            '1' => '1',            // 편도 (인성 API 형식)
+            '3' => '3',            // 왕복 (인성 API 형식)
+            '5' => '5',            // 경유 (인성 API 형식)
         ];
         
         // 기본값: 편도(1)
@@ -1247,27 +1276,46 @@ class InsungApiService
     /**
      * sfast 변환 (배송선택)
      * 인성 API: 1(일반), 3(급송), 5(조조), 7(야간), 8(할증), 9(과적), 0(택배), A(심야), B(휴일), C(납품), D(대기), F(눈비), 4(독차), 6(혼적), G(할인), M(마일), H(우편), I(행랑), J(해외), K(신문), Q(퀵), N(보관), O(혹한), P(상하차), R(명절)
+     * 여러 옵션을 조합할 수 있음 (예: '13' = 일반+급송, '19' = 일반+과적)
      */
-    private function convertSfast($deliveryType, $urgencyLevel)
+    private function convertSfast($deliveryType, $urgencyLevel, $isOverload = false)
     {
+        $sfastOptions = [];
+        
         // deliveryType 우선 확인
-        if ($deliveryType === 'express') {
-            return '3'; // 급송
-        } elseif ($deliveryType === 'normal') {
-            return '1'; // 일반
+        if ($deliveryType === 'express' || $deliveryType === '3') {
+            $sfastOptions[] = '3'; // 급송
+        } elseif ($deliveryType === 'normal' || $deliveryType === '1') {
+            $sfastOptions[] = '1'; // 일반
+        } elseif (!empty($deliveryType) && strlen($deliveryType) === 1 && preg_match('/[0-9A-Z]/', $deliveryType)) {
+            // 이미 인성 API 형식인 경우 (예: '3', 'A' 등)
+            $sfastOptions[] = $deliveryType;
         }
         
         // urgency_level 확인
-        if ($urgencyLevel === 'urgent') {
-            return '3'; // 급송
-        } elseif ($urgencyLevel === 'super_urgent') {
-            return '3'; // 급송
-        } elseif ($urgencyLevel === 'normal') {
-            return '1'; // 일반
+        if ($urgencyLevel === 'urgent' || $urgencyLevel === 'super_urgent') {
+            if (!in_array('3', $sfastOptions)) {
+                $sfastOptions[] = '3'; // 급송
+            }
+        } elseif ($urgencyLevel === 'normal' && empty($sfastOptions)) {
+            $sfastOptions[] = '1'; // 일반
         }
         
-        // 기본값: 일반(1)
-        return '1';
+        // 과적 옵션 추가
+        if ($isOverload) {
+            if (!in_array('9', $sfastOptions)) {
+                $sfastOptions[] = '9'; // 과적
+            }
+        }
+        
+        // 기본값: 일반(1) - 옵션이 없을 때만
+        if (empty($sfastOptions)) {
+            $sfastOptions[] = '1';
+        }
+        
+        // 옵션들을 정렬하여 문자열로 반환 (예: '13', '19', '139' 등)
+        sort($sfastOptions);
+        return implode('', $sfastOptions);
     }
 
     /**
@@ -1361,7 +1409,14 @@ class InsungApiService
             $fromDate = date('Y-m-d');
         }
         if (empty($toDate)) {
-            $toDate = date('Y-m-d');
+            // toDate가 없으면 오늘 날짜 + 5일로 설정
+            $toDate = date('Y-m-d', strtotime('+5 days'));
+        } else {
+            // toDate가 오늘 날짜와 같으면 + 5일로 변경
+            $today = date('Y-m-d');
+            if ($toDate === $today) {
+                $toDate = date('Y-m-d', strtotime('+5 days'));
+            }
         }
         
         // 날짜 형식 변환 (YYYY-MM-DD -> YYYYMMDD 또는 그대로 유지)
@@ -1409,31 +1464,79 @@ class InsungApiService
             
             // 1. state 파라미터 없이 호출 (모든 상태)
             $paramsWithoutState = $params;
-            unset($paramsWithoutState['state']); // state 파라미터 제거
+            unset($paramsWithoutState['state']); // state íŒŒë¼ë¯¸í„° ì œê±°
             
-            log_message('debug', "Insung API: 부서별 오더목록 호출 1/2 - state 파라미터 없음 (모든 상태)");
-            $resultDept1 = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithoutState, $apiIdx);
+            log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 1/2 - state íŒŒë¼ë¯¸í„° ì—†ìŒ (ëª¨ë“  ìƒíƒœ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
             
-            if ($resultDept1) {
-                $ordersDept1 = $this->parseOrderListResponse($resultDept1);
-                if ($ordersDept1 !== false && !empty($ordersDept1)) {
-                    $allOrdersDept = array_merge($allOrdersDept, $ordersDept1);
-                    log_message('debug', "Insung API: 부서별 오더목록 1/2 - " . count($ordersDept1) . "건 수집");
+            $paramsWithoutState['page'] = 1;
+            $resultDept1First = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithoutState, $apiIdx);
+            
+            
+            if ($resultDept1First) {
+                $totalPage1 = $this->extractTotalPage($resultDept1First);
+                
+                // ì²« íŽ˜ì´ì§€ íŒŒì‹±
+                $ordersDept1First = $this->parseOrderListResponse($resultDept1First);
+                if ($ordersDept1First !== false && !empty($ordersDept1First)) {
+                    $allOrdersDept = array_merge($allOrdersDept, $ordersDept1First);
+                    log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ 1/2 - íŽ˜ì´ì§€ 1/" . ($totalPage1 ?: 1) . " - " . count($ordersDept1First) . "ê±´ ìˆ˜ì§‘");
+                }
+                
+                // ë‚˜ë¨¸ì§€ íŽ˜ì´ì§€ ìˆœíšŒ
+                if ($totalPage1 > 1) {
+                    for ($page = 2; $page <= $totalPage1; $page++) {
+                        $paramsWithoutState['page'] = $page;
+                        $resultDept1Page = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithoutState, $apiIdx);
+                        if ($resultDept1Page) {
+                            $ordersDept1Page = $this->parseOrderListResponse($resultDept1Page);
+                            if ($ordersDept1Page !== false && !empty($ordersDept1Page)) {
+                                $allOrdersDept = array_merge($allOrdersDept, $ordersDept1Page);
+                                //log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ 1/2 - íŽ˜ì´ì§€ {$page}/{$totalPage1} - " . count($ordersDept1Page) . "ê±´ ìˆ˜ì§‘");
+                            }
+                        }
+                    }
                 }
             }
             
-            // 2. state=40 (취소) 호출
+            // 2. state=40 (ì·¨ì†Œ) í˜¸ì¶œ - ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ
             $paramsWithCancel = $params;
-            $paramsWithCancel['state'] = '40'; // 취소 상태
+            $paramsWithCancel['state'] = '40'; // ì·¨ì†Œ ìƒíƒœ
             
-            log_message('debug', "Insung API: 부서별 오더목록 호출 2/2 - state=40 (취소)");
-            $resultDept2 = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithCancel, $apiIdx);
+            //log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 2/2 - state=40 (ì·¨ì†Œ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
             
-            if ($resultDept2) {
-                $ordersDept2 = $this->parseOrderListResponse($resultDept2);
-                if ($ordersDept2 !== false && !empty($ordersDept2)) {
-                    $allOrdersDept = array_merge($allOrdersDept, $ordersDept2);
-                    log_message('debug', "Insung API: 부서별 오더목록 2/2 - state=40, " . count($ordersDept2) . "건 수집");
+            $paramsWithCancel['page'] = 1;
+            $resultDept2First = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithCancel, $apiIdx);
+            
+            // API ì‘ë‹µ JSON ì „ì²´ ì¶œë ¥
+            if ($resultDept2First) {
+                $responseJson = json_encode($resultDept2First, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+                //log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´ (2/2 - state=40):\n" . $responseJson);
+            }
+            
+            if ($resultDept2First) {
+                // total_page 추출
+                $totalPage2 = $this->extractTotalPage($resultDept2First);
+                
+                // 첫 페이지 파싱
+                $ordersDept2First = $this->parseOrderListResponse($resultDept2First);
+                if ($ordersDept2First !== false && !empty($ordersDept2First)) {
+                    $allOrdersDept = array_merge($allOrdersDept, $ordersDept2First);
+                    log_message('debug', "Insung API: 부서별 오더목록 2/2 - state=40, 페이지 1/" . ($totalPage2 ?: 1) . " - " . count($ordersDept2First) . "건 수집");
+                }
+                
+                // 나머지 페이지 순회
+                if ($totalPage2 > 1) {
+                    for ($page = 2; $page <= $totalPage2; $page++) {
+                        $paramsWithCancel['page'] = $page;
+                        $resultDept2Page = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithCancel, $apiIdx);
+                        if ($resultDept2Page) {
+                            $ordersDept2Page = $this->parseOrderListResponse($resultDept2Page);
+                            if ($ordersDept2Page !== false && !empty($ordersDept2Page)) {
+                                $allOrdersDept = array_merge($allOrdersDept, $ordersDept2Page);
+                                //log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ 2/2 - state=40, íŽ˜ì´ì§€ {$page}/{$totalPage2} - " . count($ordersDept2Page) . "ê±´ ìˆ˜ì§‘");
+                            }
+                        }
+                    }
                 }
             }
             
@@ -1464,7 +1567,7 @@ class InsungApiService
                 }
             }
             
-            log_message('info', "Insung API: 부서별 오더목록 - 총 " . count($allOrdersDept) . "건 수집, 중복 제거 후 " . count($uniqueOrders) . "건");
+            //log_message('info', "Insung API: 부서별 오더목록 - 총 " . count($allOrdersDept) . "건 수집, 중복 제거 후 " . count($uniqueOrders) . "건");
             
             // 성공 응답 형식으로 변환
             $result = [
@@ -1546,6 +1649,12 @@ class InsungApiService
         $urlDept = $this->baseUrl . "/api/order_list/dept/";
         log_message('info', "Insung API: 부서별 오더목록 호출 - {$urlDept}");
         $resultDept = $this->callApiWithAutoTokenRefresh($urlDept, $params, $apiIdx);
+        
+        // API ì‘ë‹µ JSON ì „ì²´ ì¶œë ¥
+        if ($resultDept) {
+            $responseJson = json_encode($resultDept, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´:\n" . $responseJson);
+        }
         
         $allOrders = [];
         $hasData = false;
@@ -1636,6 +1745,50 @@ class InsungApiService
      * @param mixed $result API 응답
      * @return array|false 주문 목록 배열 또는 false
      */
+    /**
+     * API 응답에서 total_page 추출
+     * 
+     * @param mixed $result API 응답
+     * @return int total_page 또는 1 (기본값)
+     */
+    private function extractTotalPage($result): int
+    {
+        if (!$result) {
+            return 1;
+        }
+        
+        // 배열 형태 응답: result[1]에 메타 정보
+        if (is_array($result) && isset($result[1])) {
+            if (is_object($result[1])) {
+                $totalPage = $result[1]->total_page ?? $result[1]->TotalPage ?? null;
+            } elseif (is_array($result[1])) {
+                $totalPage = $result[1]['total_page'] ?? $result[1]['TotalPage'] ?? null;
+            }
+            
+            if ($totalPage) {
+                return (int)$totalPage;
+            }
+        }
+        
+        // Result 키로 래핑된 경우
+        if (is_object($result) && isset($result->Result)) {
+            $resultArray = is_array($result->Result) ? $result->Result : [$result->Result];
+            if (isset($resultArray[1])) {
+                if (is_object($resultArray[1])) {
+                    $totalPage = $resultArray[1]->total_page ?? $resultArray[1]->TotalPage ?? null;
+                } elseif (is_array($resultArray[1])) {
+                    $totalPage = $resultArray[1]['total_page'] ?? $resultArray[1]['TotalPage'] ?? null;
+                }
+                
+                if ($totalPage) {
+                    return (int)$totalPage;
+                }
+            }
+        }
+        
+        return 1; // 기본값
+    }
+
     private function parseOrderListResponse($result)
     {
         if (!$result) {
@@ -1643,93 +1796,34 @@ class InsungApiService
             return false;
         }
         
-        // log_message('debug', 'parseOrderListResponse - 시작, result 타입: ' . gettype($result));
-        
         // 응답이 배열인 경우 첫 번째 요소 확인
         if (is_array($result) && isset($result[0])) {
             $code = $result[0]->code ?? $result[0]['code'] ?? '';
             $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
             
-            // log_message('debug', 'parseOrderListResponse - 배열 응답, code: ' . $code . ', msg: ' . $msg);
-            
             if ($code === '1000') {
-                // 주문 목록 데이터 추출
-                // result[1]: 메타 정보 (total_record, total_page 등)
-                // result[2]: 실제 주문 목록 데이터 (items[0]->item 구조)
                 $orders = [];
                 
-                // 디버깅: 응답 구조 확인 (주석처리)
-                // log_message('debug', 'parseOrderListResponse - result 구조 확인: ' . json_encode([
-                //     'result_count' => count($result),
-                //     'has_result_1' => isset($result[1]),
-                //     'has_result_2' => isset($result[2]),
-                //     'result_1_type' => isset($result[1]) ? gettype($result[1]) : 'N/A',
-                //     'result_2_type' => isset($result[2]) ? gettype($result[2]) : 'N/A',
-                // ], JSON_UNESCAPED_UNICODE));
-                
-                // result[2]에서 주문 데이터 추출
-                if (isset($result[2])) {
-                    // result[2]가 객체이고 items 속성이 있는 경우
-                    if (is_object($result[2]) && isset($result[2]->items)) {
-                        // items[0]->item 구조 확인
-                        if (is_array($result[2]->items) && isset($result[2]->items[0])) {
-                            if (isset($result[2]->items[0]->item)) {
-                                $items = is_array($result[2]->items[0]->item) ? $result[2]->items[0]->item : [$result[2]->items[0]->item];
-                                $orders = array_merge($orders, $items);
-                                // log_message('debug', 'parseOrderListResponse - result[2]->items[0]->item에서 ' . count($items) . '건 추출');
-                            }
-                        } elseif (is_object($result[2]->items) && isset($result[2]->items->item)) {
-                            // items->item 구조
-                            $items = is_array($result[2]->items->item) ? $result[2]->items->item : [$result[2]->items->item];
-                            $orders = array_merge($orders, $items);
-                            // log_message('debug', 'parseOrderListResponse - result[2]->items->item에서 ' . count($items) . '건 추출');
-                        } elseif (is_array($result[2]->items)) {
-                            // items가 배열인 경우 (각 itemGroup 순회)
-                            foreach ($result[2]->items as $itemGroup) {
-                                if (isset($itemGroup->item)) {
-                                    $items = is_array($itemGroup->item) ? $itemGroup->item : [$itemGroup->item];
-                                    $orders = array_merge($orders, $items);
-                                }
-                            }
-                            // log_message('debug', 'parseOrderListResponse - result[2]->items 배열에서 ' . count($orders) . '건 추출');
-                        }
-                    } elseif (is_array($result[2])) {
-                        // result[2]가 배열인 경우 (직접 주문 목록)
-                        $orders = $result[2];
-                        // log_message('debug', 'parseOrderListResponse - result[2] 배열에서 ' . count($orders) . '건 추출');
-                    } else {
-                        // result[2]가 객체이지만 items가 없는 경우
-                        // result[2]부터 끝까지가 주문 데이터일 수 있음 (result[2], result[3], ... result[N])
-                        // log_message('debug', 'parseOrderListResponse - result[2] 구조 확인: ' . json_encode([
-                        //     'is_object' => is_object($result[2]),
-                        //     'is_array' => is_array($result[2]),
-                        //     'has_items' => is_object($result[2]) ? (isset($result[2]->items) ? 'yes' : 'no') : 'N/A',
-                        // ], JSON_UNESCAPED_UNICODE));
+                // result[2]부터 끝까지가 주문 데이터
+                // result[0]: 코드/메시지, result[1]: 메타정보
+                for ($i = 2; $i < count($result); $i++) {
+                    if (isset($result[$i])) {
+                        // 각 요소가 주문 객체인지 확인
+                        // 메타정보 필드(total_record, from_date 등)가 있으면 스킵
+                        $item = $result[$i];
                         
-                        // result[2]부터 끝까지 순회하여 주문 데이터 추출
-                        for ($i = 2; $i < count($result); $i++) {
-                            if (isset($result[$i])) {
-                                if (is_object($result[$i]) || is_array($result[$i])) {
-                                    $orders[] = $result[$i];
-                                }
-                            }
+                        // 객체/배열을 배열로 변환하여 체크
+                        $itemArray = is_object($item) ? (array)$item : $item;
+                        
+                        // serial_number가 있으면 주문 데이터로 간주
+                        if (isset($itemArray['serial_number']) || 
+                            (is_object($item) && isset($item->serial_number))) {
+                            $orders[] = $item;
                         }
-                        // if (!empty($orders)) {
-                        //     log_message('debug', 'parseOrderListResponse - result[2]부터 끝까지에서 ' . count($orders) . '건 추출');
-                        // }
                     }
                 }
                 
-                // result[2]에 데이터가 없고 result[1]에 직접 주문 데이터가 있는 경우 (예외 처리)
-                if (empty($orders) && isset($result[1])) {
-                    // result[1]이 메타 정보가 아닌 주문 배열인 경우
-                    if (is_array($result[1]) && !isset($result[1]['total_record']) && !isset($result[1][0]->total_record)) {
-                        $orders = $result[1];
-                        // log_message('debug', 'parseOrderListResponse - result[1] 배열에서 ' . count($orders) . '건 추출 (예외 처리)');
-                    }
-                }
-                
-                // log_message('info', 'parseOrderListResponse - 최종 추출된 주문 수: ' . count($orders));
+                log_message('info', 'parseOrderListResponse - result[2]부터 끝까지에서 ' . count($orders) . '건 추출');
                 return $orders;
             }
         }
@@ -1800,8 +1894,16 @@ class InsungApiService
             'query' => $address
         ];
 
-        log_message('debug', "Insung::getAddressCoordinates - Calling API with address: {$address}");
+        log_message('info', "Insung::getAddressCoordinates - API 호출 시작");
+        log_message('info', "Insung::getAddressCoordinates - URL: {$url}");
+        log_message('info', "Insung::getAddressCoordinates - 파라미터: m_code={$mcode}, cc_code={$cccode}, query={$address}, api_idx={$apiIdx}");
+        
         $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+        
+        log_message('info', "Insung::getAddressCoordinates - API 응답 수신. 응답 타입: " . gettype($result));
+        if ($result) {
+            log_message('info', "Insung::getAddressCoordinates - API 응답 내용: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        }
 
         if (!$result) {
             log_message('error', "Insung::getAddressCoordinates - API call failed or invalid response");
@@ -1819,18 +1921,22 @@ class InsungApiService
         
         // 1. Result 키로 래핑된 경우 (루비 버전과 동일)
         if (is_object($result) && isset($result->Result) && is_array($result->Result)) {
+            log_message('info', "Insung::getAddressCoordinates - Result 키로 래핑된 응답 구조 확인");
             if (isset($result->Result[0]) && is_object($result->Result[0])) {
                 if (isset($result->Result[0]->result_info) && is_array($result->Result[0]->result_info) && isset($result->Result[0]->result_info[0])) {
                     $code = $result->Result[0]->result_info[0]->code ?? '';
                     $msg = $result->Result[0]->result_info[0]->msg ?? '';
+                    log_message('info', "Insung::getAddressCoordinates - Result[0]->result_info[0]에서 code={$code}, msg={$msg} 추출");
                 }
             }
             if (isset($result->Result[1])) {
                 $queryResult = $result->Result[1];
+                log_message('info', "Insung::getAddressCoordinates - Result[1] 존재 확인");
             }
         }
         // 2. 배열 형태인 경우
         elseif (is_array($result) && isset($result[0])) {
+            log_message('info', "Insung::getAddressCoordinates - 배열 형태 응답 구조 확인");
             if (is_object($result[0])) {
                 $code = $result[0]->code ?? '';
                 $msg = $result[0]->msg ?? '';
@@ -1838,16 +1944,24 @@ class InsungApiService
                 $code = $result[0]['code'] ?? '';
                 $msg = $result[0]['msg'] ?? '';
             }
+            log_message('info', "Insung::getAddressCoordinates - result[0]에서 code={$code}, msg={$msg} 추출");
             if (isset($result[1])) {
                 $queryResult = $result[1];
+                log_message('info', "Insung::getAddressCoordinates - result[1] 존재 확인");
             }
         }
         // 3. 객체 형태인 경우 (직접 code 속성)
         elseif (is_object($result) && isset($result->code)) {
+            log_message('info', "Insung::getAddressCoordinates - 객체 형태 응답 구조 확인 (직접 code 속성)");
             $code = $result->code ?? '';
             $msg = $result->msg ?? '';
             $queryResult = $result;
+            log_message('info', "Insung::getAddressCoordinates - result->code={$code}, result->msg={$msg} 추출");
+        } else {
+            log_message('warning', "Insung::getAddressCoordinates - 알 수 없는 응답 구조. 응답: " . json_encode($result, JSON_UNESCAPED_UNICODE));
         }
+        
+        log_message('info', "Insung::getAddressCoordinates - 최종 추출된 code={$code}, msg={$msg}");
         
         if ($code !== '1000') {
             log_message('warning', "Insung::getAddressCoordinates - API returned error. Code: {$code}, Message: {$msg}");
@@ -1859,24 +1973,42 @@ class InsungApiService
             return false;
         }
         
+        log_message('info', "Insung::getAddressCoordinates - queryResult 구조: " . json_encode($queryResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        
         // 좌표 추출
         $lon = '';
         $lat = '';
         
+        log_message('info', "Insung::getAddressCoordinates - 좌표 추출 시작");
+        
         // 루비 버전 참조: $jresult->Result[1]->query_result[0]->coordinate[0]->insung_lon
         if (is_object($queryResult) && isset($queryResult->query_result) && is_array($queryResult->query_result) && isset($queryResult->query_result[0])) {
+            log_message('info', "Insung::getAddressCoordinates - 객체 형태 query_result 확인. query_result 배열 개수: " . count($queryResult->query_result));
             if (isset($queryResult->query_result[0]->coordinate) && is_array($queryResult->query_result[0]->coordinate) && isset($queryResult->query_result[0]->coordinate[0])) {
                 $coord = $queryResult->query_result[0]->coordinate[0];
                 $lon = $coord->insung_lon ?? '';
                 $lat = $coord->insung_lat ?? '';
+                log_message('info', "Insung::getAddressCoordinates - 객체 형태에서 좌표 추출: lon={$lon}, lat={$lat}");
+                log_message('info', "Insung::getAddressCoordinates - coordinate 객체 전체: " . json_encode($coord, JSON_UNESCAPED_UNICODE));
+            } else {
+                log_message('warning', "Insung::getAddressCoordinates - coordinate 배열을 찾을 수 없음. query_result[0] 구조: " . json_encode($queryResult->query_result[0], JSON_UNESCAPED_UNICODE));
             }
         } elseif (is_array($queryResult) && isset($queryResult['query_result']) && is_array($queryResult['query_result']) && isset($queryResult['query_result'][0])) {
+            log_message('info', "Insung::getAddressCoordinates - 배열 형태 query_result 확인. query_result 배열 개수: " . count($queryResult['query_result']));
             if (isset($queryResult['query_result'][0]['coordinate']) && is_array($queryResult['query_result'][0]['coordinate']) && isset($queryResult['query_result'][0]['coordinate'][0])) {
                 $coord = $queryResult['query_result'][0]['coordinate'][0];
                 $lon = $coord['insung_lon'] ?? '';
                 $lat = $coord['insung_lat'] ?? '';
+                log_message('info', "Insung::getAddressCoordinates - 배열 형태에서 좌표 추출: lon={$lon}, lat={$lat}");
+                log_message('info', "Insung::getAddressCoordinates - coordinate 배열 전체: " . json_encode($coord, JSON_UNESCAPED_UNICODE));
+            } else {
+                log_message('warning', "Insung::getAddressCoordinates - coordinate 배열을 찾을 수 없음. query_result[0] 구조: " . json_encode($queryResult['query_result'][0], JSON_UNESCAPED_UNICODE));
             }
+        } else {
+            log_message('warning', "Insung::getAddressCoordinates - query_result 구조를 찾을 수 없음. queryResult 구조: " . json_encode($queryResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         }
+        
+        log_message('info', "Insung::getAddressCoordinates - 최종 추출된 좌표: lon={$lon}, lat={$lat}");
         
         // 좌표 유효성 검사: "0"은 유효하지 않은 좌표로 간주
         // 개발서버에서 주소를 찾지 못하면 "0"으로 반환되는 경우가 있음
@@ -2264,4 +2396,3 @@ class InsungApiService
         }
     }
 }
-

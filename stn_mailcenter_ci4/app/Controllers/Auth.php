@@ -108,24 +108,192 @@ class Auth extends BaseController
             // daumdata 로그인 처리
             $user = $this->insungUsersListModel->authenticate($username, $password);
             
+            // DB에 사용자가 없으면 인성 API로 회원정보 조회 후 추가
             if (!$user) {
-                // 로그인 실패: 아이디/비밀번호 불일치
-                $errorMessage = '입력하신 아이디와 비밀번호를 확인해주세요. 대소문자와 특수문자를 정확히 입력했는지 확인하시기 바랍니다.';
+                // 먼저 user_id만으로 DB 조회 (비밀번호는 나중에 확인)
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->where('user_id', $username);
+                $userQuery = $userBuilder->get();
+                $existingUser = $userQuery ? $userQuery->getRowArray() : null;
                 
-                // AJAX 요청인 경우 JSON 응답 반환
-                if ($this->request->isAJAX()) {
-                    return $this->response->setJSON([
-                        'success' => false,
-                        'error' => '아이디 또는 비밀번호가 올바르지 않습니다.',
-                        'error_detail' => $errorMessage,
-                        'error_type' => 'invalid_credentials'
-                    ]);
+                // DB에 user_id가 없으면 인성 API로 회원정보 조회
+                if (!$existingUser) {
+                    // 메인도메인에서 선택한 API 정보 또는 서브도메인 기본 API 정보 가져오기
+                    $selectedApiIdx = $this->request->getPost('selectedApiIdx');
+                    $mCode = null;
+                    $ccCode = null;
+                    $token = null;
+                    $apiIdx = null;
+                    
+                    if ($selectedApiIdx) {
+                        // 메인도메인: 선택한 API 정보 사용
+                        $apiListModel = new \App\Models\InsungApiListModel();
+                        $apiInfo = $apiListModel->find($selectedApiIdx);
+                        if ($apiInfo) {
+                            $mCode = $apiInfo['mcode'];
+                            $ccCode = $apiInfo['cccode'];
+                            $token = $apiInfo['token'];
+                            $apiIdx = $selectedApiIdx;
+                        }
+                    } else {
+                        // 서브도메인: 서브도메인의 comp_code로 API 정보 조회
+                        $subdomainConfig = config('Subdomain');
+                        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+                        
+                        if ($currentSubdomain && $currentSubdomain !== 'default') {
+                            $subdomainCompCode = $subdomainConfig->getCurrentCompCode();
+                            
+                            if ($subdomainCompCode) {
+                                // comp_code로 API 정보 조회 (tbl_company_list -> tbl_cc_list -> tbl_api_list)
+                                $compBuilder = $db->table('tbl_company_list c');
+                                $compBuilder->select('
+                                    d.mcode as m_code,
+                                    d.cccode as cc_code,
+                                    d.token,
+                                    d.idx as api_idx
+                                ');
+                                $compBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+                                $compBuilder->join('tbl_api_list d', 'cc.cc_apicode = d.idx', 'inner');
+                                $compBuilder->where('c.comp_code', $subdomainCompCode);
+                                $compQuery = $compBuilder->get();
+                                
+                                if ($compQuery !== false) {
+                                    $compResult = $compQuery->getRowArray();
+                                    if ($compResult) {
+                                        $mCode = $compResult['m_code'];
+                                        $ccCode = $compResult['cc_code'];
+                                        $token = $compResult['token'];
+                                        $apiIdx = $compResult['api_idx'];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // API 정보가 있으면 회원정보 조회
+                    if ($mCode && $ccCode && $token) {
+                        try {
+                            $insungApiService = new \App\Libraries\InsungApiService();
+                            $memberResult = $insungApiService->getMemberDetail($mCode, $ccCode, $token, $username, $apiIdx);
+                            
+                            if ($memberResult && (is_array($memberResult) || is_object($memberResult))) {
+                                // API 응답 파싱
+                                $code = '';
+                                $memberDetail = null;
+                                
+                                if (is_array($memberResult) && isset($memberResult[0])) {
+                                    $code = $memberResult[0]->code ?? $memberResult[0]['code'] ?? '';
+                                    if ($code === '1000' && isset($memberResult[1])) {
+                                        $memberDetail = is_object($memberResult[1]) ? (array)$memberResult[1] : $memberResult[1];
+                                    }
+                                } elseif (is_object($memberResult) && isset($memberResult->Result)) {
+                                    $code = $memberResult->Result[0]->result_info[0]->code ?? '';
+                                    if ($code === '1000' && isset($memberResult->Result[1]->item[0])) {
+                                        $memberDetail = (array)$memberResult->Result[1]->item[0];
+                                    }
+                                }
+                                
+                                // 회원정보가 조회되면 DB에 추가
+                                if ($code === '1000' && $memberDetail) {
+                                    $userCcode = $memberDetail['c_code'] ?? $memberDetail['user_code'] ?? '';
+                                    $userName = $memberDetail['name'] ?? $memberDetail['cust_name'] ?? '';
+                                    $userDept = $memberDetail['dept_name'] ?? '';
+                                    $userTel1 = $memberDetail['tel_no1'] ?? $memberDetail['tel_number'] ?? '';
+                                    $userTel2 = $memberDetail['tel_no2'] ?? '';
+                                    $compNo = $memberDetail['comp_no'] ?? '';
+                                    $userCompany = $compNo; // comp_no를 user_company로 사용
+                                    
+                                    // user_company로 comp_code 조회 (tbl_company_list)
+                                    $compCode = null;
+                                    if ($userCompany) {
+                                        $compBuilder = $db->table('tbl_company_list');
+                                        $compBuilder->select('comp_code');
+                                        $compBuilder->where('comp_code', $userCompany);
+                                        $compQuery = $compBuilder->get();
+                                        if ($compQuery !== false) {
+                                            $compResult = $compQuery->getRowArray();
+                                            if ($compResult) {
+                                                $compCode = $compResult['comp_code'];
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 주소 정보
+                                    $sido = $memberDetail['sido'] ?? '';
+                                    $gugun = $memberDetail['gugun'] ?? '';
+                                    $dongName = $memberDetail['dong_name'] ?? $memberDetail['basic_dong'] ?? '';
+                                    $ri = $memberDetail['ri'] ?? '';
+                                    $userAddr = trim(implode(' ', array_filter([$sido, $gugun, $dongName, $ri])));
+                                    $lon = $memberDetail['lon'] ?? '';
+                                    $lat = $memberDetail['lat'] ?? '';
+                                    
+                                    // 암호화 헬퍼 인스턴스 생성
+                                    $encryptionHelper = new \App\Libraries\EncryptionHelper();
+                                    $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
+                                    
+                                    // tbl_users_list에 추가
+                                    $newUserData = [
+                                        'user_id' => $username,
+                                        'user_pass' => $password, // 로그인 시 입력한 비밀번호 저장
+                                        'user_name' => $userName,
+                                        'user_dept' => $userDept,
+                                        'user_tel1' => $userTel1,
+                                        'user_company' => $compCode ?? $userCompany,
+                                        'user_ccode' => $userCcode,
+                                        'user_type' => '5', // 기본값: 일반 고객
+                                        'user_class' => '5', // 기본값: 일반
+                                        'user_addr' => $userAddr,
+                                        'user_addr_detail' => $ri,
+                                        'user_sido' => $sido,
+                                        'user_gungu' => $gugun,
+                                        'user_dong' => $dongName,
+                                        'user_lon' => $lon ?: null,
+                                        'user_lat' => $lat ?: null
+                                    ];
+                                    
+                                    if (!empty($userTel2)) {
+                                        $newUserData['user_tel2'] = $userTel2;
+                                    }
+                                    
+                                    // 암호화 처리
+                                    $newUserData = $encryptionHelper->encryptFields($newUserData, $encryptedFields);
+                                    
+                                    $insertResult = $userBuilder->insert($newUserData);
+                                    
+                                    if ($insertResult) {
+                                        log_message('info', "Auth::processLogin - Auto-registered user from API: user_id={$username}");
+                                        // 다시 인증 시도
+                                        $user = $this->insungUsersListModel->authenticate($username, $password);
+                                    }
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            log_message('error', "Auth::processLogin - Failed to fetch member from API: " . $e->getMessage());
+                        }
+                    }
                 }
                 
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', '아이디 또는 비밀번호가 올바르지 않습니다.')
-                    ->with('error_detail', $errorMessage);
+                // 여전히 인증 실패
+                if (!$user) {
+                    // 로그인 실패: 아이디/비밀번호 불일치
+                    $errorMessage = '입력하신 아이디와 비밀번호를 확인해주세요. 대소문자와 특수문자를 정확히 입력했는지 확인하시기 바랍니다.';
+                    
+                    // AJAX 요청인 경우 JSON 응답 반환
+                    if ($this->request->isAJAX()) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'error' => '아이디 또는 비밀번호가 올바르지 않습니다.',
+                            'error_detail' => $errorMessage,
+                            'error_type' => 'invalid_credentials'
+                        ]);
+                    }
+                    
+                    return redirect()->back()
+                        ->withInput()
+                        ->with('error', '아이디 또는 비밀번호가 올바르지 않습니다.')
+                        ->with('error_detail', $errorMessage);
+                }
             }
             
             // $user가 있으면 로그인 성공 처리 (위에서 !$user 체크로 이미 return됨)
@@ -376,6 +544,17 @@ class Auth extends BaseController
                 log_message('error', "Failed to trigger Insung orders sync on login: " . $e->getMessage());
             }
             
+            // 로그인 시 직원 검색 큐 등록 (CLI 명령어로 백그라운드 실행)
+            try {
+                if (!empty($apiIdx) && !empty($user['comp_code'])) {
+                    // 직원 검색 큐 등록 및 CLI 명령어를 백그라운드로 실행
+                    $this->syncInsungEmployeesViaCLI($apiIdx, $user['comp_code'], $user['user_id']);
+                }
+            } catch (\Exception $e) {
+                // 직원 검색 큐 등록 실패해도 로그인은 진행
+                log_message('error', "Failed to trigger Insung employees search queue on login: " . $e->getMessage());
+            }
+            
             // AJAX 요청인 경우 JSON 응답 반환
             if ($this->request->isAJAX()) {
                 // 현재 요청의 프로토콜을 유지하여 리다이렉트 URL 생성
@@ -536,6 +715,62 @@ class Auth extends BaseController
             
         } catch (\Exception $e) {
             log_message('error', "Exception in syncInsungOrdersViaCLI: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 직원 검색 큐 등록 및 CLI 명령어 실행
+     */
+    private function syncInsungEmployeesViaCLI($apiIdx, $compCode, $userId)
+    {
+        try {
+            $db = \Config\Database::connect();
+            
+            // 큐에 등록
+            $queueData = [
+                'api_idx' => $apiIdx,
+                'comp_code' => $compCode,
+                'user_id' => $userId,
+                'status' => 'pending',
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+            
+            $db->table('tbl_employee_search_queue')->insert($queueData);
+            $queueIdx = $db->insertID();
+            
+            // 프로젝트 루트 경로 찾기
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+            
+            // spark 파일이 존재하는지 확인
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                // 큐 상태를 failed로 변경
+                $db->table('tbl_employee_search_queue')
+                    ->where('idx', $queueIdx)
+                    ->update([
+                        'status' => 'failed',
+                        'error_message' => 'Spark 파일을 찾을 수 없습니다.',
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+                return;
+            }
+            
+            // CLI 명령어 구성 (백그라운드 실행)
+            $command = sprintf(
+                'php %s insung:sync-employees %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                escapeshellarg($queueIdx)
+            );
+            
+            // 명령어 실행
+            exec($command);
+            
+            log_message('info', "Insung employees search queue created on login: queue_idx={$queueIdx}, comp_code={$compCode}");
+            
+        } catch (\Exception $e) {
+            log_message('error', "Exception in syncInsungEmployeesViaCLI: " . $e->getMessage());
         }
     }
     

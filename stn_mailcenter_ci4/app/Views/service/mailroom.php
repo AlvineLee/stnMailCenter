@@ -9,7 +9,7 @@
         
         <div class="w-full flex flex-col lg:flex-row gap-4 flex-1">
             <!-- 왼쪽: 공통 폼 (주문자정보, 출발지, 도착지) -->
-            <div class="w-full lg:w-1/3">
+            <div class="flex-1 w-full min-w-0">
                 <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
                     <!-- 운송장 바코드 등록 (메일룸 서비스 전용) -->
                     <div class="mb-3">
@@ -37,7 +37,7 @@
             </div>
         
             <!-- 가운데: 메일룸 전용 정보 (배송수단, 물품종류, 전달사항) -->
-            <div class="w-full lg:w-1/3">
+            <div class="flex-1 w-full min-w-0">
             <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
             <!-- 배송수단 -->
             <div class="mb-2">
@@ -124,7 +124,7 @@
         </div>
         
         <!-- 오른쪽: 지급구분 -->
-        <div class="w-full lg:w-1/3">
+        <div class="w-full lg:w-64 flex-shrink-0 max-w-full box-border">
             <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">
                 <?= $this->include('forms/common-paytype') ?>
             </div>

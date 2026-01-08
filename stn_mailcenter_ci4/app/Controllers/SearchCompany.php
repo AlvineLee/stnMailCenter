@@ -757,5 +757,409 @@ class SearchCompany extends BaseController
             'password' => $password
         ]);
     }
+
+    /**
+     * 직원검색 팝업 페이지
+     */
+    public function employeeSearch()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+
+        $loginType = session()->get('login_type');
+        
+        // daumdata 로그인만 허용
+        if ($loginType !== 'daumdata') {
+            return redirect()->to('/')->with('error', '직원검색은 인성 회원만 사용할 수 있습니다.');
+        }
+
+        // API 정보 조회 (서브도메인 또는 세션에서)
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $compCode = $subdomainConfig->getCurrentCompCode();
+        
+        $apiInfo = null;
+        $apiIdx = null;
+        
+        if ($currentSubdomain !== 'default') {
+            // 서브도메인: 서브도메인 설정에서 API 정보 가져오기
+            $subdomainApiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+            if ($subdomainApiInfo) {
+                $apiInfo = [
+                    'idx' => $subdomainApiInfo['api_idx'],
+                    'mcode' => $subdomainApiInfo['m_code'],
+                    'cccode' => $subdomainApiInfo['cc_code'],
+                    'token' => $subdomainApiInfo['token']
+                ];
+                $apiIdx = $subdomainApiInfo['api_idx'];
+            }
+        } else {
+            // 메인 도메인: 세션에서 API 정보 가져오기
+            $apiIdx = session()->get('api_idx');
+            if ($apiIdx) {
+                $apiInfo = $this->insungApiListModel->find($apiIdx);
+            }
+        }
+
+        if (!$apiInfo || !$apiIdx) {
+            return redirect()->to('/')->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+
+        $compCode = $compCode ?? session()->get('user_company', '');
+        
+        // POST 요청이면 searchEmployee로 리다이렉트 (기존 폼 제출 처리)
+        if ($this->request->getMethod() === 'post') {
+            $compCode = $this->request->getPost('comp_code') ?? $compCode;
+            return $this->searchEmployee();
+        }
+
+        // GET 요청이면 뷰 렌더링 (AJAX는 searchEmployee에서 처리)
+        $data = [
+            'title' => '직원 검색',
+            'api_idx' => $apiIdx,
+            'api_info' => $apiInfo,
+            'comp_code' => $compCode,
+            'employees' => [] // AJAX로 로드하므로 빈 배열
+        ];
+
+        return view('search_company/employee-search', $data);
+    }
+
+    /**
+     * 직원 목록 조회 (AJAX - list)
+     */
+    public function searchEmployee()
+    {
+        $loginType = session()->get('login_type');
+        if ($loginType !== 'daumdata') {
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'error' => true,
+                    'message' => '직원검색은 인성 회원만 사용할 수 있습니다.'
+                ])->setStatusCode(403);
+            }
+            return redirect()->to('/')->with('error', '직원검색은 인성 회원만 사용할 수 있습니다.');
+        }
+
+        // AJAX 요청 처리
+        $ajax = $this->request->getGet('ajax');
+        
+        // AJAX: 직원 목록 조회
+        if ($ajax === 'list') {
+            return $this->getEmployeeListAjax();
+        }
+        
+        // AJAX: 직원 상세 정보 조회
+        if ($ajax === 'detail') {
+            return $this->getEmployeeDetailAjax();
+        }
+
+        // 일반 요청: 페이지 표시
+        $compCode = $this->request->getPost('comp_code') ?? session()->get('user_company', '');
+
+        if (empty($compCode)) {
+            return redirect()->to('/search-company/employeeSearch')->with('error', '거래처코드가 없습니다.');
+        }
+
+        // API 정보 조회
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $apiIdx = null;
+        $mcode = '';
+        $cccode = '';
+        $token = '';
+
+        if ($currentSubdomain !== 'default') {
+            $subdomainApiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+            if ($subdomainApiInfo) {
+                $apiIdx = $subdomainApiInfo['api_idx'];
+                $mcode = $subdomainApiInfo['m_code'];
+                $cccode = $subdomainApiInfo['cc_code'];
+                $token = $subdomainApiInfo['token'];
+            }
+        } else {
+            $apiIdx = session()->get('api_idx');
+            if ($apiIdx) {
+                $apiInfo = $this->insungApiListModel->find($apiIdx);
+                if ($apiInfo) {
+                    $mcode = $apiInfo['mcode'] ?? '';
+                    $cccode = $apiInfo['cccode'] ?? '';
+                    $token = $this->insungApiService->getTokenKey($apiIdx);
+                }
+            }
+        }
+
+        if (empty($apiIdx) || empty($mcode) || empty($cccode) || empty($token)) {
+            return redirect()->to('/search-company/employeeSearch')->with('error', 'API 정보를 찾을 수 없습니다.');
+        }
+
+        // 뷰에 데이터 전달
+        $data = [
+            'title' => '직원 검색',
+            'api_idx' => $apiIdx,
+            'api_info' => $apiInfo ?? null,
+            'comp_code' => $compCode,
+            'employees' => [] // AJAX로 로드하므로 빈 배열
+        ];
+
+        return view('search_company/employee-search', $data);
+    }
+
+    /**
+     * 직원 목록 AJAX 조회 (상세 정보 없이 기본 정보만)
+     */
+    private function getEmployeeListAjax()
+    {
+        $compCode = $this->request->getGet('comp_code') ?? session()->get('user_company', '');
+
+        if (empty($compCode)) {
+            return $this->response->setJSON([
+                'error' => true,
+                'message' => '거래처코드가 없습니다.'
+            ])->setStatusCode(400);
+        }
+
+        // API 정보 조회
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $apiIdx = null;
+        $mcode = '';
+        $cccode = '';
+        $token = '';
+
+        if ($currentSubdomain !== 'default') {
+            $subdomainApiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+            if ($subdomainApiInfo) {
+                $apiIdx = $subdomainApiInfo['api_idx'];
+                $mcode = $subdomainApiInfo['m_code'];
+                $cccode = $subdomainApiInfo['cc_code'];
+                $token = $subdomainApiInfo['token'];
+            }
+        } else {
+            $apiIdx = session()->get('api_idx');
+            if ($apiIdx) {
+                $apiInfo = $this->insungApiListModel->find($apiIdx);
+                if ($apiInfo) {
+                    $mcode = $apiInfo['mcode'] ?? '';
+                    $cccode = $apiInfo['cccode'] ?? '';
+                    $token = $this->insungApiService->getTokenKey($apiIdx);
+                }
+            }
+        }
+
+        if (empty($apiIdx) || empty($mcode) || empty($cccode) || empty($token)) {
+            return $this->response->setJSON([
+                'error' => true,
+                'message' => 'API 정보를 찾을 수 없습니다.'
+            ])->setStatusCode(400);
+        }
+
+        // 직원 목록 조회 (상세 정보 없이)
+        $result = $this->insungApiService->getCustomerAttachedList(
+            $mcode,
+            $cccode,
+            $token,
+            $compCode,
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            1,
+            999, // limit을 999로 증가 (참고 파일과 동일)
+            $apiIdx
+        );
+
+        // API 응답 구조 확인
+        $code = null;
+        $msg = null;
+        
+        if (is_object($result) && isset($result->Result[0]->result_info[0]->code)) {
+            $code = $result->Result[0]->result_info[0]->code;
+            $msg = $result->Result[0]->result_info[0]->msg ?? '';
+        } elseif (is_array($result) && isset($result[0]->code)) {
+            $code = $result[0]->code;
+            $msg = $result[0]->msg ?? '';
+        }
+
+        // 토큰 만료 시 갱신
+        if ($code == "1001") {
+            $this->insungApiService->updateTokenKey($apiIdx);
+            // 재시도는 하지 않고 에러 반환
+        }
+
+        if (!$result || $code != '1000') {
+            return $this->response->setJSON([
+                'error' => true,
+                'message' => $msg ?: '직원 목록 조회 실패'
+            ])->setStatusCode(400);
+        }
+
+        // 결과 파싱 (상세 정보 없이 기본 정보만)
+        $employees = [];
+        $currentDisplayArticle = 0;
+        
+        if (is_object($result)) {
+            if (isset($result->Result[1])) {
+                $pageInfo = $result->Result[1];
+                $currentDisplayArticle = isset($pageInfo->current_display_article) ? (int)$pageInfo->current_display_article : (isset($pageInfo->display_article) ? (int)$pageInfo->display_article : 0);
+            }
+            $loopNum = $currentDisplayArticle > 0 ? $currentDisplayArticle + 2 : 2;
+
+            for ($i = 2; $i < $loopNum; $i++) {
+                if (!isset($result->Result[$i])) continue;
+                
+                $item = $result->Result[$i];
+                $cCode = $item->c_code ?? '';
+                
+                if (empty($cCode)) {
+                    continue;
+                }
+                
+                $employees[] = [
+                    'c_name' => (string)($item->cust_name ?? ''),
+                    'dept_name' => (string)($item->dept_name ?? ''),
+                    'charge_name' => (string)($item->charge_name ?? ''),
+                    'c_telno' => (string)($item->tel_no1 ?? ''),
+                    'o_ccode' => (string)$cCode
+                ];
+            }
+        } elseif (is_array($result)) {
+            if (isset($result[1])) {
+                $pageInfo = is_object($result[1]) ? $result[1] : (object)$result[1];
+                $currentDisplayArticle = isset($pageInfo->current_display_article) ? (int)$pageInfo->current_display_article : (isset($pageInfo->display_article) ? (int)$pageInfo->display_article : 0);
+            }
+            $loopNum = $currentDisplayArticle > 0 ? $currentDisplayArticle + 2 : 2;
+
+            for ($i = 2; $i < $loopNum; $i++) {
+                if (!isset($result[$i])) continue;
+                
+                $item = $result[$i];
+                $cCode = $item->c_code ?? '';
+                
+                if (empty($cCode)) {
+                    continue;
+                }
+                
+                $employees[] = [
+                    'c_name' => (string)($item->cust_name ?? ''),
+                    'dept_name' => (string)($item->dept_name ?? ''),
+                    'charge_name' => (string)($item->charge_name ?? ''),
+                    'c_telno' => (string)($item->tel_no1 ?? ''),
+                    'o_ccode' => (string)$cCode
+                ];
+            }
+        }
+
+        return $this->response->setJSON([
+            'error' => false,
+            'data' => $employees,
+            'total' => count($employees)
+        ]);
+    }
+
+    /**
+     * 직원 상세 정보 AJAX 조회
+     */
+    private function getEmployeeDetailAjax()
+    {
+        $cCode = $this->request->getGet('c_code') ?? '';
+
+        if (empty($cCode)) {
+            return $this->response->setJSON([
+                'error' => true,
+                'message' => '직원 코드가 없습니다.'
+            ])->setStatusCode(400);
+        }
+
+        // API 정보 조회
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $apiIdx = null;
+        $mcode = '';
+        $cccode = '';
+        $token = '';
+
+        if ($currentSubdomain !== 'default') {
+            $subdomainApiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+            if ($subdomainApiInfo) {
+                $apiIdx = $subdomainApiInfo['api_idx'];
+                $mcode = $subdomainApiInfo['m_code'];
+                $cccode = $subdomainApiInfo['cc_code'];
+                $token = $subdomainApiInfo['token'];
+            }
+        } else {
+            $apiIdx = session()->get('api_idx');
+            if ($apiIdx) {
+                $apiInfo = $this->insungApiListModel->find($apiIdx);
+                if ($apiInfo) {
+                    $mcode = $apiInfo['mcode'] ?? '';
+                    $cccode = $apiInfo['cccode'] ?? '';
+                    $token = $this->insungApiService->getTokenKey($apiIdx);
+                }
+            }
+        }
+
+        if (empty($apiIdx) || empty($mcode) || empty($cccode) || empty($token)) {
+            return $this->response->setJSON([
+                'error' => true,
+                'message' => 'API 정보를 찾을 수 없습니다.'
+            ])->setStatusCode(400);
+        }
+
+        // 상세 정보 조회
+        $memberDetail = $this->insungApiService->getMemberDetailByCode($mcode, $cccode, $token, $cCode, $apiIdx);
+
+        // 사용중지 고객
+        if ($memberDetail && is_object($memberDetail) && isset($memberDetail->Result[1]->query_result[0]->code) && $memberDetail->Result[1]->query_result[0]->code == 40) {
+            return $this->response->setJSON([
+                'error' => true,
+                'disabled' => true,
+                'message' => '사용중지된 고객입니다.'
+            ]);
+        }
+
+        if (!$memberDetail || !is_object($memberDetail) || !isset($memberDetail->Result[1]->item[0])) {
+            return $this->response->setJSON([
+                'error' => true,
+                'message' => '직원 상세 정보를 찾을 수 없습니다.'
+            ])->setStatusCode(404);
+        }
+
+        $detailItem = $memberDetail->Result[1]->item[0];
+
+        $detail = [
+            'c_dept' => $detailItem->dept_name ?? '',
+            'c_charge' => $detailItem->charge_name ?? '',
+            'c_dong' => $detailItem->basic_dong ?? '',
+            'c_addr' => trim(implode(' ', array_filter([
+                $detailItem->sido ?? '',
+                $detailItem->gugun ?? '',
+                $detailItem->basic_dong ?? '',
+                $detailItem->ri ?? ''
+            ]))),
+            'c_addr2' => $detailItem->location ?? '',
+            'c_fulladdr' => trim(implode(' ', array_filter([
+                $detailItem->sido ?? '',
+                $detailItem->gugun ?? '',
+                $detailItem->basic_dong ?? '',
+                $detailItem->ri ?? ''
+            ]))),
+            'c_lon' => $detailItem->lon ?? '',
+            'c_lat' => $detailItem->lat ?? '',
+            'c_sido' => $detailItem->sido ?? '',
+            'c_gungu' => $detailItem->gugun ?? ''
+        ];
+
+        return $this->response->setJSON([
+            'error' => false,
+            'data' => $detail
+        ]);
+    }
+
 }
 

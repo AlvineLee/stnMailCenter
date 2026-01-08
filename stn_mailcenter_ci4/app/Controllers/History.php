@@ -170,6 +170,14 @@ class History extends BaseController
         $orders = $result['orders'];
         $totalCount = $result['total_count'];
         
+        // 전화번호 필드 복호화 처리
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+        foreach ($orders as &$order) {
+            $order = $encryptionHelper->decryptFields($order, $phoneFields);
+        }
+        unset($order); // 참조 해제
+        
         // 주문 데이터 포맷팅 (뷰 로직을 컨트롤러로 이동)
         $formattedOrders = [];
         foreach ($orders as $order) {

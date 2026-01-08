@@ -2130,7 +2130,16 @@ class Admin extends BaseController
         
         $userList = [];
         if ($userQuery !== false) {
+            // 암호화된 필드 복호화
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
             $userList = $userQuery->getResultArray();
+            
+            // 각 사용자 정보 복호화
+            foreach ($userList as &$user) {
+                $user = $encryptionHelper->decryptFields($user, $encryptedFields);
+            }
+            unset($user);
         }
         
         // 페이징 계산
@@ -2285,6 +2294,13 @@ class Admin extends BaseController
             
             if ($userQuery !== false) {
                 $customerInfo = $userQuery->getRowArray();
+                
+                // 암호화된 필드 복호화
+                if (!empty($customerInfo)) {
+                    $encryptionHelper = new \App\Libraries\EncryptionHelper();
+                    $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
+                    $customerInfo = $encryptionHelper->decryptFields($customerInfo, $encryptedFields);
+                }
             }
             
             // 인성 API로 상세 정보 조회
@@ -2603,6 +2619,10 @@ class Admin extends BaseController
                 }
             }
             
+            // 암호화 헬퍼 인스턴스 생성
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
+            
             // DB 업데이트
             $userData = [
                 'user_id' => $userId,
@@ -2624,6 +2644,9 @@ class Admin extends BaseController
             if (!empty($userPass)) {
                 $userData['user_pass'] = $userPass;
             }
+            
+            // 암호화 처리
+            $userData = $encryptionHelper->encryptFields($userData, $encryptedFields);
             
             $userBuilder = $db->table('tbl_users_list');
             $userBuilder->where('user_id', $userId);
@@ -2689,6 +2712,10 @@ class Admin extends BaseController
                 }
             }
             
+            // 암호화 헬퍼 인스턴스 생성
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
+            
             // DB 저장
             $userData = [
                 'user_id' => $userId,
@@ -2708,6 +2735,9 @@ class Admin extends BaseController
                 'user_ccode' => $userCcode,
                 'user_cc_idx' => $userCcIdx
             ];
+            
+            // 암호화 처리
+            $userData = $encryptionHelper->encryptFields($userData, $encryptedFields);
             
             $userBuilder = $db->table('tbl_users_list');
             $userBuilder->insert($userData);
