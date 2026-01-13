@@ -75,7 +75,7 @@ class InsungApiService
     {
         // API 호출 로그 (민감한 정보는 마스킹)
         $maskedParam = preg_replace('/(token|ukey|akey|password)=[^&]*/', '$1=***', $param);
-        log_message('info', "Insung API Call: {$url}");
+        // log_message('info', "Insung API Call: {$url}");
         log_message('debug', "Insung API Params (masked): {$maskedParam}");
         
         $response = $this->curlPost($url, $param);
@@ -103,17 +103,17 @@ class InsungApiService
             if (is_object($decoded[0]) && isset($decoded[0]->code)) {
                 $code = $decoded[0]->code;
                 $msg = isset($decoded[0]->msg) ? $decoded[0]->msg : 'No message';
-                log_message('info', "Insung API Response Code: {$code}, Message: {$msg}");
+                // log_message('info', "Insung API Response Code: {$code}, Message: {$msg}");
             } elseif (is_array($decoded[0]) && isset($decoded[0]['code'])) {
                 $code = $decoded[0]['code'];
                 $msg = isset($decoded[0]['msg']) ? $decoded[0]['msg'] : 'No message';
-                log_message('info', "Insung API Response Code: {$code}, Message: {$msg}");
+                // log_message('info', "Insung API Response Code: {$code}, Message: {$msg}");
             }
         } elseif (is_object($decoded) && isset($decoded->code)) {
             // 객체 형태인 경우
             $code = $decoded->code;
             $msg = isset($decoded->msg) ? $decoded->msg : 'No message';
-            log_message('info', "Insung API Response Code: {$code}, Message: {$msg}");
+            // log_message('info', "Insung API Response Code: {$code}, Message: {$msg}");
         }
         
         return $decoded;
@@ -187,14 +187,14 @@ class InsungApiService
             if (!$updateResult) {
                 log_message('error', "Failed to update token in database for api_idx: {$apiIdx}");
             } else {
-                log_message('info', "Token updated successfully in database for api_idx: {$apiIdx}");
+                // log_message('info', "Token updated successfully in database for api_idx: {$apiIdx}");
             }
         } else {
             // apiIdx가 없으면 mcode, cccode로 조회
             $apiInfo = $this->apiListModel->getApiInfoByMcodeCccode($mcode, $cccode);
             if ($apiInfo && isset($apiInfo['idx'])) {
                 $this->apiListModel->updateToken($apiInfo['idx'], $token);
-                log_message('info', "Token updated successfully in database for api_idx: {$apiInfo['idx']}");
+                // log_message('info', "Token updated successfully in database for api_idx: {$apiInfo['idx']}");
             } else {
                 log_message('warning', "API info not found for mcode={$mcode}, cccode={$cccode}, token not saved to DB");
             }
@@ -244,7 +244,7 @@ class InsungApiService
         // akey 생성: ukey를 MD5로 변환
         $akey = md5($ukey);
         
-        log_message('info', "Updating token for api_idx: {$apiIdx}, mcode: {$mcode}, cccode: {$cccode}");
+        // log_message('info', "Updating token for api_idx: {$apiIdx}, mcode: {$mcode}, cccode: {$cccode}");
         log_message('debug', "ukey prefix: {$keyStr}, ukey length: " . strlen($ukey) . ", akey: " . substr($akey, 0, 16) . "...");
         
         // apiIdx를 직접 전달하여 토큰 생성 및 업데이트
@@ -293,7 +293,7 @@ class InsungApiService
         // 파라미터를 쿼리스트링으로 변환
         $paramString = http_build_query($params);
         
-        log_message('info', "Insung API: Initial call to {$url}");
+        // log_message('info', "Insung API: Initial call to {$url}");
         
         // 첫 번째 API 호출
         $jresult = $this->callApi($url, $paramString);
@@ -326,20 +326,20 @@ class InsungApiService
             // 어떤 이슈 발생 시마다 자동으로 토큰을 갱신하면 토큰이 계속 변경되어
             // 다른 사용자들의 요청이 실패하는 토큰 헬이 발생함
             /*
-            log_message('info', "Insung API: Token expired (code 1001), refreshing token for api_idx: {$apiIdx}");
+            // log_message('info', "Insung API: Token expired (code 1001), refreshing token for api_idx: {$apiIdx}");
             
             // 토큰 갱신
             $newToken = $this->updateTokenKey($apiIdx);
             
             if ($newToken) {
-                log_message('info', "Insung API: Token refreshed successfully, retrying API call");
+                // log_message('info', "Insung API: Token refreshed successfully, retrying API call");
 
                 // 파라미터의 token 업데이트
                 $params['token'] = $newToken;
                 $paramString = http_build_query($params);
                 
                 // 재시도
-                log_message('info', "Insung API: Retrying API call with new token");
+                // log_message('info', "Insung API: Retrying API call with new token");
                 $jresult = $this->callApi($url, $paramString);
                 
                 // 재시도 후에도 1001이면 로그 남기기
@@ -357,7 +357,7 @@ class InsungApiService
                 if ($retryCode == "1001") {
                     log_message('warning', "Insung API: Token refresh retry still returned code 1001");
                 } else if ($retryCode == "1000") {
-                    log_message('info', "Insung API: Retry successful after token refresh");
+                    // log_message('info', "Insung API: Retry successful after token refresh");
                 }
             } else {
                 log_message('error', "Insung API: Token refresh failed for api_idx: {$apiIdx}, returning original 1001 response");
@@ -850,7 +850,7 @@ class InsungApiService
                 if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
                     $startLon = $coordResult['lon'];
                     $startLat = $coordResult['lat'];
-                    log_message('info', "Insung::registerOrder - Departure coordinates fetched: lon={$startLon}, lat={$startLat}");
+                    // log_message('info', "Insung::registerOrder - Departure coordinates fetched: lon={$startLon}, lat={$startLat}");
                 } else {
                     log_message('warning', "Insung::registerOrder - Failed to fetch departure coordinates for address: {$addressForCoord}");
                 }
@@ -880,7 +880,7 @@ class InsungApiService
                 if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
                     $destLon = $coordResult['lon'];
                     $destLat = $coordResult['lat'];
-                    log_message('info', "Insung::registerOrder - Destination coordinates fetched: lon={$destLon}, lat={$destLat}");
+                    // log_message('info', "Insung::registerOrder - Destination coordinates fetched: lon={$destLon}, lat={$destLat}");
                 } else {
                     log_message('warning', "Insung::registerOrder - Failed to fetch destination coordinates for address: {$addressForCoord}");
                 }
@@ -950,7 +950,7 @@ class InsungApiService
         }
         
         $price = (string)$calculatedPrice;
-        log_message('info', "Insung::registerOrder - Price calculated: {$price}");
+        // log_message('info', "Insung::registerOrder - Price calculated: {$price}");
         
         $params = [
             'type' => 'json',
@@ -1402,7 +1402,7 @@ class InsungApiService
      */
     public function getOrderList($mcode, $cccode, $token, $userId, $fromDate = null, $toDate = null, $state = null, $staffCode = null, $deptName = null, $compNo = null, $limit = 1000, $page = 1, $apiIdx = null, $onlyDept = false, $onlyCancel = false)
     {
-        log_message('info', "InsungApiService::getOrderList - 호출 시작: userId={$userId}, compNo={$compNo}, fromDate={$fromDate}, toDate={$toDate}, page={$page}");
+        // log_message('info', "InsungApiService::getOrderList - 호출 시작: userId={$userId}, compNo={$compNo}, fromDate={$fromDate}, toDate={$toDate}, page={$page}");
         
         // 시작일자/종료일자가 없으면 오늘 날짜로 설정
         if (empty($fromDate)) {
@@ -1460,7 +1460,7 @@ class InsungApiService
             $urlDept = $this->baseUrl . "/api/order_list/dept/";
             $allOrdersDept = [];
             
-            log_message('info', "Insung API: 부서별 오더목록 호출 (onlyDept=true) - 2번 호출 구조 - {$urlDept}");
+            // log_message('info', "Insung API: 부서별 오더목록 호출 (onlyDept=true) - 2번 호출 구조 - {$urlDept}");
             
             // 1. state 파라미터 없이 호출 (모든 상태)
             $paramsWithoutState = $params;
@@ -1589,7 +1589,7 @@ class InsungApiService
         // 참고: 취소 API는 본인이 접수한 주문만 조회 가능 (콜센터 관리자 권한으로도 접수한 본인 주문만 조회)
         if ($onlyCancel) {
             $urlCancel = $this->baseUrl . "/api/order_list/include_cancel/";
-            log_message('info', "Insung API: 취소포함 오더목록 호출 (onlyCancel=true) - {$urlCancel}");
+            // log_message('info', "Insung API: 취소포함 오더목록 호출 (onlyCancel=true) - {$urlCancel}");
             // log_message('debug', "Insung API: 취소포함 오더목록 파라미터: " . json_encode($params, JSON_UNESCAPED_UNICODE));
             $resultCancel = $this->callApiWithAutoTokenRefresh($urlCancel, $params, $apiIdx);
             
@@ -1626,7 +1626,7 @@ class InsungApiService
                 ];
             }
             
-            log_message('info', "Insung API: 취소포함 오더목록 파싱 성공 - " . count($ordersCancel) . "건");
+            // log_message('info', "Insung API: 취소포함 오더목록 파싱 성공 - " . count($ordersCancel) . "건");
             
             // 성공 응답 형식으로 변환
             $result = [
@@ -1647,13 +1647,13 @@ class InsungApiService
         // 기본 동작: 두 API 모두 호출
         // 1. 부서별 오더목록 API 호출 및 파싱
         $urlDept = $this->baseUrl . "/api/order_list/dept/";
-        log_message('info', "Insung API: 부서별 오더목록 호출 - {$urlDept}");
+        // log_message('info', "Insung API: 부서별 오더목록 호출 - {$urlDept}");
         $resultDept = $this->callApiWithAutoTokenRefresh($urlDept, $params, $apiIdx);
         
         // API ì‘ë‹µ JSON ì „ì²´ ì¶œë ¥
         if ($resultDept) {
             $responseJson = json_encode($resultDept, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-            log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´:\n" . $responseJson);
+            // log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´:\n" . $responseJson);
         }
         
         $allOrders = [];
@@ -1666,7 +1666,7 @@ class InsungApiService
             if ($ordersDept !== false && !empty($ordersDept)) {
                 $allOrders = array_merge($allOrders, $ordersDept);
                 $hasData = true;
-                log_message('info', "InsungApiService::getOrderList - 부서별 오더목록: " . count($ordersDept) . "건 파싱 완료");
+                // log_message('info', "InsungApiService::getOrderList - 부서별 오더목록: " . count($ordersDept) . "건 파싱 완료");
             } else {
                 log_message('warning', "InsungApiService::getOrderList - 부서별 오더목록 파싱 실패 또는 데이터 없음 (반환값: " . ($ordersDept === false ? 'false' : 'empty array') . ")");
             }
@@ -1674,7 +1674,7 @@ class InsungApiService
         
         // 2. 취소포함 오더목록 API 호출 및 파싱 (부서별 오더목록 처리 후)
         $urlCancel = $this->baseUrl . "/api/order_list/include_cancel/";
-        log_message('info', "Insung API: 취소포함 오더목록 호출 - {$urlCancel}");
+        // log_message('info', "Insung API: 취소포함 오더목록 호출 - {$urlCancel}");
         $resultCancel = $this->callApiWithAutoTokenRefresh($urlCancel, $params, $apiIdx);
         
         // 취소포함 오더목록 파싱 및 합치기
@@ -1684,13 +1684,13 @@ class InsungApiService
             if ($ordersCancel !== false && !empty($ordersCancel)) {
                 $allOrders = array_merge($allOrders, $ordersCancel);
                 $hasData = true;
-                log_message('info', "InsungApiService::getOrderList - 취소포함 오더목록: " . count($ordersCancel) . "건 파싱 완료");
+                // log_message('info', "InsungApiService::getOrderList - 취소포함 오더목록: " . count($ordersCancel) . "건 파싱 완료");
             } else {
-                log_message('info', "InsungApiService::getOrderList - 취소포함 오더목록: 데이터 없음 (정상 - 취소된 주문이 없을 수 있음)");
+                // log_message('info', "InsungApiService::getOrderList - 취소포함 오더목록: 데이터 없음 (정상 - 취소된 주문이 없을 수 있음)");
             }
         }
         
-        log_message('info', "InsungApiService::getOrderList - API 호출 완료: 부서별=" . ($resultDept ? '응답 수신' : '응답 없음') . ", 취소포함=" . ($resultCancel ? '응답 수신' : '응답 없음'));
+        // log_message('info', "InsungApiService::getOrderList - API 호출 완료: 부서별=" . ($resultDept ? '응답 수신' : '응답 없음') . ", 취소포함=" . ($resultCancel ? '응답 수신' : '응답 없음'));
         
         // 중복 제거 (serial_number 기준)
         $uniqueOrders = [];
@@ -1712,7 +1712,7 @@ class InsungApiService
             }
         }
         
-        log_message('info', "InsungApiService::getOrderList - 합계: 총 " . count($allOrders) . "건, 중복 제거 후 " . count($uniqueOrders) . "건");
+        // log_message('info', "InsungApiService::getOrderList - 합계: 총 " . count($allOrders) . "건, 중복 제거 후 " . count($uniqueOrders) . "건");
         
         if (!$hasData || empty($uniqueOrders)) {
             // 두 API 모두 실패하거나 데이터가 없는 경우
@@ -1823,7 +1823,7 @@ class InsungApiService
                     }
                 }
                 
-                log_message('info', 'parseOrderListResponse - result[2]부터 끝까지에서 ' . count($orders) . '건 추출');
+                // log_message('info', 'parseOrderListResponse - result[2]부터 끝까지에서 ' . count($orders) . '건 추출');
                 return $orders;
             }
         }
@@ -1894,15 +1894,15 @@ class InsungApiService
             'query' => $address
         ];
 
-        log_message('info', "Insung::getAddressCoordinates - API 호출 시작");
-        log_message('info', "Insung::getAddressCoordinates - URL: {$url}");
-        log_message('info', "Insung::getAddressCoordinates - 파라미터: m_code={$mcode}, cc_code={$cccode}, query={$address}, api_idx={$apiIdx}");
+        // log_message('info', "Insung::getAddressCoordinates - API 호출 시작");
+        // log_message('info', "Insung::getAddressCoordinates - URL: {$url}");
+        // log_message('info', "Insung::getAddressCoordinates - 파라미터: m_code={$mcode}, cc_code={$cccode}, query={$address}, api_idx={$apiIdx}");
         
         $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
         
-        log_message('info', "Insung::getAddressCoordinates - API 응답 수신. 응답 타입: " . gettype($result));
+        // log_message('info', "Insung::getAddressCoordinates - API 응답 수신. 응답 타입: " . gettype($result));
         if ($result) {
-            log_message('info', "Insung::getAddressCoordinates - API 응답 내용: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            // log_message('info', "Insung::getAddressCoordinates - API 응답 내용: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         }
 
         if (!$result) {
@@ -1921,22 +1921,22 @@ class InsungApiService
         
         // 1. Result 키로 래핑된 경우 (루비 버전과 동일)
         if (is_object($result) && isset($result->Result) && is_array($result->Result)) {
-            log_message('info', "Insung::getAddressCoordinates - Result 키로 래핑된 응답 구조 확인");
+            // log_message('info', "Insung::getAddressCoordinates - Result 키로 래핑된 응답 구조 확인");
             if (isset($result->Result[0]) && is_object($result->Result[0])) {
                 if (isset($result->Result[0]->result_info) && is_array($result->Result[0]->result_info) && isset($result->Result[0]->result_info[0])) {
                     $code = $result->Result[0]->result_info[0]->code ?? '';
                     $msg = $result->Result[0]->result_info[0]->msg ?? '';
-                    log_message('info', "Insung::getAddressCoordinates - Result[0]->result_info[0]에서 code={$code}, msg={$msg} 추출");
+                    // log_message('info', "Insung::getAddressCoordinates - Result[0]->result_info[0]에서 code={$code}, msg={$msg} 추출");
                 }
             }
             if (isset($result->Result[1])) {
                 $queryResult = $result->Result[1];
-                log_message('info', "Insung::getAddressCoordinates - Result[1] 존재 확인");
+                // log_message('info', "Insung::getAddressCoordinates - Result[1] 존재 확인");
             }
         }
         // 2. 배열 형태인 경우
         elseif (is_array($result) && isset($result[0])) {
-            log_message('info', "Insung::getAddressCoordinates - 배열 형태 응답 구조 확인");
+            // log_message('info', "Insung::getAddressCoordinates - 배열 형태 응답 구조 확인");
             if (is_object($result[0])) {
                 $code = $result[0]->code ?? '';
                 $msg = $result[0]->msg ?? '';
@@ -1944,24 +1944,24 @@ class InsungApiService
                 $code = $result[0]['code'] ?? '';
                 $msg = $result[0]['msg'] ?? '';
             }
-            log_message('info', "Insung::getAddressCoordinates - result[0]에서 code={$code}, msg={$msg} 추출");
+            // log_message('info', "Insung::getAddressCoordinates - result[0]에서 code={$code}, msg={$msg} 추출");
             if (isset($result[1])) {
                 $queryResult = $result[1];
-                log_message('info', "Insung::getAddressCoordinates - result[1] 존재 확인");
+                // log_message('info', "Insung::getAddressCoordinates - result[1] 존재 확인");
             }
         }
         // 3. 객체 형태인 경우 (직접 code 속성)
         elseif (is_object($result) && isset($result->code)) {
-            log_message('info', "Insung::getAddressCoordinates - 객체 형태 응답 구조 확인 (직접 code 속성)");
+            // log_message('info', "Insung::getAddressCoordinates - 객체 형태 응답 구조 확인 (직접 code 속성)");
             $code = $result->code ?? '';
             $msg = $result->msg ?? '';
             $queryResult = $result;
-            log_message('info', "Insung::getAddressCoordinates - result->code={$code}, result->msg={$msg} 추출");
+            // log_message('info', "Insung::getAddressCoordinates - result->code={$code}, result->msg={$msg} 추출");
         } else {
             log_message('warning', "Insung::getAddressCoordinates - 알 수 없는 응답 구조. 응답: " . json_encode($result, JSON_UNESCAPED_UNICODE));
         }
         
-        log_message('info', "Insung::getAddressCoordinates - 최종 추출된 code={$code}, msg={$msg}");
+        // log_message('info', "Insung::getAddressCoordinates - 최종 추출된 code={$code}, msg={$msg}");
         
         if ($code !== '1000') {
             log_message('warning', "Insung::getAddressCoordinates - API returned error. Code: {$code}, Message: {$msg}");
@@ -1973,34 +1973,34 @@ class InsungApiService
             return false;
         }
         
-        log_message('info', "Insung::getAddressCoordinates - queryResult 구조: " . json_encode($queryResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        // log_message('info', "Insung::getAddressCoordinates - queryResult 구조: " . json_encode($queryResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         
         // 좌표 추출
         $lon = '';
         $lat = '';
         
-        log_message('info', "Insung::getAddressCoordinates - 좌표 추출 시작");
+        // log_message('info', "Insung::getAddressCoordinates - 좌표 추출 시작");
         
         // 루비 버전 참조: $jresult->Result[1]->query_result[0]->coordinate[0]->insung_lon
         if (is_object($queryResult) && isset($queryResult->query_result) && is_array($queryResult->query_result) && isset($queryResult->query_result[0])) {
-            log_message('info', "Insung::getAddressCoordinates - 객체 형태 query_result 확인. query_result 배열 개수: " . count($queryResult->query_result));
+            // log_message('info', "Insung::getAddressCoordinates - 객체 형태 query_result 확인. query_result 배열 개수: " . count($queryResult->query_result));
             if (isset($queryResult->query_result[0]->coordinate) && is_array($queryResult->query_result[0]->coordinate) && isset($queryResult->query_result[0]->coordinate[0])) {
                 $coord = $queryResult->query_result[0]->coordinate[0];
                 $lon = $coord->insung_lon ?? '';
                 $lat = $coord->insung_lat ?? '';
-                log_message('info', "Insung::getAddressCoordinates - 객체 형태에서 좌표 추출: lon={$lon}, lat={$lat}");
-                log_message('info', "Insung::getAddressCoordinates - coordinate 객체 전체: " . json_encode($coord, JSON_UNESCAPED_UNICODE));
+                // log_message('info', "Insung::getAddressCoordinates - 객체 형태에서 좌표 추출: lon={$lon}, lat={$lat}");
+                // log_message('info', "Insung::getAddressCoordinates - coordinate 객체 전체: " . json_encode($coord, JSON_UNESCAPED_UNICODE));
             } else {
                 log_message('warning', "Insung::getAddressCoordinates - coordinate 배열을 찾을 수 없음. query_result[0] 구조: " . json_encode($queryResult->query_result[0], JSON_UNESCAPED_UNICODE));
             }
         } elseif (is_array($queryResult) && isset($queryResult['query_result']) && is_array($queryResult['query_result']) && isset($queryResult['query_result'][0])) {
-            log_message('info', "Insung::getAddressCoordinates - 배열 형태 query_result 확인. query_result 배열 개수: " . count($queryResult['query_result']));
+            // log_message('info', "Insung::getAddressCoordinates - 배열 형태 query_result 확인. query_result 배열 개수: " . count($queryResult['query_result']));
             if (isset($queryResult['query_result'][0]['coordinate']) && is_array($queryResult['query_result'][0]['coordinate']) && isset($queryResult['query_result'][0]['coordinate'][0])) {
                 $coord = $queryResult['query_result'][0]['coordinate'][0];
                 $lon = $coord['insung_lon'] ?? '';
                 $lat = $coord['insung_lat'] ?? '';
-                log_message('info', "Insung::getAddressCoordinates - 배열 형태에서 좌표 추출: lon={$lon}, lat={$lat}");
-                log_message('info', "Insung::getAddressCoordinates - coordinate 배열 전체: " . json_encode($coord, JSON_UNESCAPED_UNICODE));
+                // log_message('info', "Insung::getAddressCoordinates - 배열 형태에서 좌표 추출: lon={$lon}, lat={$lat}");
+                // log_message('info', "Insung::getAddressCoordinates - coordinate 배열 전체: " . json_encode($coord, JSON_UNESCAPED_UNICODE));
             } else {
                 log_message('warning', "Insung::getAddressCoordinates - coordinate 배열을 찾을 수 없음. query_result[0] 구조: " . json_encode($queryResult['query_result'][0], JSON_UNESCAPED_UNICODE));
             }
@@ -2008,7 +2008,7 @@ class InsungApiService
             log_message('warning', "Insung::getAddressCoordinates - query_result 구조를 찾을 수 없음. queryResult 구조: " . json_encode($queryResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         }
         
-        log_message('info', "Insung::getAddressCoordinates - 최종 추출된 좌표: lon={$lon}, lat={$lat}");
+        // log_message('info', "Insung::getAddressCoordinates - 최종 추출된 좌표: lon={$lon}, lat={$lat}");
         
         // 좌표 유효성 검사: "0"은 유효하지 않은 좌표로 간주
         // 개발서버에서 주소를 찾지 못하면 "0"으로 반환되는 경우가 있음
@@ -2016,7 +2016,7 @@ class InsungApiService
         $latNum = floatval($lat);
         
         if (!empty($lon) && !empty($lat) && $lonNum > 0 && $latNum > 0) {
-            log_message('info', "Insung::getAddressCoordinates - Coordinates found: lon={$lon}, lat={$lat}");
+            // log_message('info', "Insung::getAddressCoordinates - Coordinates found: lon={$lon}, lat={$lat}");
             return [
                 'lon' => $lon,
                 'lat' => $lat
@@ -2096,7 +2096,7 @@ class InsungApiService
         $distance = str_replace(',', '', $distance);
         $distance = (float)$distance / 1000;
         $distance = ceil($distance);
-        log_message('info', "Insung::calculatePriceByDistance - Distance calculated: {$distance} km");
+        // log_message('info', "Insung::calculatePriceByDistance - Distance calculated: {$distance} km");
 
         // 2. 거리 기반 가격 조회 (/api/cost_distance/)
         // 인성 API 문서 참조: Request 파라미터는 m_code, cc_code, user_id, token, distance, type만 전달
@@ -2242,16 +2242,16 @@ class InsungApiService
         // 인성 API에서 가격을 가져오지 못한 경우 (0 또는 실패) tbl_pay_info 테이블 조회
         // 루비 버전 참조: ret_distance_price_kt 함수
         if ($price <= 0) {
-            log_message('info', "Insung::calculatePriceByDistance - Insung API returned 0 or failed, falling back to tbl_pay_info table. distance={$distance}km, kind={$kind}");
+            // log_message('info', "Insung::calculatePriceByDistance - Insung API returned 0 or failed, falling back to tbl_pay_info table. distance={$distance}km, kind={$kind}");
             $price = $this->getPriceFromPayInfo($distance, $kind, $orderData);
             
             if ($price > 0) {
-                log_message('info', "Insung::calculatePriceByDistance - Price retrieved from tbl_pay_info: {$price} for kind={$kind}, distance={$distance}km");
+                // log_message('info', "Insung::calculatePriceByDistance - Price retrieved from tbl_pay_info: {$price} for kind={$kind}, distance={$distance}km");
             } else {
                 log_message('warning', "Insung::calculatePriceByDistance - Price not found in tbl_pay_info for kind={$kind}, distance={$distance}km");
             }
         } else {
-            log_message('info', "Insung::calculatePriceByDistance - Price calculated from Insung API: {$price} for kind={$kind}, distance={$distance}km");
+            // log_message('info', "Insung::calculatePriceByDistance - Price calculated from Insung API: {$price} for kind={$kind}, distance={$distance}km");
         }
 
         return $price;
@@ -2393,6 +2393,108 @@ class InsungApiService
         } catch (\Exception $e) {
             log_message('error', "Insung::getPriceFromPayInfo - Database query failed: " . $e->getMessage());
             return 0;
+        }
+    }
+
+    /**
+     * 부서 목록 조회 API 호출 (/api/department_list/)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
+     */
+    public function getDepartmentList($mcode, $cccode, $token, $userId, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/department_list/";
+        $params = [
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'type' => 'json'
+        ];
+        
+        $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+        
+        if (!$result) {
+            return [
+                'success' => false,
+                'data' => null,
+                'message' => '부서 목록 API 호출 실패'
+            ];
+        }
+        
+        // 응답 코드 확인
+        $code = '';
+        $data = [];
+        
+        if (is_array($result) && isset($result[0])) {
+            if (is_object($result[0]) && isset($result[0]->code)) {
+                $code = $result[0]->code;
+            } elseif (is_array($result[0]) && isset($result[0]['code'])) {
+                $code = $result[0]['code'];
+            }
+            
+            // 데이터 부분 추출
+            if (isset($result[1])) {
+                if (is_array($result[1])) {
+                    $data = $result[1];
+                } elseif (is_object($result[1])) {
+                    $data = (array)$result[1];
+                }
+            }
+        } elseif (is_object($result) && isset($result->code)) {
+            $code = $result->code;
+            if (isset($result->data)) {
+                $data = is_array($result->data) ? $result->data : (array)$result->data;
+            }
+        }
+        
+        // 응답이 배열 형태인 경우 (첫 번째 요소가 코드, 두 번째 요소가 데이터)
+        if (is_array($result) && count($result) >= 2) {
+            $code = is_array($result[0]) ? ($result[0]['code'] ?? '') : ($result[0]->code ?? '');
+            $data = is_array($result[1]) ? $result[1] : (array)$result[1];
+        }
+        
+        if ($code === '1000') {
+            // department_name 필드만 추출하여 반환
+            // 응답 구조: [{code: "1000", msg: "RESULT:OK"}, {department_name: " "}, {department_name: "CS팀"}, ...]
+            $departmentList = [];
+            
+            if (is_array($result) && count($result) >= 2) {
+                // 첫 번째 요소는 코드 정보이므로 제외하고, 두 번째부터 순회
+                for ($i = 1; $i < count($result); $i++) {
+                    $item = $result[$i];
+                    $deptName = '';
+                    
+                    if (is_array($item)) {
+                        $deptName = trim($item['department_name'] ?? '');
+                    } elseif (is_object($item)) {
+                        $deptName = trim($item->department_name ?? '');
+                    }
+                    
+                    // 빈 문자열이 아닌 경우만 추가
+                    if (!empty($deptName)) {
+                        $departmentList[] = ['department_name' => $deptName];
+                    }
+                }
+            }
+            
+            return [
+                'success' => true,
+                'data' => $departmentList,
+                'message' => '부서 목록 조회 성공'
+            ];
+        } else {
+            $message = is_array($result[0]) ? ($result[0]['msg'] ?? '부서 목록 조회 실패') : ($result[0]->msg ?? '부서 목록 조회 실패');
+            return [
+                'success' => false,
+                'data' => null,
+                'message' => $message
+            ];
         }
     }
 }

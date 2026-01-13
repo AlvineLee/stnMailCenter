@@ -185,6 +185,7 @@ class InsungUsersListModel extends Model
             b.comp_owner,
             b.cc_idx,
             b.logo_path,
+            d.idx as api_idx,
             d.mcode as m_code,
             d.cccode as cc_code,
             d.token,

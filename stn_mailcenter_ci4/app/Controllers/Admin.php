@@ -1353,8 +1353,9 @@ class Admin extends BaseController
     }
 
     /**
-     * 콜센터 관리자용 거래처관리 (user_type = 3)
-     * user_cc_idx를 기반으로 해당 콜센터의 거래처 목록 조회
+     * 콜센터 관리자용 거래처관리 (user_type = 3 또는 user_class = 1)
+     * user_type = 3: user_cc_idx를 기반으로 해당 콜센터의 거래처 목록 조회
+     * user_class = 1: 본인 거래처만 조회
      */
     public function companyListForCc()
     {
@@ -1363,23 +1364,51 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 권한 체크: daumdata 로그인 user_type=3 (콜센터 관리자)
+        // 권한 체크: daumdata 로그인 user_type=3 (콜센터 관리자) 또는 user_class=1 (거래처 관리자)
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
+        $userClass = session()->get('user_class');
+        $userId = session()->get('user_id');
         
-        if ($loginType !== 'daumdata' || $userType != '3') {
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class, user_company');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult) {
+                    if (isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                }
+            }
+        }
+        
+        // 권한 체크: user_type=3 또는 user_class=1만 허용
+        if ($loginType !== 'daumdata' || ($userType != '3' && $userClass != '1')) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
-        // 권한 체크: daumdata 로그인 user_type=3 (콜센터 관리자)
-        $loginType = session()->get('login_type');
-        $userType = session()->get('user_type');
-        
-        if ($loginType !== 'daumdata' || $userType != '3') {
-            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        // user_class = 1일 때는 본인 거래처만 조회
+        $userCompany = session()->get('user_company');
+        if ($userClass == '1' && empty($userCompany) && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_company');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult && isset($userResult['user_company'])) {
+                    $userCompany = $userResult['user_company'];
+                }
+            }
         }
         
-        // user_cc_idx 조회 (세션 또는 DB에서)
+        // user_cc_idx 조회 (세션 또는 DB에서) - user_type=3일 때만 필요
         $userCcIdx = session()->get('user_cc_idx');
         
         // 세션에 없으면 DB에서 조회
@@ -1403,26 +1432,60 @@ class Admin extends BaseController
             }
         }
         
-        // userCcIdx가 정수인지 확인하고 변환
-        if (empty($userCcIdx) || !is_numeric($userCcIdx)) {
-            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
-        }
-        
-        $userCcIdx = (int)$userCcIdx; // 최종적으로 정수로 변환
-        
-        // 검색 조건
-        $searchCompName = $this->request->getGet('search_compname') ?? '';
-        
-        // user_cc_idx로 콜센터 정보 조회 (cc_code 가져오기)
-        $db = \Config\Database::connect();
-        $ccBuilder = $db->table('tbl_cc_list');
-        $ccBuilder->select('cc_code, cc_name');
-        $ccBuilder->where('idx', $userCcIdx);
-        $ccQuery = $ccBuilder->get();
-        
-        $ccInfo = null;
-        if ($ccQuery !== false) {
-            $ccInfo = $ccQuery->getRowArray();
+        // user_class = 1일 때는 user_company로 거래처 조회
+        if ($userClass == '1') {
+            if (empty($userCompany)) {
+                return redirect()->to('/')->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            
+            // user_company로 거래처 정보 조회
+            $db = \Config\Database::connect();
+            $compBuilder = $db->table('tbl_company_list');
+            $compBuilder->select('comp_code, comp_name, cc_idx');
+            $compBuilder->where('comp_code', $userCompany);
+            $compQuery = $compBuilder->get();
+            
+            $compInfo = null;
+            if ($compQuery !== false) {
+                $compInfo = $compQuery->getRowArray();
+            }
+            
+            if (empty($compInfo)) {
+                return redirect()->to('/')->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            
+            // cc_idx로 cc_code 조회
+            if (!empty($compInfo['cc_idx'])) {
+                $ccBuilder = $db->table('tbl_cc_list');
+                $ccBuilder->select('cc_code, cc_name');
+                $ccBuilder->where('idx', $compInfo['cc_idx']);
+                $ccQuery = $ccBuilder->get();
+                
+                $ccInfo = null;
+                if ($ccQuery !== false) {
+                    $ccInfo = $ccQuery->getRowArray();
+                }
+            }
+        } else {
+            // user_type = 3일 때는 기존 로직 사용
+            // userCcIdx가 정수인지 확인하고 변환
+            if (empty($userCcIdx) || !is_numeric($userCcIdx)) {
+                return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+            }
+            
+            $userCcIdx = (int)$userCcIdx; // 최종적으로 정수로 변환
+            
+            // user_cc_idx로 콜센터 정보 조회 (cc_code 가져오기)
+            $db = \Config\Database::connect();
+            $ccBuilder = $db->table('tbl_cc_list');
+            $ccBuilder->select('cc_code, cc_name');
+            $ccBuilder->where('idx', $userCcIdx);
+            $ccQuery = $ccBuilder->get();
+            
+            $ccInfo = null;
+            if ($ccQuery !== false) {
+                $ccInfo = $ccQuery->getRowArray();
+            }
         }
         
         if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
@@ -1430,6 +1493,9 @@ class Admin extends BaseController
         }
         
         $ccCode = $ccInfo['cc_code'];
+        
+        // 검색 조건
+        $searchCompName = $this->request->getGet('search_compname') ?? '';
         
         // API 정보 조회 (cc_code로)
         $insungApiListModel = new \App\Models\InsungApiListModel();
@@ -1551,26 +1617,34 @@ class Admin extends BaseController
             }
         }
         
-        // 필드명 매핑 (뷰에서 사용하는 필드명으로)
+        // user_class = 1일 때는 본인 거래처만 필터링
         $filteredCompanies = $companyList;
+        if ($userClass == '1' && !empty($userCompany)) {
+            $filteredCompanies = array_filter($companyList, function($company) use ($userCompany) {
+                return isset($company['comp_code']) && $company['comp_code'] === $userCompany;
+            });
+            // 배열 인덱스 재정렬
+            $filteredCompanies = array_values($filteredCompanies);
+        }
         
         $data = [
             'title' => '거래처관리',
             'content_header' => [
                 'title' => '거래처관리',
-                'description' => '소속 콜센터의 거래처 목록을 조회하고 관리할 수 있습니다.'
+                'description' => ($userClass == '1') ? '본인 거래처를 조회하고 관리할 수 있습니다.' : '소속 콜센터의 거래처 목록을 조회하고 관리할 수 있습니다.'
             ],
             'company_list' => $filteredCompanies,
             'search_compname' => $originalSearchCompName, // 원본 검색어
-            'user_cc_idx' => $userCcIdx,
-            'cc_code' => $ccCode
+            'user_cc_idx' => $userCcIdx ?? null,
+            'cc_code' => $ccCode,
+            'user_class' => $userClass
         ];
 
         return view('admin/company-list-cc', $data);
     }
 
     /**
-     * 거래처 수정 폼 (user_type = 3 접근 가능)
+     * 거래처 수정 폼 (user_type = 3 또는 user_class = 1 접근 가능)
      */
     public function companyEdit()
     {
@@ -1579,24 +1653,58 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        // 권한 체크: user_type = 3 (콜센터 관리자) 또는 user_class = 1 (거래처 관리자)
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
+        $userClass = session()->get('user_class');
+        $userId = session()->get('user_id');
+        $userCompany = session()->get('user_company');
         
-        if ($loginType !== 'daumdata' || $userType != '3') {
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class, user_company');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult) {
+                    if (isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                    if (isset($userResult['user_company'])) {
+                        $userCompany = $userResult['user_company'];
+                    }
+                }
+            }
+        }
+        
+        if ($loginType !== 'daumdata' || ($userType != '3' && $userClass != '1')) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
         // comp_code 파라미터 필수
         $compCode = $this->request->getGet('comp_code');
-        if (empty($compCode)) {
+        
+        // user_class = 1일 때는 본인 거래처만 조회 가능
+        if ($userClass == '1') {
+            if (empty($userCompany)) {
+                return redirect()->to('/')->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            // comp_code가 없거나 본인 거래처가 아니면 본인 거래처로 설정
+            if (empty($compCode) || $compCode !== $userCompany) {
+                $compCode = $userCompany;
+            }
+        } elseif (empty($compCode)) {
             return redirect()->to('/admin/company-list-cc')->with('error', '거래처 코드가 필요합니다.');
         }
         
         $db = \Config\Database::connect();
         $userCcIdx = session()->get('user_cc_idx');
         
-        if (empty($userCcIdx)) {
+        // user_type = 3일 때만 user_cc_idx 조회
+        if ($userType == '3' && empty($userCcIdx)) {
             $currentUserId = session()->get('user_id');
             if ($currentUserId) {
                 $userBuilder = $db->table('tbl_users_list u');
@@ -1615,16 +1723,40 @@ class Admin extends BaseController
             }
         }
         
-        if (empty($userCcIdx)) {
-            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
-        }
-        
         // 콜센터 정보 조회
-        $ccBuilder = $db->table('tbl_cc_list');
-        $ccBuilder->select('cc_code, cc_name');
-        $ccBuilder->where('idx', $userCcIdx);
-        $ccQuery = $ccBuilder->get();
-        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        $ccInfo = null;
+        if ($userClass == '1') {
+            // user_class = 1일 때는 comp_code로 cc_idx 조회 후 cc_code 조회
+            $compBuilder = $db->table('tbl_company_list');
+            $compBuilder->select('cc_idx');
+            $compBuilder->where('comp_code', $compCode);
+            $compQuery = $compBuilder->get();
+            
+            if ($compQuery !== false) {
+                $compResult = $compQuery->getRowArray();
+                if ($compResult && !empty($compResult['cc_idx'])) {
+                    $ccBuilder = $db->table('tbl_cc_list');
+                    $ccBuilder->select('cc_code, cc_name');
+                    $ccBuilder->where('idx', $compResult['cc_idx']);
+                    $ccQuery = $ccBuilder->get();
+                    
+                    if ($ccQuery !== false) {
+                        $ccInfo = $ccQuery->getRowArray();
+                    }
+                }
+            }
+        } else {
+            // user_type = 3일 때는 기존 로직 사용
+            if (empty($userCcIdx)) {
+                return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+            }
+            
+            $ccBuilder = $db->table('tbl_cc_list');
+            $ccBuilder->select('cc_code, cc_name');
+            $ccBuilder->where('idx', $userCcIdx);
+            $ccQuery = $ccBuilder->get();
+            $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        }
         
         if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
             return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
@@ -1819,7 +1951,7 @@ class Admin extends BaseController
     }
 
     /**
-     * 거래처 저장 (user_type = 3 접근 가능)
+     * 거래처 저장 (user_type = 3 또는 user_class = 1 접근 가능)
      */
     public function companySave()
     {
@@ -1828,16 +1960,50 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        // 권한 체크: user_type = 3 (콜센터 관리자) 또는 user_class = 1 (거래처 관리자)
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
+        $userClass = session()->get('user_class');
+        $userId = session()->get('user_id');
+        $userCompany = session()->get('user_company');
         
-        if ($loginType !== 'daumdata' || $userType != '3') {
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class, user_company');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult) {
+                    if (isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                    if (isset($userResult['user_company'])) {
+                        $userCompany = $userResult['user_company'];
+                    }
+                }
+            }
+        }
+        
+        if ($loginType !== 'daumdata' || ($userType != '3' && $userClass != '1')) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
         // POST 데이터
         $compCode = $this->request->getPost('comp_code');
+        
+        // user_class = 1일 때는 본인 거래처만 수정 가능
+        if ($userClass == '1') {
+            if (empty($userCompany)) {
+                return redirect()->to('/')->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            // comp_code가 본인 거래처가 아니면 거부
+            if (empty($compCode) || $compCode !== $userCompany) {
+                return redirect()->to('/admin/company-list-cc')->with('error', '접근 권한이 없습니다.');
+            }
+        }
         $compName = $this->request->getPost('comp_name');
         $compOwner = $this->request->getPost('comp_owner');
         $compTel = $this->request->getPost('comp_tel');
@@ -1954,25 +2120,58 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        // 권한 체크: user_type = 3 (콜센터 관리자) 또는 user_class = 1 (거래처 관리자)
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
+        $userClass = session()->get('user_class');
+        $userId = session()->get('user_id');
+        $userCompany = session()->get('user_company');
         
-        if ($loginType !== 'daumdata' || $userType != '3') {
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class, user_company');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult) {
+                    if (isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                    if (isset($userResult['user_company'])) {
+                        $userCompany = $userResult['user_company'];
+                    }
+                }
+            }
+        }
+        
+        if ($loginType !== 'daumdata' || ($userType != '3' && $userClass != '1')) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
-        // comp_code 파라미터 필수
+        // comp_code 파라미터 필수 (user_class = 1일 때는 본인 거래처로 자동 설정)
         $compCode = $this->request->getGet('comp_code');
-        if (empty($compCode)) {
+        
+        // user_class = 1일 때는 본인 거래처만 조회 가능
+        if ($userClass == '1') {
+            if (empty($userCompany)) {
+                return redirect()->to('/')->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            // comp_code가 없거나 본인 거래처가 아니면 본인 거래처로 설정
+            if (empty($compCode) || $compCode !== $userCompany) {
+                $compCode = $userCompany;
+            }
+        } elseif (empty($compCode)) {
             return redirect()->to('/admin/company-list-cc')->with('error', '거래처 코드가 필요합니다.');
         }
         
-        // user_cc_idx 조회
+        // user_cc_idx 조회 (user_type = 3일 때만 필요)
         $db = \Config\Database::connect();
         $userCcIdx = session()->get('user_cc_idx');
         
-        if (empty($userCcIdx)) {
+        if ($userType == '3' && empty($userCcIdx)) {
             $currentUserId = session()->get('user_id');
             if ($currentUserId) {
                 $userBuilder = $db->table('tbl_users_list u');
@@ -1989,18 +2188,42 @@ class Admin extends BaseController
                     }
                 }
             }
-        }
-        
-        if (empty($userCcIdx)) {
-            return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+            
+            if (empty($userCcIdx)) {
+                return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
+            }
         }
         
         // 콜센터 정보 조회
-        $ccBuilder = $db->table('tbl_cc_list');
-        $ccBuilder->select('cc_code, cc_name');
-        $ccBuilder->where('idx', $userCcIdx);
-        $ccQuery = $ccBuilder->get();
-        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        $ccInfo = null;
+        if ($userClass == '1') {
+            // user_class = 1일 때는 comp_code로 cc_idx 조회 후 cc_code 조회
+            $compBuilder = $db->table('tbl_company_list');
+            $compBuilder->select('cc_idx');
+            $compBuilder->where('comp_code', $compCode);
+            $compQuery = $compBuilder->get();
+            
+            if ($compQuery !== false) {
+                $compResult = $compQuery->getRowArray();
+                if ($compResult && !empty($compResult['cc_idx'])) {
+                    $ccBuilder = $db->table('tbl_cc_list');
+                    $ccBuilder->select('cc_code, cc_name');
+                    $ccBuilder->where('idx', $compResult['cc_idx']);
+                    $ccQuery = $ccBuilder->get();
+                    
+                    if ($ccQuery !== false) {
+                        $ccInfo = $ccQuery->getRowArray();
+                    }
+                }
+            }
+        } else {
+            // user_type = 3일 때는 기존 로직 사용
+            $ccBuilder = $db->table('tbl_cc_list');
+            $ccBuilder->select('cc_code, cc_name');
+            $ccBuilder->where('idx', $userCcIdx);
+            $ccQuery = $ccBuilder->get();
+            $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+        }
         
         if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
             return redirect()->to('/')->with('error', '콜센터 정보를 찾을 수 없습니다.');
@@ -2193,24 +2416,56 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        // 권한 체크: user_type = 3 (콜센터 관리자) 또는 user_class = 1 (거래처 관리자)
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
+        $userClass = session()->get('user_class');
+        $userId = session()->get('user_id');
+        $userCompany = session()->get('user_company');
         
-        if ($loginType !== 'daumdata' || $userType != '3') {
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class, user_company');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult) {
+                    if (isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                    if (isset($userResult['user_company'])) {
+                        $userCompany = $userResult['user_company'];
+                    }
+                }
+            }
+        }
+        
+        if ($loginType !== 'daumdata' || ($userType != '3' && $userClass != '1')) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
         // 파라미터
         $compCode = $this->request->getGet('comp_code');
         $mode = $this->request->getGet('mode') ?? 'add'; // add 또는 edit
-        $userId = $this->request->getGet('user_id') ?? '';
+        $userIdParam = $this->request->getGet('user_id') ?? '';
         
-        if (empty($compCode)) {
+        // user_class = 1일 때는 본인 거래처만 조회 가능
+        if ($userClass == '1') {
+            if (empty($userCompany)) {
+                return redirect()->to('/')->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            // comp_code가 없거나 본인 거래처가 아니면 본인 거래처로 설정
+            if (empty($compCode) || $compCode !== $userCompany) {
+                $compCode = $userCompany;
+            }
+        } elseif (empty($compCode)) {
             return redirect()->to('/admin/company-list-cc')->with('error', '거래처 코드가 필요합니다.');
         }
         
-        if ($mode === 'edit' && empty($userId)) {
+        if ($mode === 'edit' && empty($userIdParam)) {
             return redirect()->to('/admin/company-customer-list?comp_code=' . urlencode($compCode))->with('error', '사용자 ID가 필요합니다.');
         }
         
@@ -2218,7 +2473,8 @@ class Admin extends BaseController
         $db = \Config\Database::connect();
         $userCcIdx = session()->get('user_cc_idx');
         
-        if (empty($userCcIdx)) {
+        // user_type = 3일 때만 user_cc_idx 조회
+        if ($userType == '3' && empty($userCcIdx)) {
             $currentUserId = session()->get('user_id');
             if ($currentUserId) {
                 $userBuilder = $db->table('tbl_users_list u');
@@ -2756,6 +3012,38 @@ class Admin extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
         }
         
+        // user_class 조회 (dept_name 파라미터 조건 확인용)
+        $loginType = session()->get('login_type');
+        $userClass = session()->get('user_class');
+        $userId = session()->get('user_id');
+        $userDept = session()->get('user_dept');
+        
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $userId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class, user_dept');
+            $userBuilder->where('user_id', $userId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult) {
+                    if (isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                    if (isset($userResult['user_dept'])) {
+                        $userDept = $userResult['user_dept'];
+                    }
+                }
+            }
+        }
+        
+        // user_class가 3 이상이고 user_dept가 있을 때만 deptName 설정
+        $deptName = null;
+        if (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
+            $deptName = $userDept;
+        }
+        
         // 권한 체크
         $loginType = session()->get('login_type');
         $userRole = session()->get('user_role');
@@ -2849,7 +3137,7 @@ class Admin extends BaseController
                     
                     // 주문 목록 조회 (API 페이지네이션 직접 활용: limit=15, page=요청한 페이지)
                     $compNo = $selCompCode;
-                    $orderListResult = $insungApiService->getOrderList($mCode, $ccCode, $token, '', $fromDate, $toDate, $state, null, null, $compNo, 15, $page, $apiIdx);
+                    $orderListResult = $insungApiService->getOrderList($mCode, $ccCode, $token, '', $fromDate, $toDate, $state, null, $deptName, $compNo, 15, $page, $apiIdx);
                     
                     if ($orderListResult && isset($orderListResult['success']) && $orderListResult['success']) {
                         $orderData = $orderListResult['data'] ?? null;
@@ -2964,7 +3252,7 @@ class Admin extends BaseController
                 
                 try {
                     // 주문 목록 조회 (comp_no 파라미터 없이, API 페이지네이션 직접 활용)
-                    $orderListResult = $insungApiService->getOrderList($mCode, $ccCode, $token, '', $fromDate, $toDate, $state, null, null, null, 15, $page, $apiIdx);
+                    $orderListResult = $insungApiService->getOrderList($mCode, $ccCode, $token, '', $fromDate, $toDate, $state, null, $deptName, null, 15, $page, $apiIdx);
                     
                     log_message('info', "Admin::orderListAjax - API 호출 결과: " . (isset($orderListResult['success']) ? ('success=' . ($orderListResult['success'] ? 'true' : 'false')) : 'success 키 없음'));
                     
@@ -3222,7 +3510,7 @@ class Admin extends BaseController
                         // 모든 주문을 가져온 후 백엔드에서 페이지네이션 처리하므로 limit을 크게 설정
                         $compNo = $compCode; // 실제 거래처 코드 사용
                         log_message('info', "Admin::orderListAjax - getOrderList 호출 직전: compCode={$compCode}, compNo={$compNo}, fromDate={$fromDate}, toDate={$toDate}, page=1 (모든 주문 수집 후 백엔드에서 페이지네이션)");
-                        $orderListResult = $insungApiService->getOrderList($mCode, $ccCode, $token, '', $fromDate, $toDate, $state, null, null, $compNo, 1000, 1, $apiIdx);
+                        $orderListResult = $insungApiService->getOrderList($mCode, $ccCode, $token, '', $fromDate, $toDate, $state, null, $deptName, $compNo, 1000, 1, $apiIdx);
                             log_message('info', "Admin::orderListAjax - getOrderList 호출 완료: " . (isset($orderListResult['success']) ? ('success=' . ($orderListResult['success'] ? 'true' : 'false')) : 'success 키 없음'));
                             
                             if (!$orderListResult) {

@@ -101,6 +101,11 @@ class HistoryModel extends Model
                 ->groupEnd();
             }
             
+            // user_dept 필터링 (user_class 3 이상일 때)
+            if (isset($filters['user_dept']) && !empty($filters['user_dept'])) {
+                $builder->where('u_list.user_dept', $filters['user_dept']);
+            }
+            
             // 서브도메인 필터가 있을 때 user_type별 추가 필터링
             if (isset($filters['user_type'])) {
                 if ($filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
@@ -145,6 +150,10 @@ class HistoryModel extends Model
                 // user_type = 1: 서브도메인 필터만 적용 (추가 필터 없음)
             }
         }
+        // user_dept 필터링 (서브도메인 필터가 없을 때, user_class 3 이상일 때)
+        if (isset($filters['user_dept']) && !empty($filters['user_dept'])) {
+            $builder->where('u_list.user_dept', $filters['user_dept']);
+        }
         // 서브도메인 필터가 없을 때 daumdata 로그인 필터링
         elseif (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
             // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
@@ -179,62 +188,41 @@ class HistoryModel extends Model
                 $builder->where('u_list.user_company', $filters['user_company']);
             }
         } elseif (isset($filters['user_type']) && $filters['user_type'] == '5') {
-            // user_type = 5: user_id 본인 것만
-            // 인성 API 주문: o.user_id = user_idx (tbl_users_list.idx, 숫자)
-            // 일반 주문: o.user_id = user_id (tbl_users.id 또는 문자열 user_id)
-            if (isset($filters['user_idx']) && $filters['user_idx']) {
-                // user_idx가 있으면 인성 API 주문과 일반 주문 모두 필터링
-                $builder->groupStart()
-                    ->groupStart()
-                        ->where('o.order_system', 'insung')
-                        ->where('o.user_id', (int)$filters['user_idx']) // 숫자로 변환하여 정확한 매칭
-                    ->groupEnd();
-                // 일반 주문도 user_idx로 필터링 (일반 주문도 user_id에 tbl_users_list.idx가 저장될 수 있음)
-                if (isset($filters['user_id']) && $filters['user_id']) {
-                    $builder->orGroupStart()
-                        ->groupStart()
-                            ->where('o.order_system IS NULL', null, true)
-                            ->orWhere('o.order_system !=', 'insung')
-                        ->groupEnd()
-                        ->where('o.user_id', $filters['user_id'])
-                    ->groupEnd();
-                }
-                $builder->groupEnd();
-            } elseif (isset($filters['user_id']) && $filters['user_id']) {
-                // user_idx가 없으면 user_id로 tbl_users_list에서 idx 조회 후 필터링
-                $userListBuilder = $this->db->table('tbl_users_list');
-                $userListBuilder->select('idx');
-                $userListBuilder->where('user_id', $filters['user_id']);
-                $userListQuery = $userListBuilder->get();
-                $foundUserIdx = null;
-                if ($userListQuery !== false) {
-                    $userListResult = $userListQuery->getRowArray();
-                    if ($userListResult && !empty($userListResult['idx'])) {
-                        $foundUserIdx = (int)$userListResult['idx'];
+            // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
+            // user_company (comp_code)로 필터링
+            if (isset($filters['user_company']) && $filters['user_company']) {
+                // comp_code로 comp_name 조회
+                $compNameBuilder = $this->db->table('tbl_company_list');
+                $compNameBuilder->select('comp_name');
+                $compNameBuilder->where('comp_code', $filters['user_company']);
+                $compNameQuery = $compNameBuilder->get();
+                $userCompName = null;
+                if ($compNameQuery !== false) {
+                    $compNameResult = $compNameQuery->getRowArray();
+                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
+                        $userCompName = $compNameResult['comp_name'];
                     }
                 }
                 
-                // 인성 API 주문과 일반 주문 모두 필터링
-                $builder->groupStart();
-                if ($foundUserIdx) {
-                    // user_idx를 찾았으면 인성 API 주문도 필터링
+                if ($userCompName) {
+                    // 인성 API 주문과 일반 주문 모두 comp_code/comp_name으로 필터링
                     $builder->groupStart()
-                        ->where('o.order_system', 'insung')
-                        ->where('o.user_id', $foundUserIdx)
+                        ->groupStart()
+                            ->where('o.order_system', 'insung')
+                            ->where('u_list.user_company', $filters['user_company'])
+                        ->groupEnd()
+                        ->orGroupStart()
+                            ->groupStart()
+                                ->where('o.order_system IS NULL', null, true)
+                                ->orWhere('o.order_system !=', 'insung')
+                            ->groupEnd()
+                            ->where('o.company_name', $userCompName)
+                        ->groupEnd()
                     ->groupEnd();
+                } else {
+                    // comp_name 조회 실패 시 comp_code로만 필터링
+                    $builder->where('u_list.user_company', $filters['user_company']);
                 }
-                // 일반 주문 필터링
-                $builder->orGroupStart()
-                    ->groupStart()
-                        ->where('o.order_system IS NULL', null, true)
-                        ->orWhere('o.order_system !=', 'insung')
-                    ->groupEnd()
-                    ->where('o.user_id', $filters['user_id'])
-                ->groupEnd();
-                $builder->groupEnd();
-            } else {
-                // user_idx와 user_id가 모두 없으면 빈 결과 반환
-                $builder->where('1', '0'); // 항상 false 조건
             }
         } elseif (isset($filters['cc_code']) && $filters['cc_code']) {
             // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
@@ -283,10 +271,17 @@ class HistoryModel extends Model
         }
         
         // 날짜 필터
-        // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
-        // updated_at >= 오늘날짜 조건으로 통일
-        $today = date('Y-m-d');
-        $builder->where('DATE(o.updated_at) >=', $today);
+        if (!empty($filters['start_date']) && !empty($filters['end_date'])) {
+            // start_date와 end_date가 있으면 해당 기간으로 필터링
+            $builder->where('DATE(o.updated_at) >=', $filters['start_date']);
+            $builder->where('DATE(o.updated_at) <=', $filters['end_date']);
+        } else {
+            // 날짜 필터가 없으면 오늘 날짜 이후만 조회
+            // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
+            // updated_at >= 오늘날짜 조건으로 통일
+            $today = date('Y-m-d');
+            $builder->where('DATE(o.updated_at) >=', $today);
+        }
         
         // 검색 조건 적용
         if (!empty($filters['search_keyword'])) {

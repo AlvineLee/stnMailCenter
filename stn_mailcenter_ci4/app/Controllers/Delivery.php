@@ -88,28 +88,45 @@ class Delivery extends BaseController
         
         // user_class는 세션에서 가져오거나 DB에서 조회 (주문조회 권한용)
         $userClass = session()->get('user_class');
+        $userDept = session()->get('user_dept');
         if (empty($userClass) && $loginType === 'daumdata') {
             $userId = session()->get('user_id');
             if ($userId) {
                 $db = \Config\Database::connect();
                 $userBuilder = $db->table('tbl_users_list');
-                $userBuilder->select('user_class');
+                $userBuilder->select('user_class, user_dept');
                 $userBuilder->where('user_id', $userId);
                 $userQuery = $userBuilder->get();
                 if ($userQuery !== false) {
                     $userResult = $userQuery->getRowArray();
-                    if ($userResult && isset($userResult['user_class'])) {
-                        $userClass = $userResult['user_class'];
+                    if ($userResult) {
+                        if (isset($userResult['user_class'])) {
+                            $userClass = $userResult['user_class'];
+                        }
+                        if (isset($userResult['user_dept'])) {
+                            $userDept = $userResult['user_dept'];
+                        }
                     }
                 }
             }
         }
         
-        // user_class별 필터링 (주문조회 권한): user_class=1(관리자) 또는 user_class=3(부서장)은 전체 조회
+        // user_class별 필터링 (주문조회 권한)
+        // user_type과 user_class는 별개로 판단
+        // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한
         if ($loginType === 'daumdata') {
-            if ($userClass == '1' || $userClass == '3') {
-                // user_class = 1(관리자) 또는 3(부서장): 전체 주문 리스트
+            if ($userClass == '1' || $userClass == '2') {
+                // user_class = 1,2: 전체 주문 리스트 (dept_name 필터 없음, user_type과 관계없이)
                 // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null; // 전체 조회
+            } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
+                // user_class = 3 이상: 부서명으로 필터링
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null;
+                $filters['user_dept'] = $userDept; // 부서명 필터 추가
+            } elseif ($userClass == '3') {
+                // user_class = 3(부서장): 전체 주문 리스트 (dept_name이 없을 경우)
                 $filters['user_type'] = '1';
                 $filters['customer_id'] = null; // 전체 조회
             } elseif ($userClass == '5') {
@@ -237,11 +254,50 @@ class Delivery extends BaseController
         $encryptionHelper = new \App\Libraries\EncryptionHelper();
         $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
         
+        // 사용자 권한 정보 (마스킹 처리용)
+        $loginType = session()->get('login_type');
+        $userClass = session()->get('user_class');
+        $userType = session()->get('user_type');
+        $loginUserId = session()->get('user_id'); // 로그인한 user_id
+        
+        // user_class가 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $loginUserId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class');
+            $userBuilder->where('user_id', $loginUserId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult && isset($userResult['user_class'])) {
+                    $userClass = $userResult['user_class'];
+                }
+            }
+        }
+        
+        // user_type 결정 (user_class 우선, 없으면 user_type 사용)
+        $finalUserType = '1';
+        if ($loginType === 'daumdata') {
+            if ($userClass == '1' || $userClass == '3') {
+                $finalUserType = '1';
+            } elseif ($userClass == '5') {
+                $finalUserType = '5';
+            } else {
+                $finalUserType = $userType ?? '1';
+            }
+        }
+        
         $formattedOrders = [];
         foreach ($orders as $order) {
             // 전화번호 필드 복호화
             $order = $encryptionHelper->decryptFields($order, $phoneFields);
             $formattedOrder = $order;
+            
+            // 리스트에서 항상 마스킹 처리할 필드 (권한 상관없이)
+            // 배송조회 리스트: 라이더연락처 항상 마스킹
+            if (isset($formattedOrder['rider_tel_number']) && !empty($formattedOrder['rider_tel_number']) && $formattedOrder['rider_tel_number'] !== '-') {
+                $formattedOrder['rider_tel_number'] = $encryptionHelper->maskPhone($formattedOrder['rider_tel_number']);
+            }
             
             // 상태 라벨 및 맵 표시 조건 처리
             $statusLabel = '';
@@ -514,6 +570,49 @@ class Delivery extends BaseController
                 'moving' => '퀵이사'
             ];
             
+            // 사용자 권한 정보 (마스킹 처리용)
+            $loginType = session()->get('login_type');
+            $userClass = session()->get('user_class');
+            $userType = session()->get('user_type');
+            $loginUserId = session()->get('user_id'); // 로그인한 user_id
+            $orderInsungUserId = $order['insung_user_id'] ?? ''; // 주문의 insung_user_id
+            
+            // user_class가 없으면 DB에서 조회
+            if (empty($userClass) && $loginType === 'daumdata' && $loginUserId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_class');
+                $userBuilder->where('user_id', $loginUserId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                }
+            }
+            
+            // user_type 결정 (user_class 우선, 없으면 user_type 사용)
+            $finalUserType = '1';
+            if ($loginType === 'daumdata') {
+                if ($userClass == '1' || $userClass == '3') {
+                    $finalUserType = '1';
+                } elseif ($userClass == '5') {
+                    $finalUserType = '5';
+                } else {
+                    $finalUserType = $userType ?? '1';
+                }
+            }
+            
+            // 팝업에서 마스킹 처리 (user_type=5이고 본인이 접수한 것이 아닌 경우)
+            if ($finalUserType === '5' && $loginUserId && $orderInsungUserId && $loginUserId !== $orderInsungUserId) {
+                foreach ($phoneFields as $field) {
+                    if (isset($order[$field]) && !empty($order[$field]) && $order[$field] !== '-') {
+                        $order[$field] = $encryptionHelper->maskPhone($order[$field]);
+                    }
+                }
+            }
+            
             // 응답 데이터 구성
             $responseData = [
                 'success' => true,
@@ -527,6 +626,10 @@ class Delivery extends BaseController
                     'shipping_platform_code' => $order['shipping_platform_code'] ?? '',
                     'user_name' => $order['user_name'],
                     'status' => $order['status'],
+                    // 마스킹 처리용 정보
+                    'user_type' => $finalUserType,
+                    'login_user_id' => $loginUserId,
+                    'order_insung_user_id' => $orderInsungUserId,
                     'status_label' => $statusLabels[$order['status']] ?? $order['status'],
                     'created_at' => $order['created_at'],
                     'updated_at' => $order['updated_at'],

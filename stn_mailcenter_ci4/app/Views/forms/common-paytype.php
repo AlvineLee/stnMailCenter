@@ -1,5 +1,8 @@
 <?php
 // 공통 지급구분 컴포넌트
+$credit = session()->get('credit'); // 거래구분 값 (1:현금, 3:신용, 5:월결제, 7:카드)
+$isCashEnabled = ($credit == '1'); // credit=1이면 착불, 선불, 송금 활성화
+$isCreditEnabled = ($credit == '3'); // credit=3이면 신용거래 활성화
 ?>
 
 <!-- 지급구분 -->
@@ -9,20 +12,20 @@
             
             <!-- 지급방법 선택 -->
             <div class="space-y-2 mb-4">
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment_type" value="cash_on_delivery" <?= old('payment_type') === 'cash_on_delivery' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                <label class="flex items-center space-x-2 <?= $isCashEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50' ?>">
+                    <input type="radio" name="payment_type" value="cash_on_delivery" <?= old('payment_type') === 'cash_on_delivery' ? 'checked' : '' ?> <?= $isCashEnabled ? '' : 'disabled' ?> class="text-gray-600 focus:ring-gray-500">
                     <span class="text-sm font-medium text-gray-700">착불(현금)</span>
                 </label>
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment_type" value="cash_in_advance" <?= old('payment_type') === 'cash_in_advance' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                <label class="flex items-center space-x-2 <?= $isCashEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50' ?>">
+                    <input type="radio" name="payment_type" value="cash_in_advance" <?= old('payment_type') === 'cash_in_advance' ? 'checked' : '' ?> <?= $isCashEnabled ? '' : 'disabled' ?> class="text-gray-600 focus:ring-gray-500">
                     <span class="text-sm font-medium text-gray-700">선불(현금)</span>
                 </label>
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment_type" value="bank_transfer" <?= old('payment_type') === 'bank_transfer' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                <label class="flex items-center space-x-2 <?= $isCashEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50' ?>">
+                    <input type="radio" name="payment_type" value="bank_transfer" <?= old('payment_type') === 'bank_transfer' ? 'checked' : '' ?> <?= $isCashEnabled ? '' : 'disabled' ?> class="text-gray-600 focus:ring-gray-500">
                     <span class="text-sm font-medium text-gray-700">송금</span>
                 </label>
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment_type" value="credit_transaction" <?= old('payment_type', 'credit_transaction') === 'credit_transaction' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                <label class="flex items-center space-x-2 <?= $isCreditEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50' ?>">
+                    <input type="radio" name="payment_type" value="credit_transaction" <?= old('payment_type', 'credit_transaction') === 'credit_transaction' ? 'checked' : '' ?> <?= $isCreditEnabled ? '' : 'disabled' ?> class="text-gray-600 focus:ring-gray-500">
                     <span class="text-sm font-medium text-gray-700">신용거래</span>
                 </label>
             </div>

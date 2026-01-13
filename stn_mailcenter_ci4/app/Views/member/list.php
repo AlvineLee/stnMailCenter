@@ -31,6 +31,12 @@
                                    class="form-input bg-gray-50 text-gray-600">
                         </div>
                         <div class="form-field">
+                            <label class="form-label">부서</label>
+                            <select id="user_dept" class="form-input">
+                                <option value="">부서를 선택하세요</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
                             <label class="form-label">담당자</label>
                             <input type="text" 
                                    id="real_name"
@@ -146,6 +152,56 @@
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 
 <script>
+// 페이지 로드 시 부서 목록 불러오기
+document.addEventListener('DOMContentLoaded', function() {
+    loadDepartmentList();
+});
+
+// 부서 목록 불러오기
+function loadDepartmentList() {
+    fetch('<?= base_url('member/getDepartmentList') ?>', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('부서 목록 응답:', data);
+        if (data.success && data.data && data.data.length > 0) {
+            const deptSelect = document.getElementById('user_dept');
+            const currentDept = '<?= esc($user['user_dept'] ?? '', 'js') ?>';
+            
+            // 기존 옵션 제거 (첫 번째 "부서를 선택하세요" 제외)
+            while (deptSelect.children.length > 1) {
+                deptSelect.removeChild(deptSelect.lastChild);
+            }
+            
+            // 부서 목록 추가
+            data.data.forEach(function(dept) {
+                if (dept && dept.department_name) {
+                    const deptName = dept.department_name.trim();
+                    if (deptName) {
+                        const option = document.createElement('option');
+                        option.value = deptName;
+                        option.textContent = deptName;
+                        if (deptName === currentDept) {
+                            option.selected = true;
+                        }
+                        deptSelect.appendChild(option);
+                    }
+                }
+            });
+        } else {
+            console.warn('부서 목록이 비어있습니다:', data);
+        }
+    })
+    .catch(error => {
+        console.error('부서 목록 조회 실패:', error);
+    });
+}
+
 // 경고 모달 열기
 function showWarningModal(message) {
     // 레이어 팝업이 열릴 때 사이드바 처리
@@ -260,8 +316,10 @@ function saveAll() {
     }
 
     // 사용자 정보 저장 요청
+    const userDept = document.getElementById('user_dept').value;
     const requestData = {
         real_name: realName,
+        user_dept: userDept,
         phone: phone,
         address_zonecode: zonecode,
         address: address,

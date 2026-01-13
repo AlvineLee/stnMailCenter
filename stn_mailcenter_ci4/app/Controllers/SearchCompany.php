@@ -801,6 +801,42 @@ class SearchCompany extends BaseController
             if ($apiIdx) {
                 $apiInfo = $this->insungApiListModel->find($apiIdx);
             }
+            
+            // 세션에 api_idx가 없으면 user_company(comp_code)로 API 정보 조회
+            if (!$apiInfo || !$apiIdx) {
+                $userCompany = session()->get('user_company');
+                if ($userCompany) {
+                    try {
+                        $db = \Config\Database::connect();
+                        $compBuilder = $db->table('tbl_company_list c');
+                        $compBuilder->select('
+                            d.idx as api_idx,
+                            d.mcode as m_code,
+                            d.cccode as cc_code,
+                            d.token
+                        ');
+                        $compBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+                        $compBuilder->join('tbl_api_list d', 'cc.cc_apicode = d.idx', 'inner');
+                        $compBuilder->where('c.comp_code', $userCompany);
+                        $compQuery = $compBuilder->get();
+                        
+                        if ($compQuery !== false) {
+                            $compResult = $compQuery->getRowArray();
+                            if ($compResult) {
+                                $apiInfo = [
+                                    'idx' => $compResult['api_idx'],
+                                    'mcode' => $compResult['m_code'],
+                                    'cccode' => $compResult['cc_code'],
+                                    'token' => $compResult['token']
+                                ];
+                                $apiIdx = $compResult['api_idx'];
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        log_message('error', 'SearchCompany::employeeSearch - Error getting API info: ' . $e->getMessage());
+                    }
+                }
+            }
         }
 
         if (!$apiInfo || !$apiIdx) {

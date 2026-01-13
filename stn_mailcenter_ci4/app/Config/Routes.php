@@ -48,6 +48,7 @@ $routes->group('dashboard', function($routes) {
 // 서비스 관련 라우트
 $routes->group('service', function($routes) {
     $routes->get('mailroom', 'Service::mailroom');
+    $routes->get('getRecentOrdersForDeparture', 'Service::getRecentOrdersForDeparture');
     $routes->get('quick-motorcycle', 'Service::quickMotorcycle');
     $routes->get('quick-vehicle', 'Service::quickVehicle');
     $routes->get('quick-flex', 'Service::quickFlex');
@@ -102,6 +103,7 @@ $routes->group('delivery', function($routes) {
 $routes->group('history', function($routes) {
     $routes->get('list', 'History::list');
     $routes->post('saveColumnOrder', 'History::saveColumnOrder');
+    $routes->get('getOrderDetail', 'History::getOrderDetail');
 });
 
 // 즐겨찾기 관련 라우트
@@ -115,6 +117,7 @@ $routes->group('bookmark', function($routes) {
 // 회원정보 관련 라우트
 $routes->group('member', function($routes) {
     $routes->get('list', 'Member::list');
+    $routes->get('getDepartmentList', 'Member::getDepartmentList');
     $routes->post('changePassword', 'Member::changePassword');
     $routes->post('updateAddress', 'Member::updateAddress');
     $routes->post('updateUserInfo', 'Member::updateUserInfo');

@@ -202,7 +202,7 @@
 </div>
 
 <!-- 주문 상세 팝업 모달 -->
-<div id="orderDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 order-detail-modal">
+<div id="orderDetailModal" class="fixed inset-0 hidden flex items-center justify-center p-4 order-detail-modal" style="background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto order-detail-modal-content" onclick="event.stopPropagation()">
         <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
             <h3 class="text-lg font-bold text-gray-800">주문 상세 정보</h3>
@@ -281,6 +281,8 @@ function populateOrderDetail(orderData) {
         if (value === null || value === undefined || value === '') return '-';
         return value;
     };
+    
+    // 마스킹 처리는 컨트롤러에서 이미 완료되었으므로 프론트엔드에서는 그냥 표시만 함
     
     // 헬퍼 함수: 날짜 포맷팅
     const formatDate = (dateStr) => {

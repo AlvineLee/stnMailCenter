@@ -120,10 +120,19 @@ if (session()->get('is_logged_in')) {
                     </svg>
                 </label>
             </div>
-            <div class="flex space-x-2">
+            <div class="flex space-x-2 relative">
                 <button type="button" id="recent_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=S') ?>', 'RECENT_S', 1363, 919)">
                     최근접수내역
                 </button>
+                <!-- 최근 접수 내역 팝오버 (출발지) -->
+                <div id="recentOrdersPopup" class="hidden absolute z-50 w-[280px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-lg shadow-2xl mt-1 max-h-80 opacity-0 transform translate-y-[-10px] transition-all duration-300 ease-out flex flex-col overflow-hidden" style="top: 100%; right: 0; left: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+                    <div class="flex-shrink-0">
+                        <div id="recentOrdersHeader" class="grid grid-cols-2 gap-2 text-xs font-semibold text-gray-700 px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg"></div>
+                    </div>
+                    <div id="recentOrdersList" class="overflow-y-auto flex-1 space-y-1 px-2 pb-2">
+                        <div class="text-xs text-gray-500 px-2 py-1">로딩 중...</div>
+                    </div>
+                </div>
                 <button type="button" id="bookmark_departure_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/popup?type=S') ?>', 'BOOKMARK_S', 750, 500)">
                     즐겨찾기
                 </button>
@@ -212,10 +221,19 @@ if (session()->get('is_logged_in')) {
                     </svg>
                 </label>
             </div>
-            <div class="flex space-x-2">
+            <div class="flex space-x-2 relative">
                 <button type="button" id="recent_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/recent-popup?type=D') ?>', 'RECENT_D', 1363, 919)">
                     최근접수내역
                 </button>
+                <!-- 최근 접수 내역 팝오버 (도착지) -->
+                <div id="recentDestinationOrdersPopup" class="hidden absolute z-50 w-[280px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-lg shadow-2xl mt-1 max-h-80 opacity-0 transform translate-y-[-10px] transition-all duration-300 ease-out flex flex-col overflow-hidden" style="top: 100%; right: 0; left: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+                    <div class="flex-shrink-0">
+                        <div id="recentDestinationOrdersHeader" class="grid grid-cols-2 gap-2 text-xs font-semibold text-gray-700 px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg"></div>
+                    </div>
+                    <div id="recentDestinationOrdersList" class="overflow-y-auto flex-1 space-y-1 px-2 pb-2">
+                        <div class="text-xs text-gray-500 px-2 py-1">로딩 중...</div>
+                    </div>
+                </div>
                 <button type="button" id="bookmark_destination_btn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors" onclick="select_pop('<?= base_url('bookmark/popup?type=D') ?>', 'BOOKMARK_D', 750, 500)">
                     즐겨찾기
                 </button>
@@ -835,10 +853,62 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // 도착지 최근접수내역 버튼 이벤트 설정
     const recentDestinationBtn = document.getElementById('recent_destination_btn');
-    if (recentDestinationBtn && !recentDestinationBtn.onclick) {
-        recentDestinationBtn.addEventListener('click', function() {
-            loadDestinationInfo();
+    const recentDestinationOrdersPopup = document.getElementById('recentDestinationOrdersPopup');
+    const recentDestinationOrdersList = document.getElementById('recentDestinationOrdersList');
+    let destinationHoverTimeout = null;
+    let isDestinationPopupVisible = false;
+    
+    if (recentDestinationBtn && recentDestinationOrdersPopup) {
+        // PC: hover 이벤트로 팝오버 표시
+        recentDestinationBtn.addEventListener('mouseenter', function() {
+            clearTimeout(destinationHoverTimeout);
+            if (!isDestinationPopupVisible) {
+                loadRecentDestinationOrders();
+            }
+        });
+        
+        recentDestinationBtn.addEventListener('mouseleave', function() {
+            destinationHoverTimeout = setTimeout(function() {
+                hideRecentDestinationOrdersPopup();
+            }, 200);
+        });
+        
+        // 팝오버에 마우스 진입 시 유지
+        recentDestinationOrdersPopup.addEventListener('mouseenter', function() {
+            clearTimeout(destinationHoverTimeout);
+        });
+        
+        // 팝오버에서 마우스 이탈 시 숨김
+        recentDestinationOrdersPopup.addEventListener('mouseleave', function() {
+            hideRecentDestinationOrdersPopup();
+        });
+        
+        // 모바일/터치: 클릭 이벤트로 팝오버 표시
+        recentDestinationBtn.addEventListener('click', function(e) {
+            const existingOnclick = recentDestinationBtn.getAttribute('onclick');
+            if (existingOnclick && existingOnclick.includes('select_pop')) {
+                if (!isDestinationPopupVisible) {
+                    loadRecentDestinationOrders();
+                }
+                return;
+            }
+            
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isDestinationPopupVisible) {
+                loadRecentDestinationOrders();
+            } else {
+                hideRecentDestinationOrdersPopup();
+            }
+        });
+        
+        // 모바일: 팝오버 외부 클릭 시 닫기
+        document.addEventListener('click', function(e) {
+            if (isDestinationPopupVisible && recentDestinationOrdersPopup && !recentDestinationOrdersPopup.contains(e.target) && !recentDestinationBtn.contains(e.target)) {
+                hideRecentDestinationOrdersPopup();
+            }
         });
     }
     
@@ -972,6 +1042,372 @@ document.addEventListener('DOMContentLoaded', function() {
                 cChargeField.value = this.value;
             }
         });
+    }
+    
+    // 최근접수내역 버튼 hover 이벤트 - 최근 접수 내역 표시
+    const recentOrdersPopup = document.getElementById('recentOrdersPopup');
+    const recentOrdersList = document.getElementById('recentOrdersList');
+    let hoverTimeout = null;
+    let isPopupVisible = false;
+    
+    // recentDepartureBtn은 위에서 이미 선언되었으므로 재사용
+    if (recentDepartureBtn && recentOrdersPopup && recentOrdersList) {
+        // 데스크톱: hover 이벤트
+        recentDepartureBtn.addEventListener('mouseenter', function() {
+            clearTimeout(hoverTimeout);
+            hoverTimeout = setTimeout(function() {
+                if (!isPopupVisible) {
+                    loadRecentOrders();
+                }
+            }, 300); // 300ms 후 표시
+        });
+        
+        // 마우스 이탈 시
+        recentDepartureBtn.addEventListener('mouseleave', function() {
+            clearTimeout(hoverTimeout);
+            hoverTimeout = setTimeout(function() {
+                if (!isPopupVisible) {
+                    hideRecentOrdersPopup();
+                }
+            }, 200); // 200ms 후 숨김
+        });
+        
+        // 팝오버에 마우스 진입 시 유지
+        recentOrdersPopup.addEventListener('mouseenter', function() {
+            clearTimeout(hoverTimeout);
+        });
+        
+        // 팝오버에서 마우스 이탈 시 숨김
+        recentOrdersPopup.addEventListener('mouseleave', function() {
+            hideRecentOrdersPopup();
+        });
+        
+        // 모바일/터치: 클릭 이벤트로 팝오버 표시
+        recentDepartureBtn.addEventListener('click', function(e) {
+            // 기존 onclick이 있으면 실행하지 않음 (select_pop 함수가 있는 경우)
+            const existingOnclick = recentDepartureBtn.getAttribute('onclick');
+            if (existingOnclick && existingOnclick.includes('select_pop')) {
+                // 기존 onclick은 그대로 실행되지만, 팝오버도 함께 표시
+                if (!isPopupVisible) {
+                    loadRecentOrders();
+                }
+                return;
+            }
+            
+            // 기존 onclick이 없으면 팝오버만 토글
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isPopupVisible) {
+                loadRecentOrders();
+            } else {
+                hideRecentOrdersPopup();
+            }
+        });
+        
+        // 모바일: 팝오버 외부 클릭 시 닫기
+        document.addEventListener('click', function(e) {
+            if (isPopupVisible && recentOrdersPopup && !recentOrdersPopup.contains(e.target) && !recentDepartureBtn.contains(e.target)) {
+                hideRecentOrdersPopup();
+            }
+        });
+        
+    }
+    
+    // 팝오버 위치 조정 함수 (화면 밖으로 나가지 않도록)
+    function adjustPopupPosition() {
+        if (!recentOrdersPopup || !isPopupVisible) return;
+        
+        const popup = recentOrdersPopup;
+        const rect = popup.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        
+        // PC 모드: 오른쪽 끝을 버튼의 오른쪽 끝과 맞춤
+        popup.style.right = '0';
+        popup.style.left = 'auto';
+        
+        // 아래로 넘어가면 위로 조정
+        if (rect.bottom > viewportHeight) {
+            popup.style.top = 'auto';
+            popup.style.bottom = '100%';
+            popup.style.marginTop = '0';
+            popup.style.marginBottom = '0.25rem';
+        } else {
+            popup.style.top = '100%';
+            popup.style.bottom = 'auto';
+            popup.style.marginTop = '0.25rem';
+            popup.style.marginBottom = '0';
+        }
+    }
+    
+    // 최근 주문 목록 로드 (출발지)
+    function loadRecentOrders() {
+        if (isPopupVisible) {
+            return;
+        }
+        
+        fetch('/service/getRecentOrdersForDeparture?type=departure', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data && data.data.length > 0) {
+                displayRecentDepartureOrders(data.data);
+                showRecentOrdersPopup();
+            } else {
+                recentOrdersList.innerHTML = '<div class="text-xs text-gray-500 px-2 py-1">최근 접수 내역이 없습니다.</div>';
+                showRecentOrdersPopup();
+            }
+        })
+        .catch(error => {
+            console.error('최근 주문 조회 실패:', error);
+            recentOrdersList.innerHTML = '<div class="text-xs text-red-500 px-2 py-1">조회 중 오류가 발생했습니다.</div>';
+            showRecentOrdersPopup();
+        });
+    }
+    
+    // 최근 주문 목록 표시 (출발지 - 2열 그리드)
+    function displayRecentDepartureOrders(orders) {
+        // 헤더 설정
+        const recentOrdersHeader = document.getElementById('recentOrdersHeader');
+        if (recentOrdersHeader) {
+            recentOrdersHeader.innerHTML = '<div>접수일</div><div>출발지</div>';
+        }
+        
+        // 데이터 리스트
+        let html = '';
+        orders.forEach(function(order) {
+            const saveDate = order.save_date || '';
+            const departureCompany = order.departure_company_name || '';
+            
+            // 데이터를 JSON으로 인코딩하여 저장
+            const orderData = JSON.stringify(order);
+            
+            html += `
+                <div class="recent-order-item grid grid-cols-2 gap-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded" 
+                     data-order='${escapeHtml(orderData)}'>
+                    <div class="text-xs text-gray-600">${escapeHtml(saveDate)}</div>
+                    <div class="text-xs font-medium text-gray-800 truncate" title="${escapeHtml(departureCompany)}">${escapeHtml(departureCompany)}</div>
+                </div>
+            `;
+        });
+        
+        recentOrdersList.innerHTML = html;
+        
+        // 클릭 이벤트 추가
+        const items = recentOrdersList.querySelectorAll('.recent-order-item');
+        items.forEach(function(item) {
+            item.addEventListener('click', function() {
+                try {
+                    const orderData = JSON.parse(this.getAttribute('data-order'));
+                    fillDepartureFields(orderData);
+                } catch (e) {
+                    console.error('주문 데이터 파싱 실패:', e);
+                }
+                
+                // 팝오버 숨김
+                hideRecentOrdersPopup();
+            });
+        });
+    }
+    
+    // 출발지 필드만 자동 입력 함수
+    function fillDepartureFields(order) {
+        setFieldValue('departure_company_name', order.departure_company_name);
+        setFieldValue('departure_contact', order.departure_contact);
+        setFieldValue('departure_department', order.departure_department);
+        setFieldValue('departure_manager', order.departure_manager);
+        setFieldValue('departure_detail', order.departure_detail);
+        setFieldValue('departure_address', order.departure_address);
+        setFieldValue('departure_dong', order.departure_dong);
+        setFieldValue('departure_lat', order.departure_lat);
+        setFieldValue('departure_lon', order.departure_lon);
+    }
+    
+    // 최근 주문 목록 로드 (도착지)
+    function loadRecentDestinationOrders() {
+        if (isDestinationPopupVisible) {
+            return;
+        }
+        
+        fetch('/service/getRecentOrdersForDeparture?type=destination', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data && data.data.length > 0) {
+                displayRecentDestinationOrders(data.data);
+                showRecentDestinationOrdersPopup();
+            } else {
+                recentDestinationOrdersList.innerHTML = '<div class="text-xs text-gray-500 px-2 py-1">최근 접수 내역이 없습니다.</div>';
+                showRecentDestinationOrdersPopup();
+            }
+        })
+        .catch(error => {
+            console.error('최근 주문 조회 실패:', error);
+            recentDestinationOrdersList.innerHTML = '<div class="text-xs text-red-500 px-2 py-1">조회 중 오류가 발생했습니다.</div>';
+            showRecentDestinationOrdersPopup();
+        });
+    }
+    
+    // 최근 주문 목록 표시 (도착지 - 2열 그리드)
+    function displayRecentDestinationOrders(orders) {
+        // 헤더 설정
+        const recentDestinationOrdersHeader = document.getElementById('recentDestinationOrdersHeader');
+        if (recentDestinationOrdersHeader) {
+            recentDestinationOrdersHeader.innerHTML = '<div>접수일</div><div>도착지</div>';
+        }
+        
+        // 데이터 리스트
+        let html = '';
+        orders.forEach(function(order) {
+            const saveDate = order.save_date || '';
+            const destinationCompany = order.destination_company_name || '';
+            
+            // 데이터를 JSON으로 인코딩하여 저장
+            const orderData = JSON.stringify(order);
+            
+            html += `
+                <div class="recent-order-item grid grid-cols-2 gap-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded" 
+                     data-order='${escapeHtml(orderData)}'>
+                    <div class="text-xs text-gray-600">${escapeHtml(saveDate)}</div>
+                    <div class="text-xs font-medium text-gray-800 truncate" title="${escapeHtml(destinationCompany)}">${escapeHtml(destinationCompany)}</div>
+                </div>
+            `;
+        });
+        
+        recentDestinationOrdersList.innerHTML = html;
+        
+        // 클릭 이벤트 추가
+        const items = recentDestinationOrdersList.querySelectorAll('.recent-order-item');
+        items.forEach(function(item) {
+            item.addEventListener('click', function() {
+                try {
+                    const orderData = JSON.parse(this.getAttribute('data-order'));
+                    fillDestinationFields(orderData);
+                } catch (e) {
+                    console.error('주문 데이터 파싱 실패:', e);
+                }
+                
+                // 팝오버 숨김
+                hideRecentDestinationOrdersPopup();
+            });
+        });
+    }
+    
+    // 도착지 필드만 자동 입력 함수
+    function fillDestinationFields(order) {
+        setFieldValue('destination_company_name', order.destination_company_name);
+        setFieldValue('destination_contact', order.destination_contact);
+        setFieldValue('destination_department', order.destination_department);
+        setFieldValue('destination_manager', order.destination_manager);
+        setFieldValue('destination_detail', order.detail_address || order.destination_detail);
+        setFieldValue('destination_address', order.destination_address);
+        setFieldValue('destination_dong', order.destination_dong);
+        setFieldValue('destination_lon', order.destination_lon);
+        setFieldValue('destination_lat', order.destination_lat);
+    }
+    
+    // 도착지 팝오버 표시
+    function showRecentDestinationOrdersPopup() {
+        if (recentDestinationOrdersPopup) {
+            recentDestinationOrdersPopup.classList.remove('hidden');
+            setTimeout(function() {
+                recentDestinationOrdersPopup.classList.remove('opacity-0', 'translate-y-[-10px]');
+                recentDestinationOrdersPopup.classList.add('opacity-100', 'translate-y-0');
+                adjustDestinationPopupPosition();
+            }, 10);
+            isDestinationPopupVisible = true;
+        }
+    }
+    
+    // 도착지 팝오버 숨김
+    function hideRecentDestinationOrdersPopup() {
+        if (recentDestinationOrdersPopup) {
+            recentDestinationOrdersPopup.classList.remove('opacity-100', 'translate-y-0');
+            recentDestinationOrdersPopup.classList.add('opacity-0', 'translate-y-[-10px]');
+            setTimeout(function() {
+                recentDestinationOrdersPopup.classList.add('hidden');
+            }, 300);
+            isDestinationPopupVisible = false;
+        }
+    }
+    
+    // 도착지 팝오버 위치 조정
+    function adjustDestinationPopupPosition() {
+        if (!recentDestinationOrdersPopup || !isDestinationPopupVisible) return;
+        
+        const popup = recentDestinationOrdersPopup;
+        const rect = popup.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        
+        popup.style.right = '0';
+        popup.style.left = 'auto';
+        
+        if (rect.bottom > viewportHeight) {
+            popup.style.top = 'auto';
+            popup.style.bottom = '100%';
+            popup.style.marginTop = '0';
+            popup.style.marginBottom = '0.25rem';
+        } else {
+            popup.style.top = '100%';
+            popup.style.bottom = 'auto';
+            popup.style.marginTop = '0.25rem';
+            popup.style.marginBottom = '0';
+        }
+    }
+    
+    // 필드 값 설정 헬퍼 함수
+    function setFieldValue(fieldId, value) {
+        if (value) {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.value = value;
+            }
+        }
+    }
+    
+    // 팝오버 표시
+    function showRecentOrdersPopup() {
+        if (recentOrdersPopup) {
+            recentOrdersPopup.classList.remove('hidden');
+            // 애니메이션을 위해 약간의 지연 후 opacity와 transform 적용
+            setTimeout(function() {
+                recentOrdersPopup.classList.remove('opacity-0', 'translate-y-[-10px]');
+                recentOrdersPopup.classList.add('opacity-100', 'translate-y-0');
+                // 위치 조정
+                adjustPopupPosition();
+            }, 10);
+            isPopupVisible = true;
+        }
+    }
+    
+    // 팝오버 숨김
+    function hideRecentOrdersPopup() {
+        if (recentOrdersPopup) {
+            // 애니메이션 효과 적용
+            recentOrdersPopup.classList.remove('opacity-100', 'translate-y-0');
+            recentOrdersPopup.classList.add('opacity-0', 'translate-y-[-10px]');
+            // 애니메이션 완료 후 hidden 처리
+            setTimeout(function() {
+                recentOrdersPopup.classList.add('hidden');
+            }, 300); // transition duration과 동일하게
+            isPopupVisible = false;
+        }
+    }
+    
+    // HTML 이스케이프 함수
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 });
 </script>

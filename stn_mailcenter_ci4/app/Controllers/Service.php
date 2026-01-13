@@ -596,10 +596,21 @@ class Service extends BaseController
                     $mCode = session()->get('m_code');
                     $ccCode = session()->get('cc_code');
                     $token = session()->get('token');
+                    $apiIdx = session()->get('api_idx');
                     // $userId는 이미 위에서 설정되었으므로 재사용 (tbl_users_list.idx)
                     // 인성 API에는 user_id 문자열을 전달해야 하므로 $insungApiUserId 사용
                     
-                    // m_code, cc_code가 없는 경우 처리 (슈퍼유저 또는 서브도메인 접근)
+                    // api_idx가 있으면 그것으로 API 정보 조회 (로그인 시 선택한 API)
+                    if ($apiIdx) {
+                        $apiInfo = $insungApiListModel->find($apiIdx);
+                        if ($apiInfo) {
+                            $mCode = $apiInfo['mcode'] ?? $mCode;
+                            $ccCode = $apiInfo['cccode'] ?? $ccCode;
+                            $token = $apiInfo['token'] ?? $token;
+                        }
+                    }
+                    
+                    // m_code, cc_code가 여전히 없는 경우 처리 (슈퍼유저 또는 서브도메인 접근)
                     if (empty($mCode) || empty($ccCode)) {
                         // 서브도메인 기반으로 조회 시도
                         $subdomainConfig = config('Subdomain');
@@ -620,13 +631,25 @@ class Service extends BaseController
                         }
                     }
                     
-                    // api_idx 조회 (mcode, cccode로 조회)
-                    $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
-                    $apiIdx = $apiInfo ? $apiInfo['idx'] : null;
+                    // api_idx가 없으면 mcode, cccode로 조회
+                    if (!$apiIdx) {
+                        $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                        $apiIdx = $apiInfo ? $apiInfo['idx'] : null;
+                    }
                     
                     // 토큰이 없으면 DB에서 가져오기
-                    if (empty($token) && $apiInfo) {
-                        $token = $apiInfo['token'] ?? '';
+                    if (empty($token)) {
+                        if ($apiIdx) {
+                            $apiInfo = $insungApiListModel->find($apiIdx);
+                            if ($apiInfo) {
+                                $token = $apiInfo['token'] ?? '';
+                            }
+                        } else {
+                            $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                            if ($apiInfo) {
+                                $token = $apiInfo['token'] ?? '';
+                            }
+                        }
                     }
                     
                     // daumdata 로그인인 경우 인성 API에 전달할 user_id (문자열) 조회
@@ -1408,5 +1431,116 @@ class Service extends BaseController
         }
         
         return $content;
+    }
+    
+    /**
+     * 최근 주문 조회 (출발지 또는 도착지 distinct 10개)
+     * type: 'departure' 또는 'destination'
+     * 
+     * @return \CodeIgniter\HTTP\ResponseInterface
+     */
+    public function getRecentOrdersForDeparture()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+        
+        $type = $this->request->getGet('type') ?? 'departure'; // 'departure' 또는 'destination'
+        
+        $loginType = session()->get('login_type');
+        
+        // 로그인 타입에 따라 user_id 결정
+        if ($loginType === 'daumdata') {
+            $userId = session()->get('user_idx');
+            $insungUserId = session()->get('user_id');
+        } else {
+            $userId = session()->get('user_id');
+            $insungUserId = null;
+        }
+        
+        if (!$userId) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '사용자 정보를 찾을 수 없습니다.'
+            ])->setStatusCode(400);
+        }
+        
+        // tbl_orders에서 본인이 등록한 주문만 조회
+        $db = \Config\Database::connect();
+        
+        if ($type === 'departure') {
+            // 출발지 distinct 조회
+            $builder = $db->table('tbl_orders o');
+            $builder->select('o.save_date, 
+                o.departure_company_name, o.departure_contact, o.departure_department, o.departure_manager,
+                o.departure_detail, o.departure_address, o.departure_dong,
+                o.departure_lat, o.departure_lon');
+            $builder->where('o.user_id', $userId);
+            if ($loginType === 'daumdata' && $insungUserId) {
+                $builder->where('o.insung_user_id', $insungUserId);
+            }
+            $oneMonthAgo = date('Y-m-d H:i:s', strtotime('-1 month'));
+            $builder->where('o.save_date >=', $oneMonthAgo);
+            $builder->where('o.departure_company_name IS NOT NULL');
+            $builder->where('o.departure_company_name !=', '');
+            $builder->groupBy('o.departure_company_name');
+            $builder->orderBy('o.save_date', 'DESC');
+            $builder->limit(10);
+        } else {
+            // 도착지 distinct 조회
+            $builder = $db->table('tbl_orders o');
+            $builder->select('o.save_date, 
+                o.destination_company_name, o.destination_contact, o.destination_department, o.destination_manager,
+                o.detail_address, o.destination_address, o.destination_dong,
+                o.destination_lat, o.destination_lon');
+            $builder->where('o.user_id', $userId);
+            if ($loginType === 'daumdata' && $insungUserId) {
+                $builder->where('o.insung_user_id', $insungUserId);
+            }
+            $oneMonthAgo = date('Y-m-d H:i:s', strtotime('-1 month'));
+            $builder->where('o.save_date >=', $oneMonthAgo);
+            $builder->where('o.destination_company_name IS NOT NULL');
+            $builder->where('o.destination_company_name !=', '');
+            $builder->groupBy('o.destination_company_name');
+            $builder->orderBy('o.save_date', 'DESC');
+            $builder->limit(10);
+        }
+        
+        $query = $builder->get();
+        
+        if ($query === false) {
+            log_message('error', 'Service::getRecentOrdersForDeparture - Query failed');
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '최근 주문 조회에 실패했습니다.',
+                'data' => []
+            ]);
+        }
+        
+        $orders = $query->getResultArray();
+        
+        // 연락처 필드 복호화 처리
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        $phoneField = $type === 'departure' ? 'departure_contact' : 'destination_contact';
+        foreach ($orders as &$order) {
+            // 전화번호 필드 복호화
+            $order = $encryptionHelper->decryptFields($order, [$phoneField]);
+            
+            // 날짜 포맷팅 (Y-m-d H:i:s -> Y-m-d)
+            if (isset($order['save_date'])) {
+                $date = new \DateTime($order['save_date']);
+                $order['save_date'] = $date->format('Y-m-d');
+            }
+        }
+        unset($order);
+        
+        return $this->response->setJSON([
+            'success' => true,
+            'data' => $orders
+        ]);
     }
 }

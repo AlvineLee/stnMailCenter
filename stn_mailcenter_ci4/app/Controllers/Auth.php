@@ -262,7 +262,7 @@ class Auth extends BaseController
                                     $insertResult = $userBuilder->insert($newUserData);
                                     
                                     if ($insertResult) {
-                                        log_message('info', "Auth::processLogin - Auto-registered user from API: user_id={$username}");
+                                        // log_message('info', "Auth::processLogin - Auto-registered user from API: user_id={$username}");
                                         // 다시 인증 시도
                                         $user = $this->insungUsersListModel->authenticate($username, $password);
                                     }
@@ -309,6 +309,7 @@ class Auth extends BaseController
             $selectedApiIdx = $this->request->getPost('selected_api_idx');
             
             // 메인도메인이고 API가 선택된 경우, 선택한 API 정보로 업데이트
+            $apiIdx = null;
             if ($currentSubdomain === 'default' && !empty($selectedApiIdx)) {
                 try {
                     $insungApiListModel = new \App\Models\InsungApiListModel();
@@ -319,9 +320,23 @@ class Auth extends BaseController
                         $mCode = $selectedApiInfo['mcode'] ?? $mCode;
                         $ccCode = $selectedApiInfo['cccode'] ?? $ccCode;
                         $ckey = $selectedApiInfo['ckey'] ?? $ckey;
+                        $apiIdx = $selectedApiIdx; // 선택한 API idx 저장
                     }
                 } catch (\Exception $e) {
                     log_message('error', "Error retrieving selected API info: " . $e->getMessage());
+                }
+            }
+            
+            // api_idx가 없으면 mCode, ccCode로 조회
+            if (!$apiIdx && !empty($mCode) && !empty($ccCode)) {
+                try {
+                    $insungApiListModel = new \App\Models\InsungApiListModel();
+                    $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                    if ($apiInfo && isset($apiInfo['idx'])) {
+                        $apiIdx = $apiInfo['idx'];
+                    }
+                } catch (\Exception $e) {
+                    log_message('error', "Error retrieving API idx: " . $e->getMessage());
                 }
             }
             
@@ -352,7 +367,7 @@ class Auth extends BaseController
                         $newToken = $insungApiService->updateTokenKey($apiIdx);
                         
                         if ($newToken) {
-                            log_message('info', "OAuth token refreshed on login for user: {$username}, api_idx: {$apiIdx}");
+                            // log_message('info', "OAuth token refreshed on login for user: {$username}, api_idx: {$apiIdx}");
                             $user['token'] = $newToken; // 새 토큰으로 업데이트
                         } else {
                             log_message('warning', "OAuth token refresh failed on login for user: {$username}, using existing token");
@@ -388,6 +403,97 @@ class Auth extends BaseController
             $ukey = $randomPrefix . $ckey; // 8글자 + ckey
             $akey = md5($ukey); // ukey를 MD5로 변환
             
+            // 거래처 credit 값 조회 (모든 사용자)
+            $credit = null;
+            $userType = $user['user_type'] ?? '5';
+            // log_message('info', "Auth::processLogin - Checking credit value: user_type={$userType}, user_company=" . ($user['user_company'] ?? 'NULL') . ", mCode=" . ($mCode ?? 'NULL') . ", ccCode=" . ($ccCode ?? 'NULL'));
+            
+            if (!empty($mCode) && !empty($ccCode) && !empty($token) && !empty($user['user_company'])) {
+                try {
+                    $insungApiService = new \App\Libraries\InsungApiService();
+                    // 거래처 목록 조회 (comp_code로 필터링)
+                    // log_message('info', "Auth::processLogin - Calling getCompanyList API: comp_code={$user['user_company']}");
+                    $companyListResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, $user['user_company'], '', 1, 1, $apiIdx);
+                    
+                    // log_message('info', "Auth::processLogin - getCompanyList API response type: " . gettype($companyListResult));
+                    
+                    // API 응답 구조 안전하게 파싱 (Admin::companyEdit와 동일한 구조 사용)
+                    $item = null;
+                    if ($companyListResult !== false) {
+                        // 응답 코드 확인
+                        $code = '';
+                        if (is_object($companyListResult) && isset($companyListResult->Result)) {
+                            $resultArray = is_array($companyListResult->Result) ? $companyListResult->Result : [$companyListResult->Result];
+                            if (isset($resultArray[0]->result_info[0]->code)) {
+                                $code = $resultArray[0]->result_info[0]->code;
+                            } elseif (isset($resultArray[0]->code)) {
+                                $code = $resultArray[0]->code;
+                            }
+                            
+                            // log_message('info', "Auth::processLogin - API response code (object): {$code}");
+                            
+                            // 성공 코드이고 데이터가 있는 경우
+                            if ($code === '1000' && isset($resultArray[2])) {
+                                if (isset($resultArray[2]->items[0]->item)) {
+                                    $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
+                                    if (!empty($items) && isset($items[0])) {
+                                        $item = $items[0];
+                                    }
+                                }
+                            }
+                        } elseif (is_array($companyListResult)) {
+                            if (isset($companyListResult[0]->code)) {
+                                $code = $companyListResult[0]->code;
+                            } elseif (isset($companyListResult[0]['code'])) {
+                                $code = $companyListResult[0]['code'];
+                            }
+                            
+                            // log_message('info', "Auth::processLogin - API response code (array): {$code}");
+                            
+                            // 성공 코드이고 데이터가 있는 경우
+                            if ($code === '1000' && isset($companyListResult[2])) {
+                                if (isset($companyListResult[2]->items[0]->item)) {
+                                    $items = is_array($companyListResult[2]->items[0]->item) ? $companyListResult[2]->items[0]->item : [$companyListResult[2]->items[0]->item];
+                                    if (!empty($items) && isset($items[0])) {
+                                        $item = $items[0];
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // log_message('info', "Auth::processLogin - Item found: " . ($item ? 'yes' : 'no'));
+                        
+                        // credit 값 가져오기 (Admin::companyEdit와 동일한 로직)
+                        if ($item) {
+                            $itemArray = is_object($item) ? (array)$item : $item;
+                            // log_message('info', "Auth::processLogin - Item data: " . json_encode($itemArray, JSON_UNESCAPED_UNICODE));
+                            
+                            if (isset($item->credit) && !empty($item->credit)) {
+                                $credit = $item->credit;
+                                // log_message('info', "Auth::processLogin - Credit value found (object): {$credit}");
+                            } elseif (isset($itemArray['credit']) && !empty($itemArray['credit'])) {
+                                $credit = $itemArray['credit'];
+                                // log_message('info', "Auth::processLogin - Credit value found (array): {$credit}");
+                            } else {
+                                // log_message('info', "Auth::processLogin - Credit value not found in item, using default: 3");
+                                $credit = '3'; // 기본값 (Admin::companyEdit와 동일)
+                            }
+                        } else {
+                            // log_message('info', "Auth::processLogin - No item in API response");
+                        }
+                    } else {
+                        // log_message('info', "Auth::processLogin - API call failed");
+                    }
+                } catch (\Exception $e) {
+                    log_message('error', "Auth::processLogin - Failed to fetch company credit: " . $e->getMessage());
+                    log_message('error', "Auth::processLogin - Exception trace: " . $e->getTraceAsString());
+                }
+            } else {
+                // log_message('info', "Auth::processLogin - Credit check skipped: user_type={$userType}, conditions not met");
+            }
+            
+            // log_message('info', "Auth::processLogin - Final credit value: " . ($credit ?? 'NULL'));
+            
             // 세션에 사용자 정보 저장 (daumdata)
             $userData = [
                 'user_id' => $user['user_id'], // 문자열 user_id (로그인용)
@@ -411,13 +517,15 @@ class Auth extends BaseController
                 'm_code' => $mCode, // 선택한 API의 m_code 또는 기존 값
                 'token' => $token, // 선택한 API의 token 또는 기존 값
                 'ckey' => $ckey, // 선택한 API의 ckey 또는 기존 값
+                'api_idx' => $apiIdx, // 선택한 API의 idx (주문접수, 직원검색 등에서 사용)
                 'ukey' => $ukey, // ukey
                 'akey' => $akey, // akey
-                'user_type' => $user['user_type'] ?? '5', // 메뉴 접근 권한용
+                'user_type' => $userType, // 메뉴 접근 권한용
                 'user_class' => $user['user_class'] ?? '5', // 주문조회 권한용
                 'login_type' => 'daumdata',
                 'is_logged_in' => true,
-                'company_logo_path' => !empty($user['logo_path']) ? $user['logo_path'] : null // 고객사 로고 경로
+                'company_logo_path' => !empty($user['logo_path']) ? $user['logo_path'] : null, // 고객사 로고 경로
+                'credit' => $credit // 거래구분 값 (1:현금, 3:신용, 5:월결제, 7:카드)
             ];
             
             session()->set($userData);
@@ -479,7 +587,7 @@ class Auth extends BaseController
                     
                     if ($userCompanyTrimmed !== $subdomainCompCodeTrimmed) {
                         session()->destroy();
-                        log_message('info', "Login denied: user_company({$userCompanyTrimmed}) != subdomain_comp_code({$subdomainCompCodeTrimmed}) for user: {$username}");
+                        // log_message('info', "Login denied: user_company({$userCompanyTrimmed}) != subdomain_comp_code({$subdomainCompCodeTrimmed}) for user: {$username}");
                         
                         // 사용자의 고객사명 조회
                         $userCompanyName = '';
@@ -726,6 +834,12 @@ class Auth extends BaseController
         try {
             $db = \Config\Database::connect();
             
+            // 테이블 존재 여부 확인
+            if (!$db->tableExists('tbl_employee_search_queue')) {
+                log_message('warning', "Auth::syncInsungEmployeesViaCLI - tbl_employee_search_queue table does not exist. Skipping queue registration.");
+                return;
+            }
+            
             // 큐에 등록
             $queueData = [
                 'api_idx' => $apiIdx,
@@ -767,7 +881,7 @@ class Auth extends BaseController
             // 명령어 실행
             exec($command);
             
-            log_message('info', "Insung employees search queue created on login: queue_idx={$queueIdx}, comp_code={$compCode}");
+            // log_message('info', "Insung employees search queue created on login: queue_idx={$queueIdx}, comp_code={$compCode}");
             
         } catch (\Exception $e) {
             log_message('error', "Exception in syncInsungEmployeesViaCLI: " . $e->getMessage());

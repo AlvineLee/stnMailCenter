@@ -168,5 +168,136 @@ class EncryptionHelper
         }
         return $data;
     }
+    
+    /**
+     * 전화번호 마스킹 처리
+     * 앞 3자리와 뒤 4자리를 제외한 가운데 숫자만 마스킹
+     * 
+     * @param string $phone 전화번호
+     * @return string 마스킹된 전화번호 (앞 3자리 + 가운데 마스킹 + 뒤 4자리)
+     */
+    public function maskPhone($phone)
+    {
+        if (empty($phone) || $phone === '-') {
+            return $phone;
+        }
+        
+        // 전화번호에서 숫자만 추출
+        $numbers = preg_replace('/\D/', '', $phone);
+        $numberLength = strlen($numbers);
+        
+        if ($numberLength < 7) {
+            // 7자리 미만이면 마스킹하지 않음
+            return $phone;
+        }
+        
+        // 앞 3자리
+        $first3 = substr($numbers, 0, 3);
+        // 뒤 4자리
+        $last4 = substr($numbers, -4);
+        // 가운데 부분 (마스킹 대상)
+        $middle = substr($numbers, 3, $numberLength - 7);
+        $middleMasked = str_repeat('*', strlen($middle));
+        
+        // 항상 하이픈 포함하여 마스킹 (010-XXXX-5678 형식)
+        return $first3 . '-' . $middleMasked . '-' . $last4;
+    }
+    
+    /**
+     * 주소 마스킹 처리
+     * 시/도, 시/군/구까지만 표시하고 나머지는 마스킹
+     * 
+     * @param string $address 주소
+     * @return string 마스킹된 주소
+     */
+    public function maskAddress($address)
+    {
+        if (empty($address) || $address === '-') {
+            return $address;
+        }
+        
+        // 주소를 공백으로 분리
+        $parts = preg_split('/\s+/', trim($address));
+        
+        if (count($parts) <= 2) {
+            // 시/도, 시/군/구만 있거나 그 이하인 경우 전체 마스킹
+            $length = mb_strlen($address, 'UTF-8');
+            return mb_substr($address, 0, min(6, $length), 'UTF-8') . str_repeat('*', max(0, $length - 6));
+        }
+        
+        // 시/도, 시/군/구까지만 표시 (최대 2개 단어)
+        $visibleParts = array_slice($parts, 0, 2);
+        $visibleText = implode(' ', $visibleParts);
+        
+        // 나머지 부분은 마스킹 (원본 주소 길이 유지)
+        $totalLength = mb_strlen($address, 'UTF-8');
+        $visibleLength = mb_strlen($visibleText, 'UTF-8');
+        $maskLength = max(3, $totalLength - $visibleLength - 1); // 최소 3자리 마스킹
+        
+        return $visibleText . ' ' . str_repeat('*', $maskLength);
+    }
+    
+    /**
+     * 금액 마스킹 처리
+     * 뒷자리 3개를 제외한 앞자리 전체를 마스킹
+     * 
+     * @param string $amount 금액 (예: "50,000원", "100000원")
+     * @return string 마스킹된 금액
+     */
+    public function maskAmount($amount)
+    {
+        if (empty($amount) || $amount === '-') {
+            return $amount;
+        }
+        
+        // 숫자만 추출
+        $numbers = preg_replace('/\D/', '', $amount);
+        
+        if (empty($numbers) || strlen($numbers) < 3) {
+            // 숫자가 없거나 3자리 미만이면 전체 마스킹
+            return str_repeat('*', mb_strlen($amount, 'UTF-8'));
+        }
+        
+        // 뒷자리 3개만 표시
+        $last3 = substr($numbers, -3);
+        $prefixLength = strlen($numbers) - 3;
+        
+        // 원본에 "원"이 있으면 유지
+        $hasWon = (strpos($amount, '원') !== false);
+        
+        // 원본에 쉼표가 있으면 쉼표 위치 유지
+        $hasComma = (strpos($amount, ',') !== false);
+        
+        if ($hasComma) {
+            // 쉼표가 있는 경우: ***,000원 형식
+            $masked = str_repeat('*', $prefixLength) . ',' . $last3;
+        } else {
+            // 쉼표가 없는 경우: ***000원 형식
+            $masked = str_repeat('*', $prefixLength) . $last3;
+        }
+        
+        if ($hasWon) {
+            return $masked . '원';
+        } else {
+            return $masked;
+        }
+    }
+    
+    /**
+     * 배열의 특정 필드들을 마스킹 처리
+     * 
+     * @param array $data 데이터 배열
+     * @param array $fields 마스킹할 필드명 배열
+     * @return array 마스킹된 데이터 배열
+     */
+    public function maskFields(array $data, array $fields)
+    {
+        foreach ($fields as $field) {
+            if (isset($data[$field]) && !empty($data[$field]) && $data[$field] !== '-') {
+                $data[$field] = $this->maskPhone($data[$field]);
+            }
+        }
+        return $data;
+    }
 }
 

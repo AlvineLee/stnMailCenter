@@ -967,6 +967,17 @@ td.text-center {
     text-align: center !important;
 }
 
+/* 테이블 헤더 및 셀 오른쪽 정렬 */
+.list-table-container th.text-right,
+th.text-right {
+    text-align: right !important;
+}
+
+.list-table-container td.text-right,
+td.text-right {
+    text-align: right !important;
+}
+
 .list-table-container tbody tr {
     background: #fafafa !important;
 }

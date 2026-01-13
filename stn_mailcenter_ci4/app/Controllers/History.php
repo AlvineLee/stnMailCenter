@@ -88,40 +88,56 @@ class History extends BaseController
         
         // user_class는 세션에서 가져오거나 DB에서 조회 (주문조회 권한용)
         $userClass = session()->get('user_class');
+        $userDept = session()->get('user_dept');
         if (empty($userClass) && $loginType === 'daumdata') {
             $userId = session()->get('user_id');
             if ($userId) {
                 $db = \Config\Database::connect();
                 $userBuilder = $db->table('tbl_users_list');
-                $userBuilder->select('user_class');
+                $userBuilder->select('user_class, user_dept');
                 $userBuilder->where('user_id', $userId);
                 $userQuery = $userBuilder->get();
                 if ($userQuery !== false) {
                     $userResult = $userQuery->getRowArray();
-                    if ($userResult && isset($userResult['user_class'])) {
-                        $userClass = $userResult['user_class'];
+                    if ($userResult) {
+                        if (isset($userResult['user_class'])) {
+                            $userClass = $userResult['user_class'];
+                        }
+                        if (isset($userResult['user_dept'])) {
+                            $userDept = $userResult['user_dept'];
+                        }
                     }
                 }
             }
         }
         
-        // user_class별 필터링 (주문조회 권한): user_class=1(관리자) 또는 user_class=3(부서장)은 전체 조회
+        // user_class별 필터링 (주문조회 권한)
+        // user_type과 user_class는 별개로 판단
+        // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한
         if ($loginType === 'daumdata') {
-            // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
-            if ($userIdx) {
-                $filters['user_idx'] = $userIdx;
-            }
-            if ($userId) {
-                $filters['user_id'] = $userId;
-            }
-            
-            if ($userClass == '1' || $userClass == '3') {
-                // user_class = 1(관리자) 또는 3(부서장): 전체 주문 리스트
+            if ($userClass == '1' || $userClass == '2') {
+                // user_class = 1,2: 전체 주문 리스트 (dept_name 필터 없음, user_type과 관계없이)
                 // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null;
+            } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
+                // user_class = 3 이상: 부서명으로 필터링
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null;
+                $filters['user_dept'] = $userDept; // 부서명 필터 추가
+            } elseif ($userClass == '3') {
+                // user_class = 3(부서장): 전체 주문 리스트 (dept_name이 없을 경우)
                 $filters['user_type'] = '1';
                 $filters['customer_id'] = null;
             } elseif ($userClass == '5') {
                 // user_class = 5(일반): 같은 회사(comp_code)의 모든 주문 조회
+                // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
+                if ($userIdx) {
+                    $filters['user_idx'] = $userIdx;
+                }
+                if ($userId) {
+                    $filters['user_id'] = $userId;
+                }
                 $filters['user_type'] = '5';
                 $filters['user_company'] = $userCompany; // 같은 회사의 모든 주문 조회
             } else {
@@ -133,6 +149,13 @@ class History extends BaseController
                     $filters['user_type'] = '3';
                     $filters['user_company'] = $userCompany;
                 } elseif ($userType == '5') {
+                    // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
+                    if ($userIdx) {
+                        $filters['user_idx'] = $userIdx;
+                    }
+                    if ($userId) {
+                        $filters['user_id'] = $userId;
+                    }
                     $filters['user_type'] = '5';
                     $filters['user_company'] = $userCompany;
                 }
@@ -178,10 +201,70 @@ class History extends BaseController
         }
         unset($order); // 참조 해제
         
+        // 사용자 권한 정보 (마스킹 처리용)
+        $loginType = session()->get('login_type');
+        $userClass = session()->get('user_class');
+        $userType = session()->get('user_type');
+        $loginUserId = session()->get('user_id'); // 로그인한 user_id
+        
+        // user_class가 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata' && $loginUserId) {
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('user_class');
+            $userBuilder->where('user_id', $loginUserId);
+            $userQuery = $userBuilder->get();
+            if ($userQuery !== false) {
+                $userResult = $userQuery->getRowArray();
+                if ($userResult && isset($userResult['user_class'])) {
+                    $userClass = $userResult['user_class'];
+                }
+            }
+        }
+        
+        // user_type 결정 (user_class 우선, 없으면 user_type 사용)
+        $finalUserType = '1';
+        if ($loginType === 'daumdata') {
+            if ($userClass == '1' || $userClass == '3') {
+                $finalUserType = '1';
+            } elseif ($userClass == '5') {
+                $finalUserType = '5';
+            } else {
+                $finalUserType = $userType ?? '1';
+            }
+        }
+        
         // 주문 데이터 포맷팅 (뷰 로직을 컨트롤러로 이동)
         $formattedOrders = [];
+        $loginUserId = session()->get('user_id'); // 로그인한 user_id (본인 접수 여부 확인용)
+        
         foreach ($orders as $order) {
             $formattedOrder = $order;
+            
+            // 본인 접수 여부 확인
+            $isOwnOrder = false;
+            if ($loginUserId && isset($order['insung_user_id']) && !empty($order['insung_user_id'])) {
+                $isOwnOrder = ($loginUserId === (string)$order['insung_user_id']);
+            }
+            
+            // 본인이 접수한 주문이 아닌 경우에만 마스킹 처리
+            if (!$isOwnOrder) {
+                // 이용내역 상세조회 리스트: 출발전화번호, 도착전화번호 마스킹
+                if (isset($formattedOrder['departure_contact']) && !empty($formattedOrder['departure_contact']) && $formattedOrder['departure_contact'] !== '-') {
+                    $formattedOrder['departure_contact'] = $encryptionHelper->maskPhone($formattedOrder['departure_contact']);
+                }
+                if (isset($formattedOrder['destination_contact']) && !empty($formattedOrder['destination_contact']) && $formattedOrder['destination_contact'] !== '-') {
+                    $formattedOrder['destination_contact'] = $encryptionHelper->maskPhone($formattedOrder['destination_contact']);
+                }
+                
+                // 이용내역 상세조회 리스트: 출발지 주소, 도착지 주소 마스킹
+                if (isset($formattedOrder['departure_address']) && !empty($formattedOrder['departure_address']) && $formattedOrder['departure_address'] !== '-') {
+                    $formattedOrder['departure_address'] = $encryptionHelper->maskAddress($formattedOrder['departure_address']);
+                }
+                if (isset($formattedOrder['destination_address']) && !empty($formattedOrder['destination_address']) && $formattedOrder['destination_address'] !== '-') {
+                    $formattedOrder['destination_address'] = $encryptionHelper->maskAddress($formattedOrder['destination_address']);
+                }
+            }
             
             // 날짜/시간 포맷팅
             $orderDate = $order['order_date'] ?? '';
@@ -295,6 +378,17 @@ class History extends BaseController
             $formattedOrder['delivery_cost_formatted'] = $order['delivery_cost'] ? number_format($order['delivery_cost']) . '원' : '-';
             $formattedOrder['total_amount_formatted'] = $order['total_amount'] ? number_format($order['total_amount']) . '원' : '-';
             
+            // 본인이 접수한 주문이 아닌 경우 금액 마스킹 처리 (포맷팅 이후)
+            if (!$isOwnOrder) {
+                // 이용내역 상세조회 리스트: 기본요금, 정산금액 마스킹
+                if (isset($formattedOrder['total_fare_formatted']) && !empty($formattedOrder['total_fare_formatted']) && $formattedOrder['total_fare_formatted'] !== '-') {
+                    $formattedOrder['total_fare_formatted'] = $encryptionHelper->maskAmount($formattedOrder['total_fare_formatted']);
+                }
+                if (isset($formattedOrder['total_amount_formatted']) && !empty($formattedOrder['total_amount_formatted']) && $formattedOrder['total_amount_formatted'] !== '-') {
+                    $formattedOrder['total_amount_formatted'] = $encryptionHelper->maskAmount($formattedOrder['total_amount_formatted']);
+                }
+            }
+            
             // 채널 라벨 변환
             $channelLabels = [
                 'A' => 'API접수',
@@ -338,6 +432,17 @@ class History extends BaseController
                 $mCode = session()->get('m_code');
                 $ccCode = session()->get('cc_code');
                 $userId = session()->get('user_id');
+                $apiIdx = session()->get('api_idx');
+                
+                // api_idx가 있으면 그것으로 API 정보 조회 (로그인 시 선택한 API)
+                if ($apiIdx) {
+                    $insungApiListModel = new \App\Models\InsungApiListModel();
+                    $apiInfo = $insungApiListModel->find($apiIdx);
+                    if ($apiInfo) {
+                        $mCode = $apiInfo['mcode'] ?? $mCode;
+                        $ccCode = $apiInfo['cccode'] ?? $ccCode;
+                    }
+                }
                 
                 // m_code, cc_code가 없는 경우 서브도메인 기반으로 조회
                 if (empty($mCode) || empty($ccCode)) {
@@ -348,7 +453,7 @@ class History extends BaseController
                         $mCode = $apiCodes['m_code'];
                         $ccCode = $apiCodes['cc_code'];
                         $subdomain = $subdomainConfig->getCurrentSubdomain();
-                        log_message('info', "History list - Subdomain access ({$subdomain}) - Using mcode={$mCode}, cccode={$ccCode}");
+                        // log_message('info', "History list - Subdomain access ({$subdomain}) - Using mcode={$mCode}, cccode={$ccCode}");
                     }
                 }
                 
@@ -553,6 +658,333 @@ class History extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => '컬럼 순서 저장에 실패했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 인성 API 주문 상세 조회
+     */
+    public function getOrderDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $serialNumber = $this->request->getGet('serial_number') ?? $this->request->getGet('order_number');
+        
+        if (empty($serialNumber)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문번호가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+        
+        // DB에서 주문의 insung_user_id 조회 (본인 접수 여부 확인용)
+        $orderInsungUserId = '';
+        try {
+            $db = \Config\Database::connect();
+            $orderBuilder = $db->table('tbl_orders');
+            $orderBuilder->select('insung_user_id');
+            $orderBuilder->where('insung_order_number', $serialNumber);
+            $orderQuery = $orderBuilder->get();
+            if ($orderQuery !== false) {
+                $orderResult = $orderQuery->getRowArray();
+                if ($orderResult && !empty($orderResult['insung_user_id'])) {
+                    $orderInsungUserId = (string)$orderResult['insung_user_id'];
+                }
+            }
+        } catch (\Exception $e) {
+            log_message('error', "History::getOrderDetail - Error getting insung_user_id from DB: " . $e->getMessage());
+        }
+
+        // API 정보 조회
+        $mCode = session()->get('m_code');
+        $ccCode = session()->get('cc_code');
+        $token = session()->get('token');
+        $apiIdx = session()->get('api_idx');
+        $userId = session()->get('user_id') ?? '';
+        
+        // 세션에 없으면 서브도메인 또는 DB에서 조회
+        if (!$mCode || !$ccCode || !$token || !$apiIdx) {
+            $subdomainConfig = config('Subdomain');
+            $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+            
+            // 서브도메인이 있으면 서브도메인 기반으로 조회
+            if ($currentSubdomain && $currentSubdomain !== 'default') {
+                $apiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+                
+                if ($apiInfo) {
+                    $mCode = $apiInfo['m_code'] ?? $mCode;
+                    $ccCode = $apiInfo['cc_code'] ?? $ccCode;
+                    $token = $apiInfo['token'] ?? $token;
+                    $apiIdx = $apiInfo['api_idx'] ?? $apiIdx;
+                    
+                    // 세션에 저장
+                    session()->set('m_code', $mCode);
+                    session()->set('cc_code', $ccCode);
+                    session()->set('token', $token);
+                    session()->set('api_idx', $apiIdx);
+                }
+            } else {
+                // 서브도메인이 없으면 세션의 user_company 또는 cc_code로 조회
+                $userCompany = session()->get('user_company');
+                $ccCodeFromSession = session()->get('cc_code');
+                
+                if ($userCompany || $ccCodeFromSession) {
+                    $insungApiListModel = new \App\Models\InsungApiListModel();
+                    
+                    if ($ccCodeFromSession) {
+                        // cc_code로 조회
+                        $apiInfo = $insungApiListModel->getApiInfoByCcCode($ccCodeFromSession);
+                    } elseif ($userCompany) {
+                        // user_company로 조회 (comp_code -> cc_code -> api_info)
+                        try {
+                            $db = \Config\Database::connect();
+                            $compBuilder = $db->table('tbl_company_list c');
+                            $compBuilder->select('
+                                d.idx as api_idx,
+                                d.mcode as m_code,
+                                d.cccode as cc_code,
+                                d.token
+                            ');
+                            $compBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+                            $compBuilder->join('tbl_api_list d', 'cc.cc_apicode = d.idx', 'inner');
+                            $compBuilder->where('c.comp_code', $userCompany);
+                            $compQuery = $compBuilder->get();
+                            
+                            if ($compQuery !== false) {
+                                $apiInfo = $compQuery->getRowArray();
+                            }
+                        } catch (\Exception $e) {
+                            log_message('error', 'History::getOrderDetail - Error getting API info: ' . $e->getMessage());
+                            $apiInfo = null;
+                        }
+                    }
+                    
+                    if ($apiInfo) {
+                        $mCode = $apiInfo['m_code'] ?? $apiInfo['mcode'] ?? $mCode;
+                        $ccCode = $apiInfo['cc_code'] ?? $apiInfo['cccode'] ?? $ccCode;
+                        $token = $apiInfo['token'] ?? $token;
+                        $apiIdx = $apiInfo['api_idx'] ?? $apiInfo['idx'] ?? $apiIdx;
+                        
+                        // 세션에 저장
+                        session()->set('m_code', $mCode);
+                        session()->set('cc_code', $ccCode);
+                        session()->set('token', $token);
+                        session()->set('api_idx', $apiIdx);
+                    }
+                }
+            }
+        }
+
+        if (!$mCode || !$ccCode || !$token || !$apiIdx) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보가 설정되지 않았습니다.'
+            ])->setStatusCode(500);
+        }
+
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+            
+            // 인성 API 주문 상세 조회
+            $orderDetailResult = $insungApiService->getOrderDetail($mCode, $ccCode, $token, $userId, $serialNumber, $apiIdx);
+            
+            // API 응답 로그 출력
+            // log_message('info', "History::getOrderDetail - API Response: " . json_encode($orderDetailResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            
+            if (!$orderDetailResult || !isset($orderDetailResult['success']) || !$orderDetailResult['success']) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $orderDetailResult['message'] ?? '주문 상세 정보를 가져올 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            $orderData = $orderDetailResult['data'] ?? null;
+            
+            // 원본 API 응답 데이터도 로그 출력
+            if ($orderData) {
+                // log_message('info', "History::getOrderDetail - API Raw Data: " . json_encode($orderData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            }
+            
+            if (!$orderData || !is_array($orderData)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 상세 데이터가 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 인성 API 응답 구조: 배열 형태로 여러 객체가 들어있음
+            // 모든 필드를 평탄화하여 추출
+            $flattenData = function($data, $prefix = '') use (&$flattenData) {
+                $result = [];
+                
+                if (is_array($data)) {
+                    foreach ($data as $key => $value) {
+                        $newKey = $prefix ? ($prefix . '_' . $key) : $key;
+                        
+                        if (is_array($value) || is_object($value)) {
+                            // 중첩된 배열/객체는 재귀적으로 처리
+                            $nested = $flattenData($value, $newKey);
+                            $result = array_merge($result, $nested);
+                        } else {
+                            $result[$newKey] = $value;
+                        }
+                    }
+                } elseif (is_object($data)) {
+                    foreach ($data as $key => $value) {
+                        $newKey = $prefix ? ($prefix . '_' . $key) : $key;
+                        
+                        if (is_array($value) || is_object($value)) {
+                            // 중첩된 배열/객체는 재귀적으로 처리
+                            $nested = $flattenData($value, $newKey);
+                            $result = array_merge($result, $nested);
+                        } else {
+                            $result[$newKey] = $value;
+                        }
+                    }
+                }
+                
+                return $result;
+            };
+            
+            // 전체 응답 데이터를 평탄화
+            // 배열의 각 객체를 하나의 객체로 병합 (접두사 없이)
+            $allFields = [];
+            
+            // $orderData가 배열인지 확인
+            if (is_array($orderData)) {
+                // 배열의 각 인덱스별로 처리
+                foreach ($orderData as $index => $item) {
+                    if (is_array($item) || is_object($item)) {
+                        // 각 객체의 키를 직접 병합 (접두사 없이)
+                        foreach ($item as $key => $value) {
+                            // code, msg 같은 메타 정보는 제외
+                            if ($key === 'code' || $key === 'msg') {
+                                continue;
+                            }
+                            // 이미 존재하는 키는 덮어쓰지 않음 (첫 번째 값 우선)
+                            if (!isset($allFields[$key]) || empty($allFields[$key])) {
+                                $allFields[$key] = $value;
+                            }
+                        }
+                    } else {
+                        $allFields["index_{$index}"] = $item;
+                    }
+                }
+            } elseif (is_object($orderData)) {
+                // 객체인 경우 직접 변환
+                foreach ($orderData as $key => $value) {
+                    if ($key !== 'code' && $key !== 'msg') {
+                        $allFields[$key] = $value;
+                    }
+                }
+            } else {
+                // 배열도 객체도 아닌 경우
+                log_message('error', "History::getOrderDetail - orderData is not array or object: " . gettype($orderData));
+            }
+            
+            // serial_number 추가
+            $allFields['serial_number'] = $serialNumber;
+            $allFields['order_number'] = $serialNumber;
+            
+            // 사용자 권한 정보 (마스킹 처리용)
+            $loginType = session()->get('login_type');
+            $userClass = session()->get('user_class');
+            $userType = session()->get('user_type');
+            $loginUserId = session()->get('user_id'); // 로그인한 user_id
+            
+            // user_class가 없으면 DB에서 조회
+            if (empty($userClass) && $loginType === 'daumdata' && $loginUserId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_class');
+                $userBuilder->where('user_id', $loginUserId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['user_class'])) {
+                        $userClass = $userResult['user_class'];
+                    }
+                }
+            }
+            
+            // user_type 결정 (user_class 우선, 없으면 user_type 사용)
+            $finalUserType = '1';
+            if ($loginType === 'daumdata') {
+                if ($userClass == '1' || $userClass == '3') {
+                    $finalUserType = '1';
+                } elseif ($userClass == '5') {
+                    $finalUserType = '5';
+                } else {
+                    $finalUserType = $userType ?? '1';
+                }
+            }
+            
+            // 주문의 insung_user_id는 이미 DB에서 조회한 값 사용 ($orderInsungUserId)
+            // 디버깅용 로그
+            $isOwnOrder = ($loginUserId && $orderInsungUserId && $loginUserId === $orderInsungUserId);
+            // log_message('info', "History::getOrderDetail - Masking check: finalUserType={$finalUserType}, loginUserId={$loginUserId}, orderInsungUserId={$orderInsungUserId}, isOwnOrder=" . ($isOwnOrder ? 'YES' : 'NO') . ", shouldMask=" . ($finalUserType === '5' && $loginUserId && !$isOwnOrder ? 'YES' : 'NO'));
+            
+            // 마스킹 처리용 정보 추가
+            $allFields['user_type'] = $finalUserType;
+            $allFields['login_user_id'] = $loginUserId;
+            $allFields['order_insung_user_id'] = $orderInsungUserId;
+            
+            // 팝업에서 마스킹 처리 (user_type=5이고 본인이 접수한 것이 아닌 경우)
+            // DB에서 조회한 insung_user_id와 로그인한 user_id를 비교
+            $shouldMask = false;
+            if ($finalUserType === '5' && $loginUserId) {
+                if (empty($orderInsungUserId)) {
+                    // insung_user_id가 없으면 무조건 마스킹 (안전을 위해)
+                    $shouldMask = true;
+                } elseif ($loginUserId !== $orderInsungUserId) {
+                    // 본인이 접수한 것이 아니면 마스킹
+                    $shouldMask = true;
+                }
+                // 본인이 접수한 경우 ($loginUserId === $orderInsungUserId)는 마스킹하지 않음
+            }
+            
+            if ($shouldMask) {
+                $encryptionHelper = new \App\Libraries\EncryptionHelper();
+                
+                // 전화번호 마스킹
+                $phoneFields = ['customer_tel_number', 'rider_tel_number', 'departure_tel_number', 'destination_tel_number', 'happy_call'];
+                foreach ($phoneFields as $field) {
+                    if (isset($allFields[$field]) && !empty($allFields[$field]) && $allFields[$field] !== '-') {
+                        $allFields[$field] = $encryptionHelper->maskPhone($allFields[$field]);
+                    }
+                }
+                
+                // 주소 마스킹
+                $addressFields = ['departure_address', 'destination_address'];
+                foreach ($addressFields as $field) {
+                    if (isset($allFields[$field]) && !empty($allFields[$field]) && $allFields[$field] !== '-') {
+                        $allFields[$field] = $encryptionHelper->maskAddress($allFields[$field]);
+                    }
+                }
+                
+                // log_message('info', "History::getOrderDetail - Masking applied to phone and address fields");
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $allFields,
+                'raw_data' => $orderData // 원본 데이터도 함께 전달 (디버깅용)
+            ]);
+            
+        } catch (\Exception $e) {
+            log_message('error', "History::getOrderDetail - Error: " . $e->getMessage());
+            log_message('error', "History::getOrderDetail - Stack trace: " . $e->getTraceAsString());
+            log_message('error', "History::getOrderDetail - File: " . $e->getFile() . ", Line: " . $e->getLine());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 상세 정보 조회 중 오류가 발생했습니다: ' . $e->getMessage()
             ])->setStatusCode(500);
         }
     }

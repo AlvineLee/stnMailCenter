@@ -58,7 +58,7 @@ class DashboardModel extends Model
     /**
      * 주문 통계 조회
      */
-    public function getOrderStats($customerId, $userRole, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null)
+    public function getOrderStats($customerId, $userRole, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null, $userDept = null)
     {
         $today = date('Y-m-d');
         $builder = $this->db->table('tbl_orders o');
@@ -132,6 +132,11 @@ class DashboardModel extends Model
             }
         }
         
+        // user_dept 필터링 (user_class 3 이상일 때)
+        if ($userDept && !empty($userDept) && $loginType === 'daumdata') {
+            $builder->where('u_list.user_dept', $userDept);
+        }
+        
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
         if ($compCodeForEnv && $loginUserId) {
             $envBuilder = $this->db->table('tbl_company_env');
@@ -189,6 +194,11 @@ class DashboardModel extends Model
                 $statusBuilder->where('o.order_system', 'insung');
                 $statusBuilder->where('u_list.user_company', $subdomainCompCode);
             }
+        }
+        
+        // user_dept 필터링 (user_class 3 이상일 때)
+        if ($userDept && !empty($userDept) && $loginType === 'daumdata') {
+            $statusBuilder->where('u_list.user_dept', $userDept);
         }
         
         // 서브도메인 필터가 없을 때만 일반 필터 적용 (배송조회와 동일)
@@ -306,6 +316,11 @@ class DashboardModel extends Model
             }
         }
         
+        // user_dept 필터링 (user_class 3 이상일 때)
+        if ($userDept && !empty($userDept) && $loginType === 'daumdata') {
+            $todayBuilder->where('u_list.user_dept', $userDept);
+        }
+        
         // 서브도메인 필터가 없을 때만 일반 필터 적용 (배송조회와 동일)
         if (!$hasSubdomainFilter) {
             // 권한에 따른 필터링
@@ -341,7 +356,7 @@ class DashboardModel extends Model
     /**
      * 최근 주문 조회
      */
-    public function getRecentOrders($customerId, $userRole, $limit = 10, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null)
+    public function getRecentOrders($customerId, $userRole, $limit = 10, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null, $userDept = null)
     {
         $builder = $this->db->table('tbl_orders o');
         
@@ -470,6 +485,11 @@ class DashboardModel extends Model
             } elseif ($customerId) {
                 $builder->where('o.customer_id', $customerId);
             }
+        }
+        
+        // user_dept 필터링 (user_class 3 이상일 때)
+        if ($userDept && !empty($userDept) && $loginType === 'daumdata') {
+            $builder->where('u_list.user_dept', $userDept);
         }
         
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링

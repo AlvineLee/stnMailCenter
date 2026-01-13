@@ -86,6 +86,25 @@
             $loginType = session()->get('login_type');
             $userRole = session()->get('user_role');
             $userType = session()->get('user_type');
+            $userClass = session()->get('user_class');
+            
+            // user_class가 세션에 없으면 DB에서 조회
+            if (empty($userClass) && $loginType === 'daumdata') {
+                $userId = session()->get('user_id');
+                if ($userId) {
+                    $db = \Config\Database::connect();
+                    $userBuilder = $db->table('tbl_users_list');
+                    $userBuilder->select('user_class');
+                    $userBuilder->where('user_id', $userId);
+                    $userQuery = $userBuilder->get();
+                    if ($userQuery !== false) {
+                        $userResult = $userQuery->getRowArray();
+                        if ($userResult && isset($userResult['user_class'])) {
+                            $userClass = $userResult['user_class'];
+                        }
+                    }
+                }
+            }
             
             $isSuperAdmin = false;
             if ($loginType === 'daumdata' && $userType == '1') {
@@ -217,8 +236,8 @@
             <?php
                 endif;
                 
-                // 콜센터 관리자 메뉴 (user_type = 3) - 거래처관리만
-                if ($userType == '3'):
+                // 콜센터 관리자 메뉴 (user_type = 3) 또는 거래처 관리자 메뉴 (user_class = 1) - 거래처관리만
+                if ($userType == '3' || $userClass == '1'):
             ?>
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">

@@ -115,6 +115,11 @@ class DeliveryModel extends Model
                 ->groupEnd();
             }
             
+            // user_dept 필터링 (user_class 3 이상일 때)
+            if (isset($filters['user_dept']) && !empty($filters['user_dept'])) {
+                $builder->where('u_list.user_dept', $filters['user_dept']);
+            }
+            
             // 서브도메인 필터가 있을 때 user_type별 추가 필터링
             if (isset($filters['user_type'])) {
                 if ($filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
@@ -158,6 +163,10 @@ class DeliveryModel extends Model
                 }
                 // user_type = 1: 서브도메인 필터만 적용 (추가 필터 없음)
             }
+        }
+        // user_dept 필터링 (서브도메인 필터가 없을 때, user_class 3 이상일 때)
+        if (isset($filters['user_dept']) && !empty($filters['user_dept'])) {
+            $builder->where('u_list.user_dept', $filters['user_dept']);
         }
         // 서브도메인 필터가 없을 때 daumdata 로그인 필터링
         elseif (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {

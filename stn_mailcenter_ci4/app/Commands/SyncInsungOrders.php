@@ -98,36 +98,27 @@ class SyncInsungOrders extends BaseCommand
             CLI::write("주문 목록 조회 중...", 'yellow');
             
             // user_class별 파라미터 설정 (주문조회 권한)
-            // 인성 API는 comp_no가 없으면 NO-DATA를 반환하므로, user_class=3(부서장)일 때도 compCode 전달
-            // 단, DB 조회 시에는 user_class=3이면 전체 조회로 처리
-            // user_class=1(관리자): compCode 전달 안함 (전체 조회 시도, 실패할 수 있음)
-            // user_class=3(부서장): compCode 전달 (해당 거래처 주문 조회)
-            // user_class=5(일반): compCode 전달 (해당 거래처 주문 조회)
-            $apiCompCode = null;
-            if ($userClass == '1') {
-                // 관리자: 전체 조회 시도 (compCode 전달 안함)
-                CLI::write("전체 조회 모드 (user_class=1)", 'green');
-            } else {
-                // 부서장(3) 또는 일반(5): 해당 거래처만 조회
-                $apiCompCode = $compCode;
-                if (!empty($compCode)) {
-                    CLI::write("거래처 코드: {$compCode} (user_class={$userClass})", 'green');
-                }
+            // user_type과 user_class는 별개로 판단
+            // comp_no(거래처번호)는 항상 전달해야 함
+            // user_class=1,2일 때는 dept_name 파라미터만 전달하지 않음 (전체 조회)
+            // user_class=3 이상일 때는 dept_name 파라미터 전달 (부서별 조회)
+            $apiCompCode = $compCode; // comp_no는 항상 전달
+            if (!empty($compCode)) {
+                CLI::write("거래처 코드: {$compCode} (user_class={$userClass})", 'green');
             }
             
-            // user_type별 파라미터 설정 - 주석처리 (API 데이터 못 가져오는 문제로 임시 비활성화)
+            // user_class별 파라미터 설정
             $staffCode = null;
+            // CLI 연동 시에는 부서명 파라미터를 전달하지 않음 (DB 조회 시에만 user_dept 필터링 적용)
             $deptName = null;
             
-            // if ($userType == '5' && !empty($userCode)) {
-            //     // user_type = 5: staff_code 사용
-            //     $staffCode = $userCode;
-            //     CLI::write("사용자 타입: 5, staff_code: {$userCode}", 'green');
-            // } elseif ($userType == '3' && !empty($userDept)) {
-            //     // user_type = 3: dept_name 사용
-            //     $deptName = $userDept;
-            //     CLI::write("사용자 타입: 3, dept_name: {$userDept}", 'green');
-            // }
+            // user_type = 5일 때 staff_code 사용 (user_class=1,2일 때는 제외)
+            if ($userType == '5' && !empty($userCode) && $userClass != '1' && $userClass != '2') {
+                $staffCode = $userCode;
+                CLI::write("사용자 코드 파라미터 추가: staff_code={$userCode} (user_type=5, user_class={$userClass})", 'green');
+            } elseif ($userType == '5' && ($userClass == '1' || $userClass == '2')) {
+                CLI::write("사용자 코드 파라미터 제외 (user_type=5, user_class={$userClass})", 'yellow');
+            }
 
             // 본인오더조회(env1=3) 확인
             $db = \Config\Database::connect();
@@ -152,8 +143,9 @@ class SyncInsungOrders extends BaseCommand
 
             // 부서별 오더목록 API 호출 → 파싱 → DB 저장
             // (내부적으로 2번 호출: state 파라미터 없이 + state=40)
+            // CLI 연동 시에는 부서명 파라미터를 전달하지 않음 (DB 조회 시에만 user_dept 필터링 적용)
             CLI::write("부서별 오더목록 조회 및 저장 중...", 'yellow');
-            $orderListResultDept = $insungApiService->getOrderList($mCode, $ccCode, $token, $userId, $startDate, $endDate, null, null, null, $apiCompCode, 1000, 1, $apiIdx, true);
+            $orderListResultDept = $insungApiService->getOrderList($mCode, $ccCode, $token, $userId, $startDate, $endDate, null, $staffCode, null, $apiCompCode, 1000, 1, $apiIdx, true);
 
             if ($orderListResultDept['success'] && isset($orderListResultDept['data'])) {
                 CLI::write("부서별 오더목록 저장 중...", 'yellow');

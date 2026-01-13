@@ -48,6 +48,7 @@ class Member extends BaseController
             $userInfo = [
                 'username' => $userInfo['user_id'] ?? '',
                 'real_name' => $userInfo['user_name'] ?? '',
+                'user_dept' => $userInfo['user_dept'] ?? '',
                 'phone' => $userInfo['user_tel1'] ?? '',
                 'customer_name' => $userInfo['comp_name'] ?? '',
                 'address_zonecode' => '', // daumdata에는 zonecode가 없을 수 있음
@@ -55,7 +56,11 @@ class Member extends BaseController
                 'address_detail' => $userInfo['user_addr_detail'] ?? '',
                 'login_type' => 'daumdata',
                 'user_idx' => $userInfo['idx'] ?? null,
-                'comp_code' => $userInfo['comp_code'] ?? null
+                'comp_code' => $userInfo['comp_code'] ?? null,
+                'm_code' => $userInfo['m_code'] ?? null,
+                'cc_code' => $userInfo['cc_code'] ?? null,
+                'token' => $userInfo['token'] ?? null,
+                'api_idx' => $userInfo['api_idx'] ?? null
             ];
         } else {
             // STN 로그인: UserModel 사용
@@ -440,6 +445,7 @@ class Member extends BaseController
                 // 사용자 정보 업데이트 (daumdata 필드명 사용)
                 $updateData = [
                     'user_name' => $inputData['real_name'],
+                    'user_dept' => $inputData['user_dept'] ?? null,
                     'user_tel1' => $inputData['phone'] ?? null,
                     'user_addr' => $inputData['address'] ?? null,
                     'user_addr_detail' => $inputData['address_detail'] ?? null
@@ -523,6 +529,81 @@ class Member extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 부서 목록 조회 API 호출
+     */
+    public function getDepartmentList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $loginType = session()->get('login_type');
+        $userId = session()->get('user_id');
+
+        try {
+            // daumdata 로그인만 지원 (부서 목록은 Insung API 사용)
+            if ($loginType !== 'daumdata') {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '부서 목록 조회는 daumdata 로그인만 지원됩니다.'
+                ])->setStatusCode(400);
+            }
+
+            // 사용자 정보 조회
+            $user = $this->insungUsersListModel->getUserWithCompanyInfo($userId);
+            
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '사용자 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // API 정보 조회
+            $mCode = $user['m_code'] ?? '';
+            $ccCode = $user['cc_code'] ?? '';
+            $token = $user['token'] ?? '';
+
+            if (empty($mCode) || empty($ccCode) || empty($token)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보가 없습니다.'
+                ])->setStatusCode(400);
+            }
+
+            // Insung API 서비스 호출
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $apiIdx = $user['api_idx'] ?? null;
+            
+            $result = $insungApiService->getDepartmentList($mCode, $ccCode, $token, $userId, $apiIdx);
+
+            if ($result && $result['success']) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'data' => $result['data']
+                ]);
+            } else {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $result['message'] ?? '부서 목록 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+        } catch (\Exception $e) {
+            log_message('error', 'Member::getDepartmentList - ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '부서 목록 조회 중 오류가 발생했습니다.'
             ])->setStatusCode(500);
         }
     }

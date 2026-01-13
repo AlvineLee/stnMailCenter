@@ -67,18 +67,24 @@ class Dashboard extends BaseController
         // 본인주문조회(env1=3) 필터링: 일반 등급(user_class=5)일 때만 적용
         // user_class는 세션에서 가져오거나 DB에서 조회
         $userClass = session()->get('user_class');
+        $userDept = session()->get('user_dept');
         if (empty($userClass) && $loginType === 'daumdata') {
             $userId = session()->get('user_id');
             if ($userId) {
                 $db = \Config\Database::connect();
                 $userBuilder = $db->table('tbl_users_list');
-                $userBuilder->select('user_class');
+                $userBuilder->select('user_class, user_dept');
                 $userBuilder->where('user_id', $userId);
                 $userQuery = $userBuilder->get();
                 if ($userQuery !== false) {
                     $userResult = $userQuery->getRowArray();
-                    if ($userResult && isset($userResult['user_class'])) {
-                        $userClass = $userResult['user_class'];
+                    if ($userResult) {
+                        if (isset($userResult['user_class'])) {
+                            $userClass = $userResult['user_class'];
+                        }
+                        if (isset($userResult['user_dept'])) {
+                            $userDept = $userResult['user_dept'];
+                        }
                     }
                 }
             }
@@ -89,11 +95,23 @@ class Dashboard extends BaseController
             $compCodeForEnv = $subdomainCompCode ?? $userCompany;
         }
         
+        // user_dept 파라미터 설정
+        // user_type과 user_class는 별개로 판단
+        // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한이므로 user_dept 필터 없음
+        // user_class 3 이상일 때만 user_dept 필터 적용
+        $userDeptParam = null;
+        if ($userClass == '1' || $userClass == '2') {
+            // user_class=1,2: 전체 조회 (user_dept 필터 없음, user_type과 관계없이)
+            $userDeptParam = null;
+        } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
+            $userDeptParam = $userDept;
+        }
+        
         // 통계 데이터 조회
-        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
+        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam);
         
         // 최근 주문 조회
-        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId);
+        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam);
         
         // 선택된 고객사 정보
         $selectedCustomer = null;
