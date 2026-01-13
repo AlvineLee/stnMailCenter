@@ -58,7 +58,7 @@ class DashboardModel extends Model
     /**
      * 주문 통계 조회
      */
-    public function getOrderStats($customerId, $userRole, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null, $userDept = null)
+    public function getOrderStats($customerId, $userRole, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null, $userDept = null, $settlementDepts = null)
     {
         $today = date('Y-m-d');
         $builder = $this->db->table('tbl_orders o');
@@ -135,6 +135,14 @@ class DashboardModel extends Model
         // user_dept 필터링 (user_class 3 이상일 때)
         if ($userDept && !empty($userDept) && $loginType === 'daumdata') {
             $builder->where('u_list.user_dept', $userDept);
+        }
+        
+        // 정산관리부서 필터링 (user_class 4일 때)
+        if ($settlementDepts !== null && is_array($settlementDepts) && !empty($settlementDepts) && $loginType === 'daumdata') {
+            $builder->whereIn('u_list.user_dept', $settlementDepts);
+        } elseif ($settlementDepts !== null && is_array($settlementDepts) && empty($settlementDepts) && $loginType === 'daumdata') {
+            // 정산관리부서가 설정되지 않았으면 빈 결과
+            $builder->where('1', '0'); // 항상 false 조건
         }
         
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
@@ -356,7 +364,7 @@ class DashboardModel extends Model
     /**
      * 최근 주문 조회
      */
-    public function getRecentOrders($customerId, $userRole, $limit = 10, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null, $userDept = null)
+    public function getRecentOrders($customerId, $userRole, $limit = 10, $loginType = 'stn', $userType = null, $compCode = null, $ccCode = null, $compCodeForEnv = null, $loginUserId = null, $userDept = null, $settlementDepts = null)
     {
         $builder = $this->db->table('tbl_orders o');
         
@@ -490,6 +498,14 @@ class DashboardModel extends Model
         // user_dept 필터링 (user_class 3 이상일 때)
         if ($userDept && !empty($userDept) && $loginType === 'daumdata') {
             $builder->where('u_list.user_dept', $userDept);
+        }
+        
+        // 정산관리부서 필터링 (user_class 4일 때)
+        if ($settlementDepts !== null && is_array($settlementDepts) && !empty($settlementDepts) && $loginType === 'daumdata') {
+            $builder->whereIn('u_list.user_dept', $settlementDepts);
+        } elseif ($settlementDepts !== null && is_array($settlementDepts) && empty($settlementDepts) && $loginType === 'daumdata') {
+            // 정산관리부서가 설정되지 않았으면 빈 결과
+            $builder->where('1', '0'); // 항상 false 조건
         }
         
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링

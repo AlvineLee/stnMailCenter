@@ -2369,10 +2369,11 @@ class Admin extends BaseController
         helper('pagination');
         $pagination = calculatePagination($totalCount, $page, $perPage);
         
-        // user_class 라벨 매핑 (고객 목록용: 일반/부서장/관리자)
+        // user_class 라벨 매핑 (고객 목록용)
         $userClassLabels = [
             '1' => '관리자',
             '3' => '부서장',
+            '4' => '정산담당자',
             '5' => '일반'
         ];
         
@@ -2451,6 +2452,7 @@ class Admin extends BaseController
         $compCode = $this->request->getGet('comp_code');
         $mode = $this->request->getGet('mode') ?? 'add'; // add 또는 edit
         $userIdParam = $this->request->getGet('user_id') ?? '';
+        $searchKeyword = $this->request->getGet('search_keyword') ?? ''; // 검색 파라미터 유지용
         
         // user_class = 1일 때는 본인 거래처만 조회 가능
         if ($userClass == '1') {
@@ -2540,11 +2542,11 @@ class Admin extends BaseController
         
         // 고객 정보 (수정 모드일 때)
         $customerInfo = null;
-        if ($mode === 'edit' && !empty($userId)) {
-            // DB에서 기본 정보 조회
+        if ($mode === 'edit' && !empty($userIdParam)) {
+            // DB에서 기본 정보 조회 (URL 파라미터의 user_id 사용)
             $userBuilder = $db->table('tbl_users_list');
             $userBuilder->select('user_id, user_pass, user_name, user_dept, user_tel1, user_tel2, user_addr, user_addr_detail, user_class, user_memo, user_ccode, user_sido, user_gungu, user_dong');
-            $userBuilder->where('user_id', $userId);
+            $userBuilder->where('user_id', $userIdParam);
             $userBuilder->where('user_company', $compCode);
             $userQuery = $userBuilder->get();
             
@@ -2570,7 +2572,7 @@ class Admin extends BaseController
                 $customerInfo['gungu'] = $customerInfo['user_gungu'] ?? '';
                 $customerInfo['user_dong'] = $customerInfo['user_dong'] ?? '';
                 
-                $memberResult = $insungApiService->getMemberDetail($mCode, $ccCodeApi, $token, $userId, $apiIdx);
+                $memberResult = $insungApiService->getMemberDetail($mCode, $ccCodeApi, $token, $userIdParam, $apiIdx);
                 
                 if ($memberResult !== false && isset($memberResult->Result[1])) {
                     $member = $memberResult->Result[1];
@@ -2609,7 +2611,8 @@ class Admin extends BaseController
             'customer_info' => $customerInfo,
             'mode' => $mode,
             'comp_code' => $compCode,
-            'user_id' => $userId
+            'user_id' => $userIdParam,
+            'search_keyword' => $searchKeyword // 검색 파라미터 전달
         ];
         
         return view('admin/company-customer-form', $data);
@@ -2625,11 +2628,36 @@ class Admin extends BaseController
             return redirect()->to('/auth/login');
         }
         
-        // 권한 체크: user_type = 3 (콜센터 관리자)만 접근 가능
+        // 권한 체크: user_type = 3 (콜센터 관리자) 또는 user_class = 1 (거래처 관리자)
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
+        $userClass = session()->get('user_class');
+        $userCompany = session()->get('user_company');
         
-        if ($loginType !== 'daumdata' || $userType != '3') {
+        // user_class가 세션에 없으면 DB에서 조회
+        if (empty($userClass) && $loginType === 'daumdata') {
+            $currentUserId = session()->get('user_id');
+            if ($currentUserId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_class, user_company');
+                $userBuilder->where('user_id', $currentUserId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult) {
+                        if (isset($userResult['user_class'])) {
+                            $userClass = $userResult['user_class'];
+                        }
+                        if (isset($userResult['user_company'])) {
+                            $userCompany = $userResult['user_company'];
+                        }
+                    }
+                }
+            }
+        }
+        
+        if ($loginType !== 'daumdata' || ($userType != '3' && $userClass != '1')) {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
         
@@ -2701,34 +2729,68 @@ class Admin extends BaseController
             return redirect()->back()->with('error', '아이디와 비밀번호를 다르게 입력하세요.');
         }
         
+        // user_class = 1일 때는 본인 거래처만 수정 가능
+        if ($userClass == '1') {
+            if (empty($userCompany)) {
+                return redirect()->back()->with('error', '거래처 정보를 찾을 수 없습니다.');
+            }
+            if ($compCode !== $userCompany) {
+                return redirect()->back()->with('error', '본인 거래처만 수정할 수 있습니다.');
+            }
+        }
+        
         // API 정보 조회
         $db = \Config\Database::connect();
         $userCcIdx = session()->get('user_cc_idx');
         
-        if (empty($userCcIdx)) {
-            $currentUserId = session()->get('user_id');
-            if ($currentUserId) {
-                $userBuilder = $db->table('tbl_users_list u');
-                $userBuilder->select('c.cc_idx');
-                $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
-                $userBuilder->where('u.user_id', (string)$currentUserId);
-                $userQuery = $userBuilder->get();
-                
-                if ($userQuery !== false) {
-                    $userResult = $userQuery->getRowArray();
-                    if ($userResult && !empty($userResult['cc_idx'])) {
-                        $userCcIdx = (int)$userResult['cc_idx'];
-                        session()->set('user_cc_idx', $userCcIdx);
+        if ($userClass == '1') {
+            // user_class = 1일 때는 comp_code로 cc_idx 조회 후 cc_code 조회
+            $compBuilder = $db->table('tbl_company_list');
+            $compBuilder->select('cc_idx');
+            $compBuilder->where('comp_code', $compCode);
+            $compQuery = $compBuilder->get();
+            
+            if ($compQuery !== false) {
+                $compResult = $compQuery->getRowArray();
+                if ($compResult && !empty($compResult['cc_idx'])) {
+                    $ccBuilder = $db->table('tbl_cc_list');
+                    $ccBuilder->select('cc_code');
+                    $ccBuilder->where('idx', $compResult['cc_idx']);
+                    $ccQuery = $ccBuilder->get();
+                    $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
+                } else {
+                    $ccInfo = null;
+                }
+            } else {
+                $ccInfo = null;
+            }
+        } else {
+            // user_type = 3일 때는 기존 로직 사용
+            if (empty($userCcIdx)) {
+                $currentUserId = session()->get('user_id');
+                if ($currentUserId) {
+                    $userBuilder = $db->table('tbl_users_list u');
+                    $userBuilder->select('c.cc_idx');
+                    $userBuilder->join('tbl_company_list c', 'u.user_company = c.comp_code', 'left');
+                    $userBuilder->where('u.user_id', (string)$currentUserId);
+                    $userQuery = $userBuilder->get();
+                    
+                    if ($userQuery !== false) {
+                        $userResult = $userQuery->getRowArray();
+                        if ($userResult && !empty($userResult['cc_idx'])) {
+                            $userCcIdx = (int)$userResult['cc_idx'];
+                            session()->set('user_cc_idx', $userCcIdx);
+                        }
                     }
                 }
             }
+            
+            $ccBuilder = $db->table('tbl_cc_list');
+            $ccBuilder->select('cc_code');
+            $ccBuilder->where('idx', $userCcIdx);
+            $ccQuery = $ccBuilder->get();
+            $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
         }
-        
-        $ccBuilder = $db->table('tbl_cc_list');
-        $ccBuilder->select('cc_code');
-        $ccBuilder->where('idx', $userCcIdx);
-        $ccQuery = $ccBuilder->get();
-        $ccInfo = $ccQuery !== false ? $ccQuery->getRowArray() : null;
         
         if (empty($ccInfo) || empty($ccInfo['cc_code'])) {
             return redirect()->back()->with('error', '콜센터 정보를 찾을 수 없습니다.');
@@ -2904,10 +2966,113 @@ class Admin extends BaseController
             // 암호화 처리
             $userData = $encryptionHelper->encryptFields($userData, $encryptedFields);
             
+            // DB 업데이트 (user_id만으로 조회, user_company는 업데이트 데이터에 포함)
             $userBuilder = $db->table('tbl_users_list');
             $userBuilder->where('user_id', $userId);
             $userBuilder->where('user_company', $compCode);
-            $userBuilder->update($userData);
+            $updateResult = $userBuilder->update($userData);
+            
+            // 업데이트 결과 확인
+            if ($updateResult === false) {
+                log_message('error', "Admin::companyCustomerSave - DB 업데이트 실패: user_id={$userId}, comp_code={$compCode}");
+                return redirect()->back()->with('error', 'DB 업데이트에 실패했습니다.');
+            }
+            
+            // 업데이트된 행 수 확인
+            $affectedRows = $db->affectedRows();
+            if ($affectedRows === 0) {
+                log_message('warning', "Admin::companyCustomerSave - 업데이트된 행이 없음: user_id={$userId}, comp_code={$compCode}. user_id만으로 재시도");
+                // user_company 조건 없이 user_id만으로 재시도
+                $userBuilder2 = $db->table('tbl_users_list');
+                $userBuilder2->where('user_id', $userId);
+                $updateResult2 = $userBuilder2->update($userData);
+                $affectedRows2 = $db->affectedRows();
+                
+                if ($affectedRows2 === 0) {
+                    log_message('warning', "Admin::companyCustomerSave - user_id만으로도 업데이트 실패: user_id={$userId}. INSERT 시도");
+                    // 행이 없으면 INSERT 시도 (혹시 모를 경우를 대비)
+                    $userData['created_at'] = date('Y-m-d H:i:s');
+                    $userData['updated_at'] = date('Y-m-d H:i:s');
+                    $insertResult = $db->table('tbl_users_list')->insert($userData);
+                    if ($insertResult === false) {
+                        log_message('error', "Admin::companyCustomerSave - DB INSERT 실패: user_id={$userId}, comp_code={$compCode}");
+                    } else {
+                        log_message('info', "Admin::companyCustomerSave - DB INSERT 성공: user_id={$userId}, comp_code={$compCode}");
+                    }
+                } else {
+                    log_message('info', "Admin::companyCustomerSave - DB 업데이트 성공 (user_id만으로): user_id={$userId}, affected_rows={$affectedRows2}");
+                }
+            } else {
+                log_message('info', "Admin::companyCustomerSave - DB 업데이트 성공: user_id={$userId}, comp_code={$compCode}, affected_rows={$affectedRows}");
+            }
+            
+            // user_id로 user_idx 조회 (정산관리부서 저장/삭제용)
+            $userIdxBuilder = $db->table('tbl_users_list');
+            $userIdxBuilder->select('idx');
+            $userIdxBuilder->where('user_id', $userId);
+            if (!empty($compCode)) {
+                $userIdxBuilder->where('user_company', $compCode);
+            }
+            $userIdxQuery = $userIdxBuilder->get();
+            
+            $userIdx = null;
+            if ($userIdxQuery !== false) {
+                $userIdxResult = $userIdxQuery->getRowArray();
+                if ($userIdxResult && isset($userIdxResult['idx'])) {
+                    $userIdx = $userIdxResult['idx'];
+                } else {
+                    // user_company 조건 없이 재시도
+                    $userIdxBuilder2 = $db->table('tbl_users_list');
+                    $userIdxBuilder2->select('idx');
+                    $userIdxBuilder2->where('user_id', $userId);
+                    $userIdxQuery2 = $userIdxBuilder2->get();
+                    if ($userIdxQuery2 !== false) {
+                        $userIdxResult2 = $userIdxQuery2->getRowArray();
+                        if ($userIdxResult2 && isset($userIdxResult2['idx'])) {
+                            $userIdx = $userIdxResult2['idx'];
+                        }
+                    }
+                }
+            }
+            
+            // 정산관리부서 처리
+            $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
+            if ($userIdx) {
+                if ($userClass == '4') {
+                    // user_class=4일 때: 정산관리부서 저장
+                    $settlementDeptsJson = $this->request->getPost('settlement_depts');
+                    $settlementDepts = [];
+                    
+                    if (!empty($settlementDeptsJson)) {
+                        // JSON 문자열인 경우 파싱
+                        if (is_string($settlementDeptsJson)) {
+                            $settlementDepts = json_decode($settlementDeptsJson, true);
+                            if (!is_array($settlementDepts)) {
+                                $settlementDepts = [];
+                            }
+                        } elseif (is_array($settlementDeptsJson)) {
+                            $settlementDepts = $settlementDeptsJson;
+                        }
+                    }
+                    
+                    // 정산관리부서 저장
+                    $saveResult = $userSettlementDeptModel->saveSettlementDepts($userIdx, $settlementDepts);
+                    
+                    if ($saveResult) {
+                        log_message('info', "Admin::companyCustomerSave - 정산관리부서 저장 성공: user_id={$userId}, user_idx={$userIdx}, depts=" . implode(',', $settlementDepts));
+                    } else {
+                        log_message('error', "Admin::companyCustomerSave - 정산관리부서 저장 실패: user_id={$userId}, user_idx={$userIdx}");
+                    }
+                } else {
+                    // user_class가 4가 아닐 때: 기존 정산관리부서 삭제
+                    $deleteResult = $userSettlementDeptModel->where('user_idx', $userIdx)->delete();
+                    if ($deleteResult !== false) {
+                        log_message('info', "Admin::companyCustomerSave - 정산관리부서 삭제 완료: user_id={$userId}, user_idx={$userIdx} (user_class={$userClass})");
+                    }
+                }
+            } else {
+                log_message('warning', "Admin::companyCustomerSave - user_idx 조회 실패: user_id={$userId}, comp_code={$compCode}");
+            }
             
         } else {
             // 등록 모드: 아이디 중복 확인
@@ -2996,10 +3161,48 @@ class Admin extends BaseController
             $userData = $encryptionHelper->encryptFields($userData, $encryptedFields);
             
             $userBuilder = $db->table('tbl_users_list');
-            $userBuilder->insert($userData);
+            $insertResult = $userBuilder->insert($userData);
+            
+            // 정산관리부서 저장 (user_class=4일 때만)
+            if ($userClass == '4' && $insertResult !== false) {
+                $insertId = $db->insertID();
+                
+                if ($insertId) {
+                    $settlementDeptsJson = $this->request->getPost('settlement_depts');
+                    $settlementDepts = [];
+                    
+                    if (!empty($settlementDeptsJson)) {
+                        // JSON 문자열인 경우 파싱
+                        if (is_string($settlementDeptsJson)) {
+                            $settlementDepts = json_decode($settlementDeptsJson, true);
+                            if (!is_array($settlementDepts)) {
+                                $settlementDepts = [];
+                            }
+                        } elseif (is_array($settlementDeptsJson)) {
+                            $settlementDepts = $settlementDeptsJson;
+                        }
+                    }
+                    
+                    // 정산관리부서 저장
+                    $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
+                    $saveResult = $userSettlementDeptModel->saveSettlementDepts($insertId, $settlementDepts);
+                    
+                    if ($saveResult) {
+                        log_message('info', "Admin::companyCustomerSave - 정산관리부서 저장 성공 (등록): user_id={$userId}, user_idx={$insertId}, depts=" . implode(',', $settlementDepts));
+                    } else {
+                        log_message('error', "Admin::companyCustomerSave - 정산관리부서 저장 실패 (등록): user_id={$userId}, user_idx={$insertId}");
+                    }
+                }
+            }
         }
         
-        return redirect()->to('/admin/company-customer-list?comp_code=' . urlencode($compCode))->with('success', ($isEditMode ? '고객 정보가 수정되었습니다.' : '고객이 등록되었습니다.'));
+        // 리다이렉트 URL 구성 (검색 파라미터 포함)
+        $redirectUrl = '/admin/company-customer-list?comp_code=' . urlencode($compCode);
+        if (!empty($searchKeyword)) {
+            $redirectUrl .= '&search_keyword=' . urlencode($searchKeyword);
+        }
+        
+        return redirect()->to($redirectUrl)->with('success', ($isEditMode ? '고객 정보가 수정되었습니다.' : '고객이 등록되었습니다.'));
     }
 
     /**
@@ -4021,6 +4224,157 @@ class Admin extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => '주문 상세 정보 조회 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 부서 목록 조회 API 호출 (거래처관리용)
+     */
+    public function getDepartmentList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $loginType = session()->get('login_type');
+        $userId = session()->get('user_id');
+
+        try {
+            // daumdata 로그인만 지원 (부서 목록은 Insung API 사용)
+            if ($loginType !== 'daumdata') {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '부서 목록 조회는 daumdata 로그인만 지원됩니다.'
+                ])->setStatusCode(400);
+            }
+
+            // 사용자 정보 조회
+            $insungUsersListModel = new \App\Models\InsungUsersListModel();
+            $user = $insungUsersListModel->getUserWithCompanyInfo($userId);
+            
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '사용자 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // API 정보 조회
+            $mCode = $user['m_code'] ?? '';
+            $ccCode = $user['cc_code'] ?? '';
+            $token = $user['token'] ?? '';
+
+            if (empty($mCode) || empty($ccCode) || empty($token)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보가 없습니다.'
+                ])->setStatusCode(400);
+            }
+
+            // Insung API 서비스 호출
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $apiIdx = $user['api_idx'] ?? null;
+            
+            $result = $insungApiService->getDepartmentList($mCode, $ccCode, $token, $userId, $apiIdx);
+
+            if ($result && $result['success']) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'data' => $result['data']
+                ]);
+            } else {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $result['message'] ?? '부서 목록 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+        } catch (\Exception $e) {
+            log_message('error', 'Admin::getDepartmentList - ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '부서 목록 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * user_id로 정산관리부서 목록 조회 (거래처관리용)
+     */
+    public function getSettlementDeptsByUserId()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $loginType = session()->get('login_type');
+        $requestUserId = $this->request->getGet('user_id');
+
+        try {
+            // daumdata 로그인만 지원
+            if ($loginType !== 'daumdata') {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '정산관리부서 조회는 daumdata 로그인만 지원됩니다.'
+                ])->setStatusCode(400);
+            }
+
+            if (empty($requestUserId)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'user_id가 필요합니다.'
+                ])->setStatusCode(400);
+            }
+
+            // user_id로 user_idx 조회
+            $db = \Config\Database::connect();
+            $userBuilder = $db->table('tbl_users_list');
+            $userBuilder->select('idx');
+            $userBuilder->where('user_id', $requestUserId);
+            $userQuery = $userBuilder->get();
+            
+            if ($userQuery === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '사용자 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+            
+            $userResult = $userQuery->getRowArray();
+            if (!$userResult || !isset($userResult['idx'])) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $userIdx = $userResult['idx'];
+
+            // 정산관리부서 목록 조회
+            $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
+            $settlementDepts = $userSettlementDeptModel->getSettlementDeptsByUserIdx($userIdx);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $settlementDepts
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Admin::getSettlementDeptsByUserId - ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '정산관리부서 조회 중 오류가 발생했습니다.'
             ])->setStatusCode(500);
         }
     }

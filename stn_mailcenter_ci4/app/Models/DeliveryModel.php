@@ -120,6 +120,14 @@ class DeliveryModel extends Model
                 $builder->where('u_list.user_dept', $filters['user_dept']);
             }
             
+            // 정산관리부서 필터링 (user_class 4일 때)
+            if (isset($filters['settlement_depts']) && is_array($filters['settlement_depts']) && !empty($filters['settlement_depts'])) {
+                $builder->whereIn('u_list.user_dept', $filters['settlement_depts']);
+            } elseif (isset($filters['settlement_depts']) && is_array($filters['settlement_depts']) && empty($filters['settlement_depts'])) {
+                // 정산관리부서가 설정되지 않았으면 빈 결과
+                $builder->where('1', '0'); // 항상 false 조건
+            }
+            
             // 서브도메인 필터가 있을 때 user_type별 추가 필터링
             if (isset($filters['user_type'])) {
                 if ($filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
@@ -167,6 +175,14 @@ class DeliveryModel extends Model
         // user_dept 필터링 (서브도메인 필터가 없을 때, user_class 3 이상일 때)
         if (isset($filters['user_dept']) && !empty($filters['user_dept'])) {
             $builder->where('u_list.user_dept', $filters['user_dept']);
+        }
+        
+        // 정산관리부서 필터링 (서브도메인 필터가 없을 때, user_class 4일 때)
+        if (isset($filters['settlement_depts']) && is_array($filters['settlement_depts']) && !empty($filters['settlement_depts'])) {
+            $builder->whereIn('u_list.user_dept', $filters['settlement_depts']);
+        } elseif (isset($filters['settlement_depts']) && is_array($filters['settlement_depts']) && empty($filters['settlement_depts'])) {
+            // 정산관리부서가 설정되지 않았으면 빈 결과
+            $builder->where('1', '0'); // 항상 false 조건
         }
         // 서브도메인 필터가 없을 때 daumdata 로그인 필터링
         elseif (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {

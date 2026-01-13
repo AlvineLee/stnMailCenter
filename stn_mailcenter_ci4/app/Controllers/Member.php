@@ -7,6 +7,7 @@ use App\Models\UserModel;
 use App\Models\CustomerHierarchyModel;
 use App\Models\AuthModel;
 use App\Models\InsungUsersListModel;
+use App\Models\UserSettlementDeptModel;
 
 class Member extends BaseController
 {
@@ -14,6 +15,7 @@ class Member extends BaseController
     protected $customerHierarchyModel;
     protected $authModel;
     protected $insungUsersListModel;
+    protected $userSettlementDeptModel;
 
     public function __construct()
     {
@@ -21,6 +23,7 @@ class Member extends BaseController
         $this->customerHierarchyModel = new CustomerHierarchyModel();
         $this->authModel = new AuthModel();
         $this->insungUsersListModel = new InsungUsersListModel();
+        $this->userSettlementDeptModel = new UserSettlementDeptModel();
         helper('form');
     }
 
@@ -466,6 +469,17 @@ class Member extends BaseController
                 if (!$updateResult) {
                     throw new \Exception('정보 저장에 실패했습니다.');
                 }
+
+                // 정산관리부서 저장
+                if (isset($inputData['settlement_depts']) && is_array($inputData['settlement_depts'])) {
+                    $settlementDepts = array_filter($inputData['settlement_depts'], function($dept) {
+                        return !empty(trim($dept));
+                    });
+                    $this->userSettlementDeptModel->saveSettlementDepts($user['idx'], $settlementDepts);
+                } else {
+                    // settlement_depts가 없으면 기존 데이터 유지 (빈 배열이면 삭제)
+                    $this->userSettlementDeptModel->saveSettlementDepts($user['idx'], []);
+                }
             } else {
                 // STN 로그인: UserModel 사용
                 $user = $this->userModel->find($userId);
@@ -604,6 +618,59 @@ class Member extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => '부서 목록 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 정산관리부서 목록 조회
+     */
+    public function getSettlementDepts()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $loginType = session()->get('login_type');
+        $userId = session()->get('user_id');
+
+        try {
+            // daumdata 로그인만 지원
+            if ($loginType !== 'daumdata') {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '정산관리부서 조회는 daumdata 로그인만 지원됩니다.'
+                ])->setStatusCode(400);
+            }
+
+            // 사용자 정보 조회
+            $user = $this->insungUsersListModel->getUserWithCompanyInfo($userId);
+            
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '사용자 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 정산관리부서 목록 조회
+            $settlementDepts = $this->userSettlementDeptModel->getSettlementDeptsByUserIdx($user['idx']);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $settlementDepts
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Member::getSettlementDepts - ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '정산관리부서 조회 중 오류가 발생했습니다.'
             ])->setStatusCode(500);
         }
     }

@@ -118,6 +118,7 @@ $routes->group('bookmark', function($routes) {
 $routes->group('member', function($routes) {
     $routes->get('list', 'Member::list');
     $routes->get('getDepartmentList', 'Member::getDepartmentList');
+    $routes->get('getSettlementDepts', 'Member::getSettlementDepts');
     $routes->post('changePassword', 'Member::changePassword');
     $routes->post('updateAddress', 'Member::updateAddress');
     $routes->post('updateUserInfo', 'Member::updateUserInfo');
@@ -287,6 +288,8 @@ $routes->group('admin', function($routes) {
     $routes->get('company-customer-list', 'Admin::companyCustomerList'); // 거래처별 고객 리스트
     $routes->get('company-customer-form', 'Admin::companyCustomerForm'); // 고객 등록/수정 폼
     $routes->post('company-customer-save', 'Admin::companyCustomerSave'); // 고객 등록/수정 저장
+    $routes->get('getDepartmentList', 'Admin::getDepartmentList'); // 부서 목록 조회
+    $routes->get('getSettlementDeptsByUserId', 'Admin::getSettlementDeptsByUserId'); // 정산관리부서 조회
     $routes->post('createServiceType', 'Admin::createServiceType');
     $routes->post('updateServiceType', 'Admin::updateServiceType');
     $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');

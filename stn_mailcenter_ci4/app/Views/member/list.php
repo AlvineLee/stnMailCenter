@@ -31,10 +31,19 @@
                                    class="form-input bg-gray-50 text-gray-600">
                         </div>
                         <div class="form-field">
-                            <label class="form-label">부서</label>
-                            <select id="user_dept" class="form-input">
-                                <option value="">부서를 선택하세요</option>
-                            </select>
+                            <label class="form-label">소속부서</label>
+                            <div class="flex gap-3 items-end">
+                                <select id="user_dept" class="form-input flex-1">
+                                    <option value="">부서를 선택하세요</option>
+                                </select>
+                                <button type="button" 
+                                        id="settlement-depts-btn" 
+                                        onclick="openSettlementDeptsPopup()"
+                                        class="flex-1 bg-white border border-gray-300 rounded text-left text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        style="padding: 6px 8px;">
+                                    <span id="settlement-depts-display">정산관리부서 (복수선택가능)</span>
+                                </button>
+                            </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">담당자</label>
@@ -148,28 +157,85 @@
     </div>
 </div>
 
+<!-- 정산관리부서 선택 레이어 팝업 -->
+<div id="settlementDeptsPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4" style="z-index: 9999 !important; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col" style="z-index: 10000 !important;">
+        <!-- 헤더 -->
+        <div class="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 p-2 rounded-t-lg flex-shrink-0">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xs font-bold text-gray-800" style="font-size: 12px !important; font-weight: 600 !important;">정산관리부서 선택</h2>
+                <button onclick="closeSettlementDeptsPopup()" class="text-gray-500 hover:text-gray-700 text-lg font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors" style="font-size: 18px !important; width: 24px !important; height: 24px !important;">&times;</button>
+            </div>
+            <p class="text-xs text-gray-600 mt-1" style="font-size: 11px !important;">복수 선택 가능합니다</p>
+        </div>
+        
+        <!-- 본문 (스크롤 가능) -->
+        <div class="flex-1 overflow-y-auto p-2 min-h-0" style="padding: 8px !important;">
+            <div id="settlement-depts-list" class="space-y-1" style="gap: 4px !important;">
+                <!-- 체크박스 목록이 여기에 동적으로 생성됩니다 -->
+            </div>
+        </div>
+        
+        <!-- 푸터 -->
+        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-2 rounded-b-lg flex-shrink-0" style="padding: 8px !important;">
+            <div class="flex justify-between items-center mb-2" style="margin-bottom: 8px !important;">
+                <span class="text-xs text-gray-600" style="font-size: 12px !important;">
+                    선택된 부서: <span id="settlement-depts-count" class="font-semibold text-blue-600" style="font-weight: 600 !important;">0</span>개
+                </span>
+            </div>
+            <div class="flex gap-2" style="gap: 8px !important;">
+                <button onclick="selectAllSettlementDepts()" 
+                        class="flex-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium transition-colors"
+                        style="padding: 4px 12px !important; font-size: 12px !important; height: 24px !important; border-radius: 6px !important; font-weight: 600 !important; background: #f1f5f9 !important; color: #475569 !important; border: 1px solid #e2e8f0 !important;">
+                    전체 선택
+                </button>
+                <button onclick="deselectAllSettlementDepts()" 
+                        class="flex-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium transition-colors"
+                        style="padding: 4px 12px !important; font-size: 12px !important; height: 24px !important; border-radius: 6px !important; font-weight: 600 !important; background: #f1f5f9 !important; color: #475569 !important; border: 1px solid #e2e8f0 !important;">
+                    전체 해제
+                </button>
+                <button onclick="confirmSettlementDepts()" 
+                        class="flex-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors"
+                        style="padding: 4px 12px !important; font-size: 12px !important; height: 24px !important; border-radius: 6px !important; font-weight: 600 !important;">
+                    확인
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 다음 주소 검색 API 스크립트 -->
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 
 <script>
-// 페이지 로드 시 부서 목록 불러오기
+// 페이지 로드 시 부서 목록 및 정산관리부서 목록 불러오기
 document.addEventListener('DOMContentLoaded', function() {
-    loadDepartmentList();
-});
-
-// 부서 목록 불러오기
-function loadDepartmentList() {
-    fetch('<?= base_url('member/getDepartmentList') ?>', {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
+    // 정산관리부서 목록을 먼저 불러온 후, 부서 목록을 불러와서 체크박스 생성
+    Promise.all([
+        fetch('<?= base_url('member/getSettlementDepts') ?>', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(response => response.json()),
+        fetch('<?= base_url('member/getDepartmentList') ?>', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(response => response.json())
+    ]).then(([settlementData, deptData]) => {
+        // 정산관리부서 목록 저장
+        if (settlementData.success && settlementData.data) {
+            window.selectedSettlementDepts = settlementData.data.map(dept => dept.dept_name);
+        } else {
+            window.selectedSettlementDepts = [];
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log('부서 목록 응답:', data);
-        if (data.success && data.data && data.data.length > 0) {
+        
+        // 부서 목록 처리
+        if (deptData.success && deptData.data && deptData.data.length > 0) {
             const deptSelect = document.getElementById('user_dept');
             const currentDept = '<?= esc($user['user_dept'] ?? '', 'js') ?>';
             
@@ -179,7 +245,7 @@ function loadDepartmentList() {
             }
             
             // 부서 목록 추가
-            data.data.forEach(function(dept) {
+            deptData.data.forEach(function(dept) {
                 if (dept && dept.department_name) {
                     const deptName = dept.department_name.trim();
                     if (deptName) {
@@ -193,13 +259,160 @@ function loadDepartmentList() {
                     }
                 }
             });
+            
+            // 정산관리부서 체크박스 생성 (팝업용)
+            window.deptListData = deptData.data; // 전역 변수에 저장
+            loadSettlementDeptsCheckboxes(deptData.data);
+            updateSettlementDeptsDisplay(); // 버튼 텍스트 업데이트
         } else {
-            console.warn('부서 목록이 비어있습니다:', data);
+            console.warn('부서 목록이 비어있습니다:', deptData);
         }
-    })
-    .catch(error => {
-        console.error('부서 목록 조회 실패:', error);
+    }).catch(error => {
+        console.error('데이터 로드 실패:', error);
     });
+});
+
+// 정산관리부서 팝업 열기
+function openSettlementDeptsPopup() {
+    const popup = document.getElementById('settlementDeptsPopup');
+    if (!popup) return;
+    
+    // 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    // 팝업 표시
+    popup.classList.remove('hidden');
+    popup.classList.add('flex');
+    
+    // 체크박스 목록이 없으면 생성
+    if (window.deptListData && window.deptListData.length > 0) {
+        loadSettlementDeptsCheckboxes(window.deptListData);
+    }
+    
+    // 선택된 개수 업데이트
+    updateSettlementDeptsCount();
+}
+
+// 정산관리부서 팝업 닫기
+function closeSettlementDeptsPopup() {
+    const popup = document.getElementById('settlementDeptsPopup');
+    if (!popup) return;
+    
+    popup.classList.add('hidden');
+    popup.classList.remove('flex');
+    
+    // 사이드바 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 정산관리부서 체크박스 생성
+function loadSettlementDeptsCheckboxes(deptList) {
+    const container = document.getElementById('settlement-depts-list');
+    if (!container) return;
+    
+    // 기존 체크박스 제거
+    container.innerHTML = '';
+    
+    if (!deptList || deptList.length === 0) {
+        container.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">부서 목록이 없습니다.</div>';
+        return;
+    }
+    
+    // 선택된 정산관리부서 목록 (전역 변수)
+    const selectedDepts = window.selectedSettlementDepts || [];
+    
+    // 체크박스 생성
+    deptList.forEach(function(dept) {
+        if (dept && dept.department_name) {
+            const deptName = dept.department_name.trim();
+            if (deptName) {
+                const label = document.createElement('label');
+                label.className = 'flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded border border-gray-200 transition-colors';
+                label.style.cssText = 'padding: 4px 8px !important; gap: 8px !important; border-radius: 4px !important;';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = deptName;
+                checkbox.className = 'text-blue-600 border-gray-300 rounded focus:ring-blue-500';
+                checkbox.style.cssText = 'width: 14px !important; height: 14px !important;';
+                
+                // 선택된 부서인지 확인
+                if (selectedDepts.includes(deptName)) {
+                    checkbox.checked = true;
+                }
+                
+                // 체크박스 변경 이벤트
+                checkbox.addEventListener('change', function() {
+                    updateSettlementDeptsCount();
+                });
+                
+                const span = document.createElement('span');
+                span.className = 'text-gray-700 flex-1';
+                span.style.cssText = 'font-size: 12px !important; color: #374151 !important;';
+                span.textContent = deptName;
+                
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                container.appendChild(label);
+            }
+        }
+    });
+}
+
+// 선택된 정산관리부서 개수 업데이트
+function updateSettlementDeptsCount() {
+    const checkboxes = document.querySelectorAll('#settlement-depts-list input[type="checkbox"]:checked');
+    const count = checkboxes.length;
+    const countElement = document.getElementById('settlement-depts-count');
+    if (countElement) {
+        countElement.textContent = count;
+    }
+}
+
+// 전체 선택
+function selectAllSettlementDepts() {
+    const checkboxes = document.querySelectorAll('#settlement-depts-list input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = true);
+    updateSettlementDeptsCount();
+}
+
+// 전체 해제
+function deselectAllSettlementDepts() {
+    const checkboxes = document.querySelectorAll('#settlement-depts-list input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateSettlementDeptsCount();
+}
+
+// 선택 확인 (팝업 닫기 및 버튼 텍스트 업데이트)
+function confirmSettlementDepts() {
+    const checkboxes = document.querySelectorAll('#settlement-depts-list input[type="checkbox"]:checked');
+    window.selectedSettlementDepts = Array.from(checkboxes).map(cb => cb.value);
+    
+    updateSettlementDeptsDisplay();
+    closeSettlementDeptsPopup();
+}
+
+// 정산관리부서 버튼 텍스트 업데이트
+function updateSettlementDeptsDisplay() {
+    const displayElement = document.getElementById('settlement-depts-display');
+    const selectedDepts = window.selectedSettlementDepts || [];
+    
+    if (!displayElement) return;
+    
+    if (selectedDepts.length === 0) {
+        displayElement.textContent = '정산관리부서 (복수선택가능)';
+        displayElement.className = 'text-gray-500';
+    } else {
+        displayElement.textContent = `정산관리부서 (${selectedDepts.length}개 선택됨)`;
+        displayElement.className = 'text-gray-700 font-medium';
+    }
 }
 
 // 경고 모달 열기
@@ -317,9 +530,15 @@ function saveAll() {
 
     // 사용자 정보 저장 요청
     const userDept = document.getElementById('user_dept').value;
+    
+    // 정산관리부서 선택값 수집
+    const settlementDeptCheckboxes = document.querySelectorAll('#settlement-depts-list input[type="checkbox"]:checked');
+    const settlementDepts = Array.from(settlementDeptCheckboxes).map(cb => cb.value);
+    
     const requestData = {
         real_name: realName,
         user_dept: userDept,
+        settlement_depts: settlementDepts,
         phone: phone,
         address_zonecode: zonecode,
         address: address,
@@ -381,6 +600,24 @@ document.addEventListener('keydown', function(e) {
         if (warningModal && !warningModal.classList.contains('hidden')) {
             closeWarningModal();
         }
+        
+        const settlementDeptsPopup = document.getElementById('settlementDeptsPopup');
+        if (settlementDeptsPopup && !settlementDeptsPopup.classList.contains('hidden')) {
+            closeSettlementDeptsPopup();
+        }
+    }
+});
+
+// 팝업 외부 클릭 시 닫히지 않도록 (오버레이 클릭 방지)
+document.addEventListener('click', function(e) {
+    const settlementDeptsPopup = document.getElementById('settlementDeptsPopup');
+    if (settlementDeptsPopup && !settlementDeptsPopup.classList.contains('hidden')) {
+        // 팝업 내부 클릭은 무시
+        if (e.target.closest('.bg-white.rounded-lg.shadow-2xl')) {
+            return;
+        }
+        // 오버레이 클릭도 무시 (닫지 않음)
+        // closeSettlementDeptsPopup(); // 주석 처리하여 외부 클릭 시 닫히지 않도록
     }
 });
 </script>

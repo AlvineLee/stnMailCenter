@@ -89,23 +89,43 @@ class Delivery extends BaseController
         // user_class는 세션에서 가져오거나 DB에서 조회 (주문조회 권한용)
         $userClass = session()->get('user_class');
         $userDept = session()->get('user_dept');
+        $userIdx = null; // user_class=4일 때 정산관리부서 조회용
         if (empty($userClass) && $loginType === 'daumdata') {
             $userId = session()->get('user_id');
             if ($userId) {
                 $db = \Config\Database::connect();
                 $userBuilder = $db->table('tbl_users_list');
-                $userBuilder->select('user_class, user_dept');
+                $userBuilder->select('idx, user_class, user_dept');
                 $userBuilder->where('user_id', $userId);
                 $userQuery = $userBuilder->get();
                 if ($userQuery !== false) {
                     $userResult = $userQuery->getRowArray();
                     if ($userResult) {
+                        if (isset($userResult['idx'])) {
+                            $userIdx = $userResult['idx'];
+                        }
                         if (isset($userResult['user_class'])) {
                             $userClass = $userResult['user_class'];
                         }
                         if (isset($userResult['user_dept'])) {
                             $userDept = $userResult['user_dept'];
                         }
+                    }
+                }
+            }
+        } elseif ($loginType === 'daumdata' && $userClass == '4') {
+            // user_class=4일 때 user_idx 조회
+            $userId = session()->get('user_id');
+            if ($userId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('idx');
+                $userBuilder->where('user_id', $userId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['idx'])) {
+                        $userIdx = $userResult['idx'];
                     }
                 }
             }
@@ -120,6 +140,22 @@ class Delivery extends BaseController
                 // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
                 $filters['user_type'] = '1';
                 $filters['customer_id'] = null; // 전체 조회
+            } elseif ($userClass == '4') {
+                // user_class = 4(정산담당자): 정산관리부서로 필터링
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null;
+                if ($userIdx) {
+                    $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
+                    $settlementDepts = $userSettlementDeptModel->getSettlementDeptNamesForQuery($userIdx);
+                    if ($settlementDepts !== null && !empty($settlementDepts)) {
+                        $filters['settlement_depts'] = $settlementDepts; // 정산관리부서 목록 필터 추가
+                    } else {
+                        // 정산관리부서가 설정되지 않았으면 빈 결과
+                        $filters['settlement_depts'] = [];
+                    }
+                } else {
+                    $filters['settlement_depts'] = [];
+                }
             } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
                 // user_class = 3 이상: 부서명으로 필터링
                 $filters['user_type'] = '1';

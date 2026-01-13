@@ -68,23 +68,43 @@ class Dashboard extends BaseController
         // user_class는 세션에서 가져오거나 DB에서 조회
         $userClass = session()->get('user_class');
         $userDept = session()->get('user_dept');
+        $userIdx = null; // user_class=4일 때 정산관리부서 조회용
         if (empty($userClass) && $loginType === 'daumdata') {
             $userId = session()->get('user_id');
             if ($userId) {
                 $db = \Config\Database::connect();
                 $userBuilder = $db->table('tbl_users_list');
-                $userBuilder->select('user_class, user_dept');
+                $userBuilder->select('idx, user_class, user_dept');
                 $userBuilder->where('user_id', $userId);
                 $userQuery = $userBuilder->get();
                 if ($userQuery !== false) {
                     $userResult = $userQuery->getRowArray();
                     if ($userResult) {
+                        if (isset($userResult['idx'])) {
+                            $userIdx = $userResult['idx'];
+                        }
                         if (isset($userResult['user_class'])) {
                             $userClass = $userResult['user_class'];
                         }
                         if (isset($userResult['user_dept'])) {
                             $userDept = $userResult['user_dept'];
                         }
+                    }
+                }
+            }
+        } elseif ($loginType === 'daumdata' && $userClass == '4') {
+            // user_class=4일 때 user_idx 조회
+            $userId = session()->get('user_id');
+            if ($userId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('idx');
+                $userBuilder->where('user_id', $userId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['idx'])) {
+                        $userIdx = $userResult['idx'];
                     }
                 }
             }
@@ -99,19 +119,33 @@ class Dashboard extends BaseController
         // user_type과 user_class는 별개로 판단
         // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한이므로 user_dept 필터 없음
         // user_class 3 이상일 때만 user_dept 필터 적용
+        // user_class=4일 때는 정산관리부서 필터 적용
         $userDeptParam = null;
+        $settlementDeptsParam = null;
         if ($userClass == '1' || $userClass == '2') {
             // user_class=1,2: 전체 조회 (user_dept 필터 없음, user_type과 관계없이)
             $userDeptParam = null;
+            $settlementDeptsParam = null;
+        } elseif ($userClass == '4') {
+            // user_class=4(정산담당자): 정산관리부서로 필터링
+            $userDeptParam = null;
+            if ($userIdx) {
+                $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
+                $settlementDepts = $userSettlementDeptModel->getSettlementDeptNamesForQuery($userIdx);
+                $settlementDeptsParam = $settlementDepts; // null이거나 배열
+            } else {
+                $settlementDeptsParam = [];
+            }
         } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
             $userDeptParam = $userDept;
+            $settlementDeptsParam = null;
         }
         
         // 통계 데이터 조회
-        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam);
+        $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam, $settlementDeptsParam);
         
         // 최근 주문 조회
-        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam);
+        $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam, $settlementDeptsParam);
         
         // 선택된 고객사 정보
         $selectedCustomer = null;

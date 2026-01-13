@@ -48,7 +48,14 @@
                     <?php foreach ($user_list as $user): ?>
                     <tr class="hover:bg-gray-50">
                         <td class="px-4 py-2 text-sm">
-                            <a href="<?= base_url('admin/company-customer-form?comp_code=' . urlencode($comp_code ?? $company_info['comp_code'] ?? '') . '&mode=edit&user_id=' . urlencode($user['user_id'] ?? '')) ?>" 
+                            <?php
+                            $formUrl = 'admin/company-customer-form?comp_code=' . urlencode($comp_code ?? $company_info['comp_code'] ?? '') . '&mode=edit&user_id=' . urlencode($user['user_id'] ?? '');
+                            // 검색 파라미터가 있으면 함께 전달
+                            if (!empty($search_keyword)) {
+                                $formUrl .= '&search_keyword=' . urlencode($search_keyword);
+                            }
+                            ?>
+                            <a href="<?= base_url($formUrl) ?>" 
                                class="text-blue-600 hover:text-blue-800 hover:underline">
                                 <?= esc($user['user_id'] ?? '') ?>
                             </a>
@@ -66,7 +73,18 @@
                         </td>
                         <td class="px-4 py-2 text-sm"><?= esc($user['user_memo'] ?? '-') ?></td>
                         <td class="px-4 py-2 text-sm text-center">
-                            <span class="px-2 py-1 text-xs font-semibold rounded <?= ($user['user_class'] ?? '5') == '1' ? 'bg-purple-100 text-purple-800' : (($user['user_class'] ?? '5') == '3' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800') ?>">
+                            <?php
+                            $userClass = $user['user_class'] ?? '5';
+                            $badgeClass = 'bg-gray-100 text-gray-800';
+                            if ($userClass == '1' || $userClass == '2') {
+                                $badgeClass = 'bg-purple-100 text-purple-800';
+                            } elseif ($userClass == '3') {
+                                $badgeClass = 'bg-blue-100 text-blue-800';
+                            } elseif ($userClass == '4') {
+                                $badgeClass = 'bg-green-100 text-green-800';
+                            }
+                            ?>
+                            <span class="px-2 py-1 text-xs font-semibold rounded <?= $badgeClass ?>">
                                 <?= esc($user['user_class_label'] ?? '일반') ?>
                             </span>
                         </td>
