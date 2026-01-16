@@ -71,42 +71,42 @@
             <table class="min-w-full bg-white border border-gray-200">
                 <thead class="bg-gray-50">
                     <tr id="table-header-row">
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b delivery-list-header" data-column-index="0">번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="1" draggable="true">접수일자</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="2" draggable="true">전표</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="3" draggable="true">상태</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="4" draggable="true">주문번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="5" draggable="true">의뢰자</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="6" draggable="true">의뢰담당</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="7" draggable="true">출발지</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="8" draggable="true">출발동</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="9" draggable="true">출발담당</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="10" draggable="true">출발부서</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="11" draggable="true">출발전화번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="12" draggable="true">출발상세</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="13" draggable="true">도착지</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">도착동</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">도착담당</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착전화번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">도착상세</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">왕복</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">형태</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">차종</th>
-                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="21" draggable="true" style="text-align: right !important;">기본요금</th>
-                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="22" draggable="true" style="text-align: right !important;">추가</th>
-                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="23" draggable="true" style="text-align: right !important;">탁송료</th>
-                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="24" draggable="true" style="text-align: right !important;">정산금액</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="25" draggable="true">상품</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="26" draggable="true">적요</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="27" draggable="true">채널</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b delivery-list-header" data-column-index="0">번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="1" draggable="true">접수일자</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="2" draggable="true">전표</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="3" draggable="true">상태</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="4" draggable="true">주문번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="5" draggable="true">의뢰자</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="6" draggable="true">의뢰담당</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="7" draggable="true">출발지</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="8" draggable="true">출발동</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="9" draggable="true">출발담당</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="10" draggable="true">출발부서</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="11" draggable="true">출발전화번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="12" draggable="true">출발상세</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="13" draggable="true">도착지</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">도착동</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">도착담당</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착전화번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">도착상세</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">왕복</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">형태</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">차종</th>
+                        <th class="px-4 py-2 text-right text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="21" draggable="true" style="text-align: right !important;">기본요금</th>
+                        <th class="px-4 py-2 text-right text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="22" draggable="true" style="text-align: right !important;">추가</th>
+                        <th class="px-4 py-2 text-right text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="23" draggable="true" style="text-align: right !important;">탁송료</th>
+                        <th class="px-4 py-2 text-right text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="24" draggable="true" style="text-align: right !important;">정산금액</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="25" draggable="true">상품</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="26" draggable="true">적요</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="27" draggable="true">채널</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                 <?php foreach ($orders as $order): ?>
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-2 text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="1"><?= esc($order['formatted_order_datetime'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="2">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="1"><?= esc($order['formatted_order_datetime'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="2">
                         <?php 
                         // 완료된 주문인지 확인 (state='30' 또는 status_label='완료')
                         $isCompleted = false;
@@ -125,14 +125,14 @@
                             -
                         <?php endif; ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="3">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="3">
                         <?php if ($order['show_map_on_click'] ?? false): ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php else: ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php endif; ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="4">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="4">
                         <?php if (!empty($order['display_order_number']) && $order['display_order_number'] !== '-' && ($order['order_system'] ?? '') === 'insung'): ?>
                             <a href="javascript:void(0)" onclick="viewInsungOrderDetail('<?= esc($order['display_order_number']) ?>')" class="text-blue-600 hover:text-blue-800 no-underline cursor-pointer">
                                 <?= esc($order['display_order_number']) ?>
@@ -141,9 +141,9 @@
                             <?= esc($order['display_order_number'] ?? '-') ?>
                         <?php endif; ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="5"><?= esc($order['company_name'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="6"><?= esc($order['customer_duty'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="7">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="5"><?= esc($order['company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="6"><?= esc($order['customer_duty'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="7">
                         <?php 
                         $departureAddr = $order['departure_address'] ?? '-';
                         if ($departureAddr !== '-' && mb_strlen($departureAddr, 'UTF-8') > 20) {
@@ -153,12 +153,12 @@
                         }
                         ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="8"><?= esc($order['departure_dong'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="9"><?= esc($order['departure_manager'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="10"><?= esc($order['departure_department'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="11"><?= esc($order['departure_contact'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="12"><?= esc($order['departure_detail'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="13">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="8"><?= esc($order['departure_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="9"><?= esc($order['departure_manager'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="10"><?= esc($order['departure_department'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="11"><?= esc($order['departure_contact'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="12"><?= esc($order['departure_detail'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="13">
                         <?php 
                         $destinationAddr = $order['destination_address'] ?? '-';
                         if ($destinationAddr !== '-' && mb_strlen($destinationAddr, 'UTF-8') > 20) {
@@ -168,10 +168,10 @@
                         }
                         ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="14"><?= esc($order['destination_dong'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="15"><?= esc($order['destination_manager'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="16"><?= esc($order['destination_contact'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="17">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="14"><?= esc($order['destination_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="15"><?= esc($order['destination_manager'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="16"><?= esc($order['destination_contact'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="17">
                         <?php 
                         $detailAddr = $order['detail_address'] ?? '-';
                         if ($detailAddr !== '-' && mb_strlen($detailAddr, 'UTF-8') > 20) {
@@ -181,16 +181,16 @@
                         }
                         ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="18"><?= esc($order['delivery_route_label'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="19"><?= esc($order['service_category'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="20"><?= esc($order['car_type'] ?? ($order['car_kind'] ?? '-')) ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="18"><?= esc($order['delivery_route_label'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="19"><?= esc($order['service_category'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="20"><?= esc($order['car_type'] ?? ($order['car_kind'] ?? '-')) ?></td>
                     <td class="px-4 py-2 text-sm text-right" data-column-index="21" style="text-align: right !important;"><?= esc($order['total_fare_formatted'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm text-right" data-column-index="22" style="text-align: right !important;"><?= esc($order['add_cost_formatted'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm text-right" data-column-index="23" style="text-align: right !important;"><?= esc($order['delivery_cost_formatted'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm text-right" data-column-index="24" style="text-align: right !important;"><?= esc($order['total_amount_formatted'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="25"><?= esc($order['item_type'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="26"><?= esc($order['delivery_content'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="27"><?= esc($order['channel_label'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="25"><?= esc($order['item_type'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="26"><?= esc($order['delivery_content'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="27"><?= esc($order['channel_label'] ?? '-') ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>

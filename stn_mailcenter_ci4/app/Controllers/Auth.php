@@ -64,6 +64,79 @@ class Auth extends BaseController
             $apiList = $insungApiListModel->getApiListByMcode('4540');
         }
         
+        // QR코드 생성 (PHP 라이브러리 사용)
+        $qrCodeBase64 = null;
+        try {
+            // 로고 이미지 경로 결정
+            $logoPath = null;
+            if (!empty($subdomainInfo['logo_path'])) {
+                $logoPath = ROOTPATH . 'public/' . $subdomainInfo['logo_path'];
+                if (!file_exists($logoPath)) {
+                    $logoPath = null;
+                }
+            }
+            // 로고가 없으면 기본 DaumData 로고 사용
+            if (!$logoPath) {
+                $defaultLogoPath = ROOTPATH . 'public/assets/images/logo/daumdata_logo_2.png';
+                if (file_exists($defaultLogoPath)) {
+                    $logoPath = $defaultLogoPath;
+                }
+            }
+            
+            // QR코드 크기 (더 크게 생성하여 로고가 인식 범위 안쪽에 들어가도록)
+            $qrSize = 200;
+            // 로고 크기: QR코드 크기의 약 15% (인식 범위 안쪽에 안전하게 배치)
+            $logoSize = 30;
+            
+            // endroid/qr-code v4.x 사용
+            if (class_exists('\Endroid\QrCode\Builder\Builder')) {
+                $builder = \Endroid\QrCode\Builder\Builder::create()
+                    ->writer(new \Endroid\QrCode\Writer\PngWriter())
+                    ->data(current_url())
+                    ->size($qrSize)
+                    ->margin(2);
+                
+                // 오류 정정 레벨 설정 (H: High - 최대 30% 데이터 손실 허용)
+                if (class_exists('\Endroid\QrCode\ErrorCorrectionLevel')) {
+                    $builder->errorCorrectionLevel(\Endroid\QrCode\ErrorCorrectionLevel::High);
+                }
+                
+                // 로고가 있으면 중앙에 추가 (인식 범위 안쪽에 배치)
+                if ($logoPath) {
+                    $builder->logoPath($logoPath)
+                        ->logoResizeToWidth($logoSize)
+                        ->logoResizeToHeight($logoSize);
+                }
+                
+                $result = $builder->build();
+                $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($result->getString());
+            }
+            // endroid/qr-code v3.x 사용 (하위 호환)
+            elseif (class_exists('\Endroid\QrCode\QrCode')) {
+                $qrCode = new \Endroid\QrCode\QrCode(current_url());
+                $qrCode->setSize($qrSize);
+                $qrCode->setMargin(2);
+                
+                // 오류 정정 레벨 설정 (H: High)
+                if (method_exists($qrCode, 'setErrorCorrectionLevel')) {
+                    $qrCode->setErrorCorrectionLevel(\Endroid\QrCode\ErrorCorrectionLevel::High);
+                }
+                
+                // 로고가 있으면 중앙에 추가 (인식 범위 안쪽에 배치)
+                if ($logoPath) {
+                    $qrCode->setLogoPath($logoPath);
+                    $qrCode->setLogoWidth($logoSize);
+                    $qrCode->setLogoHeight($logoSize);
+                }
+                
+                $writer = new \Endroid\QrCode\Writer\PngWriter();
+                $result = $writer->write($qrCode);
+                $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($result->getString());
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'QR코드 생성 실패: ' . $e->getMessage());
+        }
+        
         $data = [
             'title' => $subdomainInfo['name'] . ' - 로그인',
             'error' => session()->getFlashdata('error'),
@@ -71,7 +144,8 @@ class Auth extends BaseController
             'is_subdomain' => $isSubdomainAccess,
             'api_idx' => $apiIdx,
             'api_code' => $apiCode, // api_code 추가
-            'api_list' => $apiList
+            'api_list' => $apiList,
+            'qr_code' => $qrCodeBase64
         ];
         
         return view('auth/login', $data);

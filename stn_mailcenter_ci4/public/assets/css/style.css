@@ -2106,87 +2106,101 @@ div[class*="fixed"][class*="inset-0"][class*="items-center"][class*="justify-cen
     }
 }
 
-/* 검색 필터 반응형 - 768px 미만: 모든 요소 한 줄에 배치, 라벨 제거 */
+/* 검색 필터 반응형 - 768px 미만: 그리드 레이아웃으로 여러 줄 배치 */
 @media (max-width: 767px) {
-    /* 검색 필터 컨테이너 - 한 줄에 모든 요소 배치 */
+    /* 검색 필터 컨테이너 - 그리드 레이아웃으로 변경 */
     .search-filter-container {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 6px !important;
-        align-items: center !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+        align-items: start !important;
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
     }
     
-    /* 검색 필터 라벨 제거 */
+    /* 검색 필터 라벨 - 다시 표시하되 작게 */
     .search-filter-label {
-        display: none !important;
+        display: block !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        color: #4a5568 !important;
+        margin-bottom: 4px !important;
+        line-height: 1.2 !important;
+        height: auto !important;
     }
     
-    /* 검색 필터 아이템 - 한 줄에 배치 */
+    /* 검색 필터 아이템 - 세로 배치 */
     .search-filter-item {
         display: flex !important;
-        flex-direction: row !important;
-        flex: 0 0 auto !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 4px !important;
         min-width: 0 !important;
-        max-width: none !important;
-        align-items: center !important;
-        gap: 0 !important;
+        width: 100% !important;
+        min-height: auto !important;
     }
     
-    /* 검색 필터 입력 필드 - 라벨 제거 후 크기 조정 */
+    /* 검색 필터 입력 필드 - 전체 너비 사용 */
     .search-filter-item .search-filter-select,
     .search-filter-item .search-filter-input,
     .search-filter-select,
     .search-filter-input {
-        min-width: 70px !important;
-        max-width: 120px !important;
-        width: auto !important;
-        padding: 6px 8px !important;
-        font-size: 11px !important;
-        flex: 0 0 auto !important;
-    }
-    
-    /* 단일 검색 필드일 때는 충분한 공간 확보 (모바일 미디어 쿼리 내에서도 우선 적용) */
-    .search-compact .search-filter-container.search-single-field .search-filter-item {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 8px 12px !important;
+        font-size: 14px !important;
         flex: 1 1 auto !important;
-        min-width: 250px !important;
-        max-width: none !important;
-        width: auto !important;
+        height: 40px !important;
+        line-height: 24px !important;
     }
     
-    .search-compact .search-filter-container.search-single-field .search-filter-input {
-        flex: 1 1 auto !important;
-        min-width: 200px !important;
-        max-width: none !important;
-        width: auto !important;
-    }
-    
-    /* 검색 버튼 래퍼 - 같은 줄에 배치 */
+    /* 검색 버튼 래퍼 - 전체 너비 사용 */
     .search-filter-button-wrapper {
-        flex-shrink: 0 !important;
+        grid-column: 1 / -1 !important;
         display: flex !important;
-        flex-direction: row !important;
-        gap: 6px !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
+        justify-content: stretch !important;
+        gap: 8px !important;
+        margin-top: 4px !important;
     }
     
-    /* 검색 버튼 - 같은 줄에 배치 */
+    /* 검색 버튼 - 전체 너비 사용 */
     .search-filter-button-wrapper .search-button {
-        flex-shrink: 0 !important;
-        white-space: nowrap !important;
-        padding: 6px 10px !important;
-        font-size: 11px !important;
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        padding: 12px 16px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
         min-width: auto !important;
-        width: auto !important;
+        height: 44px !important;
     }
     
     /* 검색 영역 패딩 조정 */
     .search-compact {
-        padding: 12px !important;
-        overflow: hidden !important; /* 스크롤 방지 */
+        padding: 16px !important;
+        overflow: visible !important;
+        min-height: auto !important;
+        height: auto !important;
+    }
+    
+    /* 단일 검색 필드일 때는 전체 너비 사용 */
+    .search-compact .search-filter-container.search-single-field {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .search-compact .search-filter-container.search-single-field .search-filter-item {
+        grid-column: 1 !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+    
+    .search-compact .search-filter-container.search-single-field .search-filter-input {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
     }
 }
 

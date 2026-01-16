@@ -9,9 +9,10 @@
     <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
 </head>
 <body class="login-page">
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-300 to-gray-400">
-        <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <div class="text-center mb-6">
+    <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-300 to-gray-400">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md relative">
+            <div class="text-center mb-6 relative">
+                <!-- 로고 - 정 가운데 배치 -->
                 <?php if (!empty($subdomain['logo_path'])): ?>
                     <!-- 로고 이미지가 있는 경우 -->
                     <img src="<?= base_url($subdomain['logo_path']) ?>" alt="<?= esc($subdomain['name']) ?>" class="h-16 mx-auto mb-3 object-contain">
@@ -126,6 +127,13 @@
                 비밀번호: admin
             </div> -->
         </div>
+        
+        <!-- QR코드 - 로그인 패널 바로 밑에 떠있는 형태 -->
+        <?php if (!empty($qr_code)): ?>
+        <div class="mt-6 flex justify-center">
+            <img src="<?= esc($qr_code) ?>" alt="QR Code" style="width: 150px; height: 150px; display: block; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1); border-radius: 8px; background: white; padding: 8px;">
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- 개인정보처리방침 레이어팝업 -->

@@ -90,37 +90,37 @@
             <table class="min-w-full bg-white border border-gray-200">
                 <thead class="bg-gray-50">
                     <tr id="table-header-row">
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b delivery-list-header" data-column-index="0">번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="1" draggable="true">접수일자</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="2" draggable="true">예약일</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="3" draggable="true">상태</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="4" draggable="true">회사명</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="5" draggable="true">완료시간</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="6" draggable="true">접수부서</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="7" draggable="true">접수담당</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="8" draggable="true">도착지담당명</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="9" draggable="true">전달내용</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="10" draggable="true">상품</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="11" draggable="true">라이더연락처</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="12" draggable="true">주문번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="13" draggable="true">출발지고객명</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">출발지담당명</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">출발지동</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착지고객명</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">도착지동</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">지불</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">배송</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">배송수단</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="21" draggable="true">기사번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="22" draggable="true">기사이름</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b delivery-list-header delivery-list-cell-action" data-column-index="23">액션</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b delivery-list-header" data-column-index="0">번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="1" draggable="true">접수일자</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="2" draggable="true">예약일</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="3" draggable="true">상태</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="4" draggable="true">회사명</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="5" draggable="true">완료시간</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="6" draggable="true">접수부서</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="7" draggable="true">접수담당</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="8" draggable="true">도착지담당명</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="9" draggable="true">전달내용</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="10" draggable="true">상품</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="11" draggable="true">라이더연락처</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="12" draggable="true">주문번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="13" draggable="true">출발지고객명</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">출발지담당명</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">출발지동</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착지고객명</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">도착지동</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">지불</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">배송</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">배송수단</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="21" draggable="true">기사번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="22" draggable="true">기사이름</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b delivery-list-header delivery-list-cell-action" data-column-index="23">액션</th>
                 </tr>
             </thead>
                 <tbody class="divide-y divide-gray-200">
                 <?php foreach ($orders as $order): ?>
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-2 text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="1">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="1">
                         <?php
                         $orderDate = $order['order_date'] ?? '';
                         $orderTime = $order['order_time'] ?? '';
@@ -133,8 +133,8 @@
                         }
                         ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="2"><?= esc($order['reserve_date'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="3">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="2"><?= esc($order['reserve_date'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="3">
                         <?php if ($order['show_map_on_click'] ?? false): ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php elseif ($order['show_ilyang_detail'] ?? false): ?>
@@ -143,14 +143,14 @@
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php endif; ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="4"><?= esc($order['company_name'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="5"><?= esc($order['complete_time'] ? date('Y-m-d H:i', strtotime($order['complete_time'])) : '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="6"><?= esc($order['customer_department'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="7"><?= esc($order['customer_duty'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="8"><?= esc($order['destination_manager'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="9"><?= esc($order['delivery_content'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="10"><?= esc($order['item_type'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="11"><?= esc($order['rider_tel_number'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="4"><?= esc($order['company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="5"><?= esc($order['complete_time'] ? date('Y-m-d H:i', strtotime($order['complete_time'])) : '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="6"><?= esc($order['customer_department'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="7"><?= esc($order['customer_duty'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="8"><?= esc($order['destination_manager'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="9"><?= esc($order['delivery_content'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="10"><?= esc($order['item_type'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="11"><?= esc($order['rider_tel_number'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm delivery-list-cell-order-number" data-column-index="12">
                         <span class="delivery-list-cell-order-number-content">
                             <?= esc($order['display_order_number'] ?? '-') ?>
@@ -162,20 +162,20 @@
                             <?php endif; ?>
                         </span>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="13"><?= esc($order['departure_company_name'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="14"><?= esc($order['departure_manager'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="15"><?= esc($order['departure_dong'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="16"><?= esc($order['destination_company_name'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="17"><?= esc($order['destination_dong'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="18">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="13"><?= esc($order['departure_company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="14"><?= esc($order['departure_manager'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="15"><?= esc($order['departure_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="16"><?= esc($order['destination_company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="17"><?= esc($order['destination_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="18">
                         <?= esc($order['payment_type_label'] ?? '-') ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="19">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="19">
                         <?= esc($order['general_status_label'] ?? '-') ?>
                     </td>
-                    <td class="px-4 py-2 text-sm" data-column-index="20"><?= esc($order['car_type'] ?? ($order['delivery_method'] ?? '-')) ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="21"><?= esc($order['rider_code_no'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="22"><?= esc($order['rider_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="20"><?= esc($order['car_type'] ?? ($order['delivery_method'] ?? '-')) ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="21"><?= esc($order['rider_code_no'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="22"><?= esc($order['rider_name'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm delivery-list-cell-action" data-column-index="23">
                         <span class="delivery-list-cell-action-buttons">
                             <button onclick="viewOrderDetail('<?= esc($order['encrypted_order_number'] ?? '') ?>')" class="delivery-list-cell-action-button">상세</button>
