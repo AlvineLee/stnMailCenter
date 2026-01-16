@@ -1555,7 +1555,7 @@ class InsungApiService
         // onlyDept가 true이면 부서별 오더목록만 호출
         // 2번 호출: 1) state 파라미터 없이 (모든 상태), 2) state=40 (취소)
         if ($onlyDept) {
-            $urlDept = $this->baseUrl . "/api/order_list/dept/detail";
+            $urlDept = $this->baseUrl . "/api/order_list/dept/";
             $allOrdersDept = [];
             
             // log_message('info', "Insung API: 부서별 오더목록 호출 (onlyDept=true) - 2번 호출 구조 - {$urlDept}");
