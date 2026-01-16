@@ -25,17 +25,123 @@ class SearchCompany extends BaseController
         $apiIdx = $this->request->getGet('api_idx');
         $apiCode = $this->request->getGet('api_code'); // api_code 파라미터 추가
         
-        if (empty($apiIdx)) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'API 정보가 없습니다.'
-            ])->setStatusCode(400);
-        }
-
-        // API 정보 조회
-        $apiInfo = $this->insungApiListModel->find($apiIdx);
+        // 서브도메인 설정 확인
+        $subdomainConfig = config('Subdomain');
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $isSubdomainAccess = ($currentSubdomain && $currentSubdomain !== 'default');
         
-        if (!$apiInfo) {
+        // 입력된 값을 퀵사 코드(api_code)로 먼저 조회 시도 (예: "8900" -> api_idx=2)
+        $apiInfo = null;
+        $originalApiIdx = $apiIdx;
+        
+        log_message('debug', 'SearchCompany::index - 입력값: api_idx=' . $apiIdx . ', api_code=' . ($apiCode ?? 'null'));
+        
+        if (!empty($apiIdx)) {
+            // 먼저 퀵사 코드(api_code)로 조회 시도
+            $quickCode = $originalApiIdx;
+            
+            try {
+                // tbl_api_list에서 api_code로 조회
+                log_message('debug', 'SearchCompany::index - 퀵사 코드로 조회 시도: ' . $quickCode);
+                $apiInfo = $this->insungApiListModel->getApiInfoByCode($quickCode);
+                
+                if ($apiInfo && !empty($apiInfo['idx'])) {
+                    // 퀵사 코드로 조회 성공: api_idx 변환
+                    log_message('debug', 'SearchCompany::index - 퀵사 코드로 조회 성공: api_idx=' . $apiInfo['idx']);
+                    $apiIdx = $apiInfo['idx'];
+                    if (empty($apiCode) && !empty($apiInfo['api_code'])) {
+                        $apiCode = $apiInfo['api_code'];
+                    }
+                } else {
+                    // 퀵사 코드로 조회 실패한 경우, cccode로 조회 시도
+                    log_message('debug', 'SearchCompany::index - 퀵사 코드로 조회 실패, cccode로 조회 시도: ' . $quickCode);
+                    if (is_numeric($quickCode)) {
+                        // 숫자인 경우 cccode로 조회 시도
+                        $apiInfo = $this->insungApiListModel->where('cccode', $quickCode)->first();
+                        if ($apiInfo && !empty($apiInfo['idx'])) {
+                            log_message('debug', 'SearchCompany::index - cccode로 조회 성공: api_idx=' . $apiInfo['idx']);
+                            $apiIdx = $apiInfo['idx'];
+                            if (empty($apiCode) && !empty($apiInfo['api_code'])) {
+                                $apiCode = $apiInfo['api_code'];
+                            }
+                        }
+                    }
+                    
+                    // cccode로도 조회 실패한 경우, 회사 코드(comp_code)로 조회 시도
+                    if (!$apiInfo) {
+                        log_message('debug', 'SearchCompany::index - cccode로도 조회 실패, 회사 코드로 조회 시도: ' . $quickCode);
+                        $compCode = $quickCode;
+                        
+                        $db = \Config\Database::connect();
+                        $compBuilder = $db->table('tbl_company_list c');
+                        $compBuilder->select('
+                            d.idx as api_idx,
+                            d.api_code,
+                            d.mcode as m_code,
+                            d.cccode as cc_code,
+                            d.token
+                        ');
+                        $compBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+                        $compBuilder->join('tbl_api_list d', 'cc.cc_apicode = d.idx', 'inner');
+                        $compBuilder->where('c.comp_code', $compCode);
+                        $compQuery = $compBuilder->get();
+                        
+                        if ($compQuery !== false) {
+                            $compResult = $compQuery->getRowArray();
+                            if ($compResult && !empty($compResult['api_idx'])) {
+                                // 회사 코드로 조회 성공: api_idx 변환
+                                log_message('debug', 'SearchCompany::index - 회사 코드로 조회 성공: api_idx=' . $compResult['api_idx']);
+                                $apiIdx = $compResult['api_idx'];
+                                if (empty($apiCode) && !empty($compResult['api_code'])) {
+                                    $apiCode = $compResult['api_code'];
+                                }
+                                
+                                // 변환된 api_idx로 다시 조회
+                                $apiInfo = $this->insungApiListModel->find($apiIdx);
+                            } else {
+                                log_message('debug', 'SearchCompany::index - 회사 코드로 조회 실패: comp_code=' . $compCode);
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                log_message('error', 'SearchCompany::index - Error getting API info: ' . $e->getMessage());
+            }
+            
+            // 퀵사 코드와 회사 코드로 모두 조회 실패한 경우, api_idx로 직접 조회 시도
+            if (!$apiInfo && is_numeric($originalApiIdx)) {
+                log_message('debug', 'SearchCompany::index - api_idx로 직접 조회 시도: ' . $originalApiIdx);
+                $apiInfo = $this->insungApiListModel->find($originalApiIdx);
+                if ($apiInfo) {
+                    log_message('debug', 'SearchCompany::index - api_idx로 직접 조회 성공');
+                    $apiIdx = $originalApiIdx; // 원래 값 유지
+                } else {
+                    log_message('debug', 'SearchCompany::index - api_idx로 직접 조회 실패: ' . $originalApiIdx);
+                }
+            }
+        }
+        
+        log_message('debug', 'SearchCompany::index - 최종 결과: api_idx=' . ($apiIdx ?? 'null') . ', apiInfo=' . ($apiInfo ? '있음' : '없음'));
+        
+        // api_idx가 없거나 찾지 못했고, 서브도메인 접근인 경우 서브도메인 설정에서 API 정보 가져오기
+        if ((empty($apiIdx) || !$apiInfo) && $isSubdomainAccess) {
+            $subdomainApiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+            if ($subdomainApiInfo && !empty($subdomainApiInfo['api_idx'])) {
+                $apiIdx = $subdomainApiInfo['api_idx'];
+                // api_idx로 다시 조회
+                $apiInfo = $this->insungApiListModel->find($apiIdx);
+                // apiInfo에서 api_code 가져오기
+                if ($apiInfo && empty($apiCode) && !empty($apiInfo['api_code'])) {
+                    $apiCode = $apiInfo['api_code'];
+                }
+            }
+        }
+        
+        if (empty($apiIdx) || !$apiInfo) {
+            // AJAX 요청이 아니면 에러 페이지로 리다이렉트
+            if (!$this->request->isAJAX()) {
+                return redirect()->to('/auth/login')->with('error', 'API 정보를 찾을 수 없습니다.');
+            }
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'API 정보를 찾을 수 없습니다.'
@@ -261,6 +367,14 @@ class SearchCompany extends BaseController
         $mcode = $apiInfo['mcode'] ?? '';
         $cccode = $apiInfo['cccode'] ?? '';
         $token = $this->insungApiService->getTokenKey($apiIdx);
+
+        // 필수값 검증
+        if (empty($mcode) || empty($cccode) || empty($token)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 인증 정보가 올바르지 않습니다.'
+            ])->setStatusCode(400);
+        }
 
         // 회원 리스트 조회
         $result = $this->insungApiService->getCustomerAttachedList(
@@ -1022,9 +1136,12 @@ class SearchCompany extends BaseController
             $msg = $result[0]->msg ?? '';
         }
 
+        // [자동 토큰 갱신 비활성화] 다중 서버 환경에서 토큰 갱신 시 다른 서버의 요청이 실패할 수 있으므로
+        // 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 합니다.
         // 토큰 만료 시 갱신
         if ($code == "1001") {
-            $this->insungApiService->updateTokenKey($apiIdx);
+            log_message('warning', "SearchCompany: Token expired (code 1001) for api_idx: {$apiIdx}. Manual token refresh required.");
+            // $this->insungApiService->updateTokenKey($apiIdx); // 자동 토큰 갱신 비활성화
             // 재시도는 하지 않고 에러 반환
         }
 

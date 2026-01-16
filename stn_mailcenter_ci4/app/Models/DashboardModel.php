@@ -117,8 +117,25 @@ class DashboardModel extends Model
                     }
                 } elseif ($userType == '5') {
                     // 일반 고객: 본인 고객사의 주문만
+                    // 단, env1=1(전체 조회)일 때는 필터 추가하지 않음
+                    // env1 확인
+                    $env1 = null;
+                    if ($compCodeForEnv) {
+                        $envBuilder = $this->db->table('tbl_company_env');
+                        $envBuilder->select('env1');
+                        $envBuilder->where('comp_code', $compCodeForEnv);
+                        $envQuery = $envBuilder->get();
+                        if ($envQuery !== false) {
+                            $envResult = $envQuery->getRowArray();
+                            if ($envResult && isset($envResult['env1'])) {
+                                $env1 = $envResult['env1'];
+                            }
+                        }
+                    }
+                    
+                    // env1=1(전체 조회)일 때도 comp_code 필터는 필요 (user_company 필터만 제거)
                     if ($compCode) {
-                        $builder->where('u_list.user_company', $compCode);
+                        $builder->where('o.customer_id', $compCode);
                     }
                 }
             } else {
@@ -343,7 +360,24 @@ class DashboardModel extends Model
                     }
                 } elseif ($userType == '5') {
                     // 일반 고객: 본인 고객사의 주문만
-                    if ($compCode) {
+                    // 단, env1=1(전체 조회)일 때는 필터 추가하지 않음
+                    // env1 확인
+                    $env1 = null;
+                    if ($compCodeForEnv) {
+                        $envBuilder = $this->db->table('tbl_company_env');
+                        $envBuilder->select('env1');
+                        $envBuilder->where('comp_code', $compCodeForEnv);
+                        $envQuery = $envBuilder->get();
+                        if ($envQuery !== false) {
+                            $envResult = $envQuery->getRowArray();
+                            if ($envResult && isset($envResult['env1'])) {
+                                $env1 = $envResult['env1'];
+                            }
+                        }
+                    }
+                    
+                    // env1=1(전체 조회)이 아닐 때만 compCode 필터 추가
+                    if ($env1 != '1' && $compCode) {
                         $todayBuilder->where('u_list.user_company', $compCode);
                     }
                 }
@@ -384,6 +418,7 @@ class DashboardModel extends Model
                 o.total_amount,
                 o.departure_company_name,
                 o.destination_company_name,
+                o.customer_duty,
                 st.service_name as service,
                 COALESCE(ch.customer_name, cl_ch.comp_name) as customer,
                 COALESCE(u.real_name, u_list.user_name) as user_name,
@@ -409,6 +444,7 @@ class DashboardModel extends Model
                 o.order_time,
                 o.created_at,
                 o.total_amount,
+                o.customer_duty,
                 st.service_name as service,
                 ch.customer_name as customer,
                 u.real_name as user_name,
@@ -481,9 +517,26 @@ class DashboardModel extends Model
                 }
             } elseif ($userType == '5') {
                 // 일반 고객: 본인 고객사의 주문만 (인성 API 주문만)
+                // 단, env1=1(전체 조회)일 때는 필터 추가하지 않음
+                // env1 확인
+                $env1 = null;
+                if ($compCodeForEnv) {
+                    $envBuilder = $this->db->table('tbl_company_env');
+                    $envBuilder->select('env1');
+                    $envBuilder->where('comp_code', $compCodeForEnv);
+                    $envQuery = $envBuilder->get();
+                    if ($envQuery !== false) {
+                        $envResult = $envQuery->getRowArray();
+                        if ($envResult && isset($envResult['env1'])) {
+                            $env1 = $envResult['env1'];
+                        }
+                    }
+                }
+                
+                // env1=1(전체 조회)일 때도 comp_code 필터는 필요 (user_company 필터만 제거)
                 if ($compCode) {
                     $builder->where('o.order_system', 'insung');
-                    $builder->where('u_list.user_company', $compCode);
+                    $builder->where('o.customer_id', $compCode);
                 }
             }
         } elseif (!$hasSubdomainFilter && $loginType !== 'daumdata') {
@@ -614,8 +667,25 @@ class DashboardModel extends Model
                 }
             } elseif ($userType == '5') {
                 // 일반 고객: 본인 고객사의 주문만
-                if ($compCode) {
-                    $builder->where('u_list.user_company', $compCode);
+                // 단, env1=1(전체 조회)일 때는 필터 추가하지 않음
+                // env1 확인
+                $env1 = null;
+                if ($compCodeForEnv) {
+                    $envBuilder = $this->db->table('tbl_company_env');
+                    $envBuilder->select('env1');
+                    $envBuilder->where('comp_code', $compCodeForEnv);
+                    $envQuery = $envBuilder->get();
+                    if ($envQuery !== false) {
+                        $envResult = $envQuery->getRowArray();
+                        if ($envResult && isset($envResult['env1'])) {
+                            $env1 = $envResult['env1'];
+                        }
+                    }
+                }
+                
+                // env1=1(전체 조회)이 아닐 때만 compCode 필터 추가
+                if ($env1 != '1' && $compCode) {
+                    $builder->where('o.customer_id', $compCode);
                 }
             }
         } else {

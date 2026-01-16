@@ -29,7 +29,8 @@ class EncryptionHelper
      */
     public function encrypt($data)
     {
-        if (empty($data)) {
+        // null이나 빈 문자열만 건너뛰기 (0은 유효한 값이므로 암호화)
+        if ($data === null || $data === '') {
             return $data;
         }
         
@@ -139,14 +140,27 @@ class EncryptionHelper
     public function encryptFields(array $data, array $fields)
     {
         foreach ($fields as $field) {
-            if (isset($data[$field]) && $data[$field] !== null && $data[$field] !== '') {
-                $encrypted = $this->encrypt($data[$field]);
-                if ($encrypted !== false) {
+            if (isset($data[$field])) {
+                $originalValue = $data[$field];
+                
+                // null이나 빈 문자열이면 건너뛰기 (0은 유효한 값이므로 암호화)
+                if ($originalValue === null || $originalValue === '') {
+                    // log_message('debug', "EncryptionHelper::encryptFields - Skipping field: {$field} (null or empty)");
+                    continue;
+                }
+                
+                // log_message('debug', "EncryptionHelper::encryptFields - Processing field: {$field}, value length: " . strlen($originalValue));
+                
+                $encrypted = $this->encrypt($originalValue);
+                if ($encrypted !== false && $encrypted !== $originalValue) {
                     $data[$field] = $encrypted;
+                    // log_message('debug', "EncryptionHelper::encryptFields - Successfully encrypted field: {$field}, length: " . strlen($encrypted));
                 } else {
                     // 암호화 실패 시 로그 출력
-                    log_message('error', 'EncryptionHelper::encryptFields - Failed to encrypt field: ' . $field . ', value: ' . substr($data[$field], 0, 20));
+                    log_message('error', 'EncryptionHelper::encryptFields - Failed to encrypt field: ' . $field . ', value: ' . substr($originalValue, 0, 20) . ', encrypted result: ' . ($encrypted === false ? 'false' : 'same as original'));
                 }
+            } else {
+                // log_message('debug', "EncryptionHelper::encryptFields - Field not found in data: {$field}");
             }
         }
         return $data;

@@ -14,7 +14,7 @@
                 <input type="hidden" name="api_idx" value="<?= esc($api_idx) ?>">
                 <div class="input-group">
                     <!-- 거래처코드는 항상 텍스트 입력으로 처리 -->
-                    <input type="text" name="comp_code" id="comp_code" class="form-input" placeholder="거래처코드" value="<?= esc($comp_code) ?>" required>
+                    <input type="text" name="comp_code" id="comp_code" class="form-input" placeholder="거래처코드" value="" required>
                     <input type="text" name="charge_name" id="charge_name" class="form-input" placeholder="담당자명" value="">
                     <input type="text" name="tel_no" id="tel_no" class="form-input" placeholder="전화번호" value="">
                     <button type="submit" class="search-button">조회하기</button>
@@ -181,13 +181,20 @@
                             const buttonOnClick = isDisabled ? '' : `onclick="useMember('${member.c_code}', ${currentSearchParams.api_idx})"`;
                             const buttonText = isRegistered ? '사용중' : '사용하기';
                             
+                            // use_state가 "중지"인 경우 아이디만 표시하고 나머지는 숨김
+                            const isStopped = member.use_state === '중지' || member.use_state === 'N' || (member.use_state && member.use_state !== 'Y');
+                            const deptNameDisplay = isStopped ? '' : escapeHtml(member.dept_name || '');
+                            const chargeNameDisplay = isStopped ? '' : escapeHtml(member.charge_name || '');
+                            const telDisplayFinal = isStopped ? '' : telDisplay;
+                            const buttonDisplay = isStopped ? 'none' : '';
+                            
                             row.innerHTML = `
                                 <td style="width: 50px; min-width: 50px;">${reverseNumber}</td>
-                                <td class="w110">${escapeHtml(member.dept_name || '')}</td>
-                                <td class="w110">${escapeHtml(member.charge_name || '')}</td>
-                                <td class="w110">${telDisplay}</td>
+                                <td class="w110">${deptNameDisplay}</td>
+                                <td class="w110">${chargeNameDisplay}</td>
+                                <td class="w110">${telDisplayFinal}</td>
                                 <td class="w110">${escapeHtml(member.user_id || '')}</td>
-                                <td class="w110">
+                                <td class="w110" style="display: ${buttonDisplay};">
                                     <button type="button" class="${buttonClass}" ${buttonOnClick} style="${buttonStyle}" ${isDisabled ? 'disabled' : ''}>${buttonText}</button>
                                 </td>
                             `;

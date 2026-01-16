@@ -63,7 +63,9 @@ class Delivery extends BaseController
             'start_date' => $startDate,
             'end_date' => $endDate,
             'order_by' => $orderBy,
-            'order_dir' => $orderDir
+            'order_dir' => $orderDir,
+            'login_type' => $loginType,
+            'comp_code' => session()->get('comp_code')
         ];
         
         // 서브도메인 기반 필터링 (우선순위 1)
@@ -131,61 +133,19 @@ class Delivery extends BaseController
             }
         }
         
-        // user_class별 필터링 (주문조회 권한)
-        // user_type과 user_class는 별개로 판단
-        // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한
-        if ($loginType === 'daumdata') {
-            if ($userClass == '1' || $userClass == '2') {
-                // user_class = 1,2: 전체 주문 리스트 (dept_name 필터 없음, user_type과 관계없이)
-                // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null; // 전체 조회
-            } elseif ($userClass == '4') {
-                // user_class = 4(정산담당자): 정산관리부서로 필터링
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null;
-                if ($userIdx) {
-                    $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
-                    $settlementDepts = $userSettlementDeptModel->getSettlementDeptNamesForQuery($userIdx);
-                    if ($settlementDepts !== null && !empty($settlementDepts)) {
-                        $filters['settlement_depts'] = $settlementDepts; // 정산관리부서 목록 필터 추가
-                    } else {
-                        // 정산관리부서가 설정되지 않았으면 빈 결과
-                        $filters['settlement_depts'] = [];
-                    }
-                } else {
-                    $filters['settlement_depts'] = [];
-                }
-            } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
-                // user_class = 3 이상: 부서명으로 필터링
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null;
-                $filters['user_dept'] = $userDept; // 부서명 필터 추가
-            } elseif ($userClass == '3') {
-                // user_class = 3(부서장): 전체 주문 리스트 (dept_name이 없을 경우)
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null; // 전체 조회
-            } elseif ($userClass == '5') {
-                // user_class = 5(일반): 같은 회사(comp_code)의 모든 주문 조회
-                $filters['user_type'] = '5';
-                $filters['user_company'] = $userCompany; // 같은 회사의 모든 주문 조회
-            } else {
-                // user_class가 없거나 다른 값인 경우 user_type으로 폴백
-                if ($userType == '1') {
-                    $filters['user_type'] = '1';
-                    $filters['customer_id'] = null;
-                } elseif ($userType == '3') {
-                    $filters['user_type'] = '3';
-                    $filters['user_company'] = $userCompany;
-                } elseif ($userType == '5') {
-                    $filters['user_type'] = '5';
-                    $filters['user_company'] = $userCompany;
-                }
-            }
-        } else {
-            // STN 로그인인 경우 기존 로직
-            $filters['customer_id'] = $userRole !== 'super_admin' ? $customerId : null;
-        }
+        // user_class별 필터링 (주문조회 권한) - 공통 메서드 사용
+        $userClassFilters = $this->buildUserClassFilters(
+            $loginType,
+            $userClass,
+            $userType,
+            $userCompany,
+            $userDept,
+            $userIdx,
+            $subdomainCompCode,
+            $userRole,
+            $customerId
+        );
+        $filters = array_merge($filters, $userClassFilters);
         
         // 본인주문조회(env1=3) 필터링: 일반 등급(user_class=5)일 때만 insung_user_id로 필터링
         
@@ -271,6 +231,9 @@ class Delivery extends BaseController
                 
                 // 인성 API 주문 상세 동기화
                 $this->syncInsungOrderDetailsViaCLI();
+                
+                // 일양 API 주문 상태 동기화 (order_system='ilyang'인 주문들)
+                $this->syncIlyangOrdersViaCLI($startDate, $endDate);
             } catch (\Exception $e) {
                 // 동기화 실패해도 리스트는 표시
                 log_message('error', "Failed to trigger Insung sync on list page: " . $e->getMessage());
@@ -415,7 +378,17 @@ class Delivery extends BaseController
             
             $formattedOrder['status_label'] = $statusLabel;
             $formattedOrder['status_class'] = $statusClass;
-            $formattedOrder['show_map_on_click'] = $showMapOnClick && !empty($insungOrderNumberForMap);
+            
+            // 일양 주문인 경우 배송정보 상세 조회 가능 플래그
+            $formattedOrder['show_ilyang_detail'] = (
+                ($order['order_system'] ?? '') === 'ilyang' &&
+                !empty($order['shipping_tracking_number'])
+            );
+            $formattedOrder['ilyang_tracking_number'] = $order['shipping_tracking_number'] ?? '';
+            
+            // 일양 주문인 경우 맵 표시 비활성화 (일양은 상세 조회만 가능)
+            $isIlyangOrder = ($order['order_system'] ?? '') === 'ilyang';
+            $formattedOrder['show_map_on_click'] = !$isIlyangOrder && $showMapOnClick && !empty($insungOrderNumberForMap);
             $formattedOrder['is_riding'] = $isRiding;
             $formattedOrder['insung_order_number_for_map'] = $insungOrderNumberForMap;
             
@@ -735,6 +708,69 @@ class Delivery extends BaseController
     }
     
     /**
+     * 일양 배송정보 상세 조회
+     */
+    public function getIlyangDeliveryDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+        
+        $trackingNumber = $this->request->getGet('tracking_number');
+        if (!$trackingNumber) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '운송장번호가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+        
+        try {
+            // 일양 API 서비스 초기화
+            $apiService = \App\Libraries\ApiServiceFactory::create('ilyang', true); // 테스트 모드
+            
+            if (!$apiService) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '일양 API 서비스를 초기화할 수 없습니다.'
+                ])->setStatusCode(500);
+            }
+            
+            // 일양 API로 배송정보 조회
+            $result = $apiService->getDeliveryStatus([$trackingNumber]);
+            
+            if (!$result || !$result['success']) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $result['error'] ?? '배송정보를 조회할 수 없습니다.',
+                    'return_code' => $result['return_code'] ?? '',
+                    'return_desc' => $result['return_desc'] ?? ''
+                ])->setStatusCode(500);
+            }
+            
+            // API 응답 데이터 반환
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $result['data'] ?? [],
+                'return_code' => $result['return_code'] ?? '',
+                'return_desc' => $result['return_desc'] ?? '',
+                'success_count' => $result['success_count'] ?? 0,
+                'total_count' => $result['total_count'] ?? 0
+            ]);
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Delivery::getIlyangDeliveryDetail - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '배송정보 조회 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
      * 주문 상태 변경
      */
     public function updateStatus()
@@ -815,8 +851,12 @@ class Delivery extends BaseController
                                 // 송장번호 업데이트
                                 $orderModel->updateShippingInfo($order['id'], $platformCode, $awbNo);
                                 
-                                // 송장번호 풀에서 사용 처리
-                                $awbPoolModel->markAsUsed($awbNo, $orderNumber);
+                                // 송장번호 풀에서 사용 처리 (awb_no로 직접 업데이트)
+                                $markResult = $awbPoolModel->markAsUsedByAwbNo($awbNo, $orderNumber);
+                                
+                                if (!$markResult) {
+                                    log_message('error', "AWB No assignment failed on status change: {$awbNo} to order: {$orderNumber}");
+                                }
                                 
                                 log_message('info', "AWB No assigned on status change: {$awbNo} (Platform: {$platformCode}) to order: {$orderNumber}");
                             } else {
@@ -895,13 +935,35 @@ class Delivery extends BaseController
                 return redirect()->to('/delivery/list')->with('error', '송장 정보를 조회할 수 없습니다.');
             }
             
+            // 일양 주문인지 확인 (order_system 또는 order_number로 판단)
+            $isIlyangOrder = false;
+            if (($order['order_system'] ?? '') === 'ilyang') {
+                $isIlyangOrder = true;
+            } elseif (!empty($order['order_number']) && strpos($order['order_number'], 'ILYANG-') === 0) {
+                // 주문번호가 ILYANG-으로 시작하는 경우도 일양 주문으로 인식
+                $isIlyangOrder = true;
+            }
+            
+            // 일양 주문인 경우 별도 테이블에서 접수 데이터 조회
+            $ilyangOrderData = null;
+            if ($isIlyangOrder) {
+                $ilyangOrderModel = new \App\Models\IlyangOrderModel();
+                $ilyangOrderData = $ilyangOrderModel->getByOrderId($order['id']);
+            }
+            
             $data = [
                 'title' => '송장출력',
                 'order' => $order,
-                'waybill_data' => $waybillData['data'] ?? []
+                'waybill_data' => $waybillData['data'] ?? [],
+                'ilyang_order_data' => $ilyangOrderData  // 일양 접수 데이터
             ];
             
-            return view('delivery/print_waybill', $data);
+            // 일양 주문인 경우 새로운 일양 전용 운송장 양식 사용
+            if ($isIlyangOrder) {
+                return view('delivery/print_waybill_ilyang', $data);
+            } else {
+                return view('delivery/print_waybill', $data);
+            }
             
         } catch (\Exception $e) {
             log_message('error', 'Delivery::printWaybill - ' . $e->getMessage());
@@ -1673,6 +1735,48 @@ class Delivery extends BaseController
             
         } catch (\Exception $e) {
             log_message('error', "Exception in syncInsungOrdersViaCLI: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 리스트 페이지 진입 시 일양 API 주문 상태 동기화 (CLI 명령어로 백그라운드 실행)
+     * 
+     * @param string $startDate 시작 날짜
+     * @param string $endDate 종료 날짜
+     */
+    private function syncIlyangOrdersViaCLI($startDate = null, $endDate = null)
+    {
+        try {
+            // 프로젝트 루트 경로 찾기
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+            
+            // spark 파일이 존재하는지 확인
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                return;
+            }
+            
+            // 날짜 설정 (기본값: 오늘 날짜)
+            $today = date('Y-m-d');
+            $syncStartDate = $startDate ?? $today;
+            $syncEndDate = $endDate ?? $today;
+            
+            // CLI 명령어 구성
+            $command = sprintf(
+                'php %s ilyang:sync-orders %s %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                escapeshellarg($syncStartDate),
+                escapeshellarg($syncEndDate)
+            );
+            
+            // 명령어 실행
+            exec($command);
+            
+            // log_message('info', "Ilyang orders sync CLI command triggered on list page: {$command}");
+            
+        } catch (\Exception $e) {
+            log_message('error', "Exception in syncIlyangOrdersViaCLI: " . $e->getMessage());
         }
     }
     

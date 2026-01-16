@@ -5,7 +5,7 @@
 
     <!-- 검색 및 필터 영역 -->
     <div class="search-compact">
-        <?= form_open('/history/list', ['method' => 'GET']) ?>
+        <?= form_open('/history/list', ['method' => 'GET', 'id' => 'searchForm']) ?>
         <div class="search-filter-container">
             <div class="search-filter-item">
                 <label class="search-filter-label">검색</label>
@@ -36,6 +36,7 @@
                 </select>
             </div>
             <div class="search-filter-button-wrapper">
+                <input type="hidden" name="page" value="1" id="searchPageInput">
                 <button type="submit" class="search-button">🔍 검색</button>
             </div>
         </div>
@@ -105,7 +106,25 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-2 text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm" data-column-index="1"><?= esc($order['formatted_order_datetime'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm" data-column-index="2">-</td>
+                    <td class="px-4 py-2 text-sm" data-column-index="2">
+                        <?php 
+                        // 완료된 주문인지 확인 (state='30' 또는 status_label='완료')
+                        $isCompleted = false;
+                        if (($order['order_system'] ?? '') === 'insung') {
+                            $isCompleted = ($order['state'] ?? '') === '30' || ($order['status_label'] ?? '') === '완료';
+                        } else {
+                            $isCompleted = ($order['status'] ?? '') === 'delivered' || ($order['status_label'] ?? '') === '배송완료';
+                        }
+                        
+                        if ($isCompleted && !empty($order['display_order_number']) && $order['display_order_number'] !== '-' && ($order['order_system'] ?? '') === 'insung'): 
+                        ?>
+                            <span class="status-badge" style="cursor: pointer; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;" onclick="viewOrderSign('<?= esc($order['display_order_number']) ?>')">
+                                Sign
+                            </span>
+                        <?php else: ?>
+                            -
+                        <?php endif; ?>
+                    </td>
                     <td class="px-4 py-2 text-sm" data-column-index="3">
                         <?php if ($order['show_map_on_click'] ?? false): ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)"><?= esc($order['status_label'] ?? '-') ?></span>
@@ -182,6 +201,19 @@
 
 <script src="<?= base_url('assets/js/common-library.js') ?>"></script>
 <script>
+// 검색 폼 제출 시 페이지 리셋
+(function() {
+    const searchForm = document.getElementById('searchForm');
+    const searchPageInput = document.getElementById('searchPageInput');
+    
+    if (searchForm && searchPageInput) {
+        searchForm.addEventListener('submit', function(e) {
+            // 검색 버튼 클릭 시 항상 1페이지로 리셋
+            searchPageInput.value = '1';
+        });
+    }
+})();
+
 // 테이블 헤더 드래그 앤 드롭 기능
 (function() {
     let draggedElement = null;
@@ -888,6 +920,166 @@ function closeInsungOrderDetail() {
 }
 
 // 모달 외부 클릭 시 닫기 방지 (공통 스타일 사용으로 자동 처리됨)
+</script>
+
+<!-- 인수증 레이어 팝업 -->
+<div id="orderSignModal" class="fixed inset-0 hidden flex items-center justify-center p-4 order-detail-modal" style="z-index: 9999; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col order-detail-modal-content" onclick="event.stopPropagation()">
+        <div class="sticky top-0 bg-gray-50 border-b border-gray-200 px-6 py-4 flex justify-between items-center flex-shrink-0 rounded-t-lg">
+            <h3 class="text-lg font-bold text-gray-800">인수증</h3>
+            <button type="button" onclick="closeOrderSign()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="p-2 overflow-y-auto flex-1">
+            <div id="orderSignContent" class="modal-content">
+                <!-- 내용은 populateOrderSign()에서 동적으로 생성됩니다 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewOrderSign(serialNumber) {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+    
+    // 로딩 상태 표시
+    showOrderSignLoading();
+    
+    // AJAX로 인수증 정보 가져오기
+    fetch(`/history/getOrderSign?serial_number=${encodeURIComponent(serialNumber)}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Order Sign API Response:', data); // 디버깅용
+        if (data.success) {
+            console.log('Order Sign Data:', data.data); // 디버깅용
+            populateOrderSign(data.data);
+            // 모달 표시
+            document.getElementById('orderSignModal').classList.remove('hidden');
+            document.getElementById('orderSignModal').classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        } else {
+            showOrderSignError(data.message || '인수증 정보를 가져올 수 없습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Fetch Error:', error);
+        showOrderSignError('인수증 정보 조회 중 오류가 발생했습니다: ' + error.message);
+    })
+    .finally(() => {
+        hideOrderSignLoading();
+    });
+}
+
+function populateOrderSign(signData) {
+    const content = document.getElementById('orderSignContent');
+    
+    // 디버깅용 로그
+    console.log('populateOrderSign - signData:', signData);
+    console.log('departure_sign:', signData?.departure_sign);
+    console.log('destination_sign:', signData?.destination_sign);
+    console.log('receipt_url:', signData?.receipt_url);
+    
+    // escapeHtml 함수 정의 (없을 경우)
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    let html = '<div style="padding: 8px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 8px; width: 100%; box-sizing: border-box;">';
+    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
+    
+    // 출발지 사인 패널
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); height: 100%;">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">출발지 사인</div>';
+    const departureSign = signData?.departure_sign || '';
+    if (departureSign && departureSign.trim() !== '') {
+        html += `<img src="${escapeHtml(departureSign)}" alt="출발지 사인" style="max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div style="display: none; color: #6b7280; font-size: 12px; padding: 20px; text-align: center;">이미지를 불러올 수 없습니다.</div>`;
+    } else {
+        html += '<div style="color: #6b7280; font-size: 12px; padding: 20px; text-align: center;">출발지 사인 정보가 없습니다.</div>';
+    }
+    html += '</div>';
+    
+    // 도착지 사인 패널
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); height: 100%;">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">도착지 사인</div>';
+    const destinationSign = signData?.destination_sign || '';
+    if (destinationSign && destinationSign.trim() !== '') {
+        html += `<img src="${escapeHtml(destinationSign)}" alt="도착지 사인" style="max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div style="display: none; color: #6b7280; font-size: 12px; padding: 20px; text-align: center;">이미지를 불러올 수 없습니다.</div>`;
+    } else {
+        html += '<div style="color: #6b7280; font-size: 12px; padding: 20px; text-align: center;">도착지 사인 정보가 없습니다.</div>';
+    }
+    html += '</div>';
+    
+    html += '</div>';
+    
+    html += '</div>';
+    
+    content.innerHTML = html;
+}
+
+function showOrderSignLoading() {
+    const content = document.getElementById('orderSignContent');
+    content.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">인수증 정보를 불러오는 중...</div>';
+    
+    document.getElementById('orderSignModal').classList.remove('hidden');
+    document.getElementById('orderSignModal').classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
+
+function hideOrderSignLoading() {
+    // 로딩 상태는 populateOrderSign에서 실제 내용으로 대체됨
+}
+
+function showOrderSignError(message) {
+    const content = document.getElementById('orderSignContent');
+    content.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+            <div style="color: #ef4444; margin-bottom: 16px;">⚠️</div>
+            <div style="color: #ef4444; font-weight: 600; margin-bottom: 8px;">오류 발생</div>
+            <div style="color: #6b7280;">${escapeHtml(message)}</div>
+        </div>
+    `;
+    
+    document.getElementById('orderSignModal').classList.remove('hidden');
+    document.getElementById('orderSignModal').classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeOrderSign() {
+    document.getElementById('orderSignModal').classList.add('hidden');
+    document.getElementById('orderSignModal').classList.remove('flex');
+    document.body.style.overflow = 'auto';
+    
+    // 레이어 팝업이 닫힐 때 사이드바 복원
+    if (typeof window.showSidebarForModal === 'function') {
+        window.showSidebarForModal();
+    }
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
 </script>
 
 <?= $this->endSection() ?>

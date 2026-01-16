@@ -73,14 +73,9 @@
                 <?php if (!$is_subdomain && !empty($api_list)): ?>
                 <!-- 메인도메인에서 회사 선택 (api_list 사용) -->
                 <div class="flex gap-2 mb-3">
-                    <select name="selected_api_idx" id="selectedApiIdx" class="bg-white text-gray-700 border border-gray-300 px-3 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors flex-1" required>
-                        <option value="">회사 선택</option>
-                        <?php foreach ($api_list as $api): ?>
-                        <option value="<?= esc($api['idx']) ?>">
-                            <?= esc($api['cccode'] ?? '') ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <input type="text" name="selected_api_idx" id="selectedApiIdx" 
+                           class="bg-white text-gray-700 border border-gray-300 px-3 py-2 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors flex-1" 
+                           placeholder="회사 코드 입력">
                     <button type="button" id="customerSearchButtonMain" onclick="openCustomerSearchPopupMain()" class="bg-gray-100 text-gray-700 border border-gray-300 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors whitespace-nowrap">
                         고객검색
                     </button>
@@ -90,16 +85,10 @@
                 <?php if (!empty($api_list) && $is_subdomain): ?>
                 <!-- 서브도메인에서 API 선택 + 고객검색 버튼 (기존 기능) -->
                 <div class="flex gap-2 mb-3">
-                    <select id="apiSelect" class="bg-white text-gray-700 border border-gray-300 px-3 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors">
-                        <?php if (count($api_list) > 1): ?>
-                        <option value="">회사 선택</option>
-                        <?php endif; ?>
-                        <?php foreach ($api_list as $api): ?>
-                        <option value="<?= esc($api['idx']) ?>" data-api-code="<?= esc($api['api_code'] ?? '') ?>" <?= (isset($api_idx) && $api['idx'] == $api_idx) ? 'selected' : '' ?>>
-                            <?= esc($api['cccode'] ?? '') ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <input type="text" id="apiSelect" 
+                           class="bg-white text-gray-700 border border-gray-300 px-3 py-2 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors flex-1" 
+                           placeholder="회사 코드 입력" 
+                           value="<?= esc(isset($api_idx) ? $api_idx : '') ?>">
                     <button type="button" id="customerSearchButton" onclick="openCustomerSearchPopupMain()" class="bg-gray-100 text-gray-700 border border-gray-300 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors whitespace-nowrap">
                         고객검색
                     </button>
@@ -503,26 +492,17 @@
             let selectedApiIdx = null;
             let selectedApiCode = null;
             
-            // 메인 도메인: selectedApiIdx에서 값 가져오기
+            // 메인 도메인: selectedApiIdx에서 값 가져오기 (input type=text)
             const selectedApiIdxElement = document.getElementById('selectedApiIdx');
             if (selectedApiIdxElement) {
-                selectedApiIdx = selectedApiIdxElement.value;
-                // 선택된 옵션에서 api_code 가져오기 (data 속성 또는 옵션 텍스트에서)
-                if (selectedApiIdx) {
-                    const selectedOption = selectedApiIdxElement.options[selectedApiIdxElement.selectedIndex];
-                    selectedApiCode = selectedOption ? selectedOption.getAttribute('data-api-code') : null;
-                }
+                selectedApiIdx = selectedApiIdxElement.value.trim();
             }
             
-            // 서브도메인: apiSelect에서 값 가져오기 또는 기본 api_idx 사용
+            // 서브도메인: apiSelect에서 값 가져오기 (input type=text)
             if (!selectedApiIdx) {
                 const apiSelect = document.getElementById('apiSelect');
                 if (apiSelect) {
-                    selectedApiIdx = apiSelect.value;
-                    if (selectedApiIdx) {
-                        const selectedOption = apiSelect.options[apiSelect.selectedIndex];
-                        selectedApiCode = selectedOption ? selectedOption.getAttribute('data-api-code') : null;
-                    }
+                    selectedApiIdx = apiSelect.value.trim();
                 }
             }
             
@@ -537,7 +517,7 @@
             <?php endif; ?>
             
             if (!selectedApiIdx) {
-                alert('<?= $is_subdomain ? "회사를 선택해주세요." : "회사를 선택해주세요." ?>');
+                alert('회사 코드를 입력해주세요.');
                 return;
             }
             
@@ -547,6 +527,63 @@
             }
             window.open(url, 'customerSearch', 'width=850,height=650,scrollbars=yes,resizable=yes');
         }
+        
+        // 쿠키 저장 함수
+        function setCookie(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString() + ';path=/';
+        }
+        
+        // 쿠키 읽기 함수
+        function getCookie(name) {
+            const nameEQ = name + '=';
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            }
+            return null;
+        }
+        
+        // 입력 필드에 쿠키 저장 이벤트 추가
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectedApiIdxInput = document.getElementById('selectedApiIdx');
+            const apiSelectInput = document.getElementById('apiSelect');
+            
+            // 메인 도메인 input에 이벤트 추가
+            if (selectedApiIdxInput) {
+                // 쿠키에서 값 불러오기
+                const savedValue = getCookie('last_selected_api_idx');
+                if (savedValue && !selectedApiIdxInput.value) {
+                    selectedApiIdxInput.value = savedValue;
+                }
+                
+                // 입력 시 쿠키에 저장
+                selectedApiIdxInput.addEventListener('blur', function() {
+                    if (this.value.trim()) {
+                        setCookie('last_selected_api_idx', this.value.trim(), 30); // 30일 저장
+                    }
+                });
+            }
+            
+            // 서브도메인 input에 이벤트 추가
+            if (apiSelectInput) {
+                // 쿠키에서 값 불러오기
+                const savedValue = getCookie('last_selected_api_idx');
+                if (savedValue && !apiSelectInput.value) {
+                    apiSelectInput.value = savedValue;
+                }
+                
+                // 입력 시 쿠키에 저장
+                apiSelectInput.addEventListener('blur', function() {
+                    if (this.value.trim()) {
+                        setCookie('last_selected_api_idx', this.value.trim(), 30); // 30일 저장
+                    }
+                });
+            }
+        });
 
         function openPrivacyPopup() {
             const popup = document.getElementById('privacyPopup');
@@ -587,16 +624,39 @@
         }
 
         // 로그인 폼 AJAX 처리
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        const loginForm = document.getElementById('loginForm');
+        let isButtonClick = false; // 버튼 클릭 여부 추적
+        
+        // 로그인 버튼 클릭 시 플래그 설정
+        document.getElementById('loginButton').addEventListener('click', function(e) {
+            isButtonClick = true;
+        });
+        
+        loginForm.addEventListener('submit', function(e) {
+            // 버튼 클릭이 아닌 경우 (엔터키 등) submit 방지
+            if (!isButtonClick) {
+                e.preventDefault();
+                return false;
+            }
+            
             e.preventDefault();
+            isButtonClick = false; // 플래그 리셋
             
             const form = this;
             const selectedApiIdx = document.getElementById('selectedApiIdx');
+            const apiSelect = document.getElementById('apiSelect');
             
-            // 메인도메인에서 회사 선택 필수 체크
+            // 입력한 값 쿠키에 저장
+            if (selectedApiIdx && selectedApiIdx.value.trim()) {
+                setCookie('last_selected_api_idx', selectedApiIdx.value.trim(), 30);
+            } else if (apiSelect && apiSelect.value.trim()) {
+                setCookie('last_selected_api_idx', apiSelect.value.trim(), 30);
+            }
+            
+            // 메인도메인에서 회사 코드 입력 필수 체크
             <?php if (!$is_subdomain && !empty($api_list)): ?>
-            if (!selectedApiIdx || !selectedApiIdx.value) {
-                alert('회사를 선택해주세요.');
+            if (!selectedApiIdx || !selectedApiIdx.value.trim()) {
+                alert('회사 코드를 입력해주세요.');
                 if (selectedApiIdx) {
                     selectedApiIdx.focus();
                 }
@@ -639,6 +699,19 @@
                 loginButton.innerHTML = originalButtonText;
                 console.error('Login error:', error);
                 alert('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
+            });
+        });
+        
+        // 모든 입력 필드에서 엔터키로 submit 방지
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = loginForm.querySelectorAll('input[type="text"], input[type="password"]');
+            inputs.forEach(function(input) {
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.keyCode === 13) {
+                        e.preventDefault();
+                        return false;
+                    }
+                });
             });
         });
 

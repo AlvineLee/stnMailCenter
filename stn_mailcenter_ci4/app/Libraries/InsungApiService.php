@@ -283,9 +283,13 @@ class InsungApiService
     /**
      * API 호출 (토큰 만료 시 자동 갱신 및 재시도)
      * 
+     * [주의] 다중 서버 환경에서 토큰 갱신 시 다른 서버의 요청이 실패할 수 있으므로
+     * 자동 토큰 갱신 기능은 비활성화되어 있습니다.
+     * 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 합니다.
+     * 
      * @param string $url API 엔드포인트 URL
      * @param array $params 파라미터 배열 (m_code, cc_code, token 등)
-     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용, 현재 사용 안 함)
      * @return object|false JSON 디코드된 응답 객체 또는 false
      */
     public function callApiWithAutoTokenRefresh($url, $params, $apiIdx = null)
@@ -1025,7 +1029,8 @@ class InsungApiService
             return [
                 'success' => false,
                 'serial_number' => null,
-                'message' => 'API 호출 실패'
+                'message' => 'API 호출 실패',
+                'request_params' => $params  // request body 포함
             ];
         }
         
@@ -1043,6 +1048,7 @@ class InsungApiService
                 
                 return [
                     'success' => true,
+                    'request_params' => $params,  // request body 포함
                     'serial_number' => $serialNumber,
                     'message' => '주문 접수 성공'
                 ];
@@ -1050,7 +1056,8 @@ class InsungApiService
                 return [
                     'success' => false,
                     'serial_number' => null,
-                    'message' => "주문 접수 실패: [{$code}] {$msg}"
+                    'message' => "주문 접수 실패: [{$code}] {$msg}",
+                    'request_params' => $params  // request body 포함
                 ];
             }
         }
@@ -1058,7 +1065,8 @@ class InsungApiService
         return [
             'success' => false,
             'serial_number' => null,
-            'message' => '응답 형식 오류'
+            'message' => '응답 형식 오류',
+            'request_params' => $params  // request body 포함
         ];
     }
 
@@ -1369,6 +1377,96 @@ class InsungApiService
                     'success' => false,
                     'data' => null,
                     'message' => "주문 상세 조회 실패: [{$code}] {$msg}"
+                ];
+            }
+        }
+        
+        return [
+            'success' => false,
+            'data' => null,
+            'message' => '응답 형식 오류'
+        ];
+    }
+
+    /**
+     * 주문 사인 조회 API 호출 (/api/order_sign/)
+     * 
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param string $serialNumber 오더 고유번호
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
+     */
+    public function getOrderSign($mcode, $cccode, $token, $userId, $serialNumber, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/order_sign/";
+        
+        $params = [
+            'type' => 'json',
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'serial' => $serialNumber
+        ];
+        
+        $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+        
+        if (!$result) {
+            return [
+                'success' => false,
+                'data' => null,
+                'message' => 'API 호출 실패'
+            ];
+        }
+        
+        // 응답이 배열인 경우 첫 번째 요소에서 code 확인, 두 번째 요소에서 실제 데이터 추출
+        if (is_array($result) && isset($result[0])) {
+            $code = $result[0]->code ?? $result[0]['code'] ?? '';
+            $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
+            
+            if ($code === '1000') {
+                // 성공 시 두 번째 요소에서 실제 데이터 추출
+                $signData = null;
+                if (isset($result[1])) {
+                    $signData = $result[1];
+                } else {
+                    // 두 번째 요소가 없으면 전체 배열 반환
+                    $signData = $result;
+                }
+                
+                return [
+                    'success' => true,
+                    'data' => $signData,
+                    'message' => '주문 사인 조회 성공'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => "주문 사인 조회 실패: [{$code}] {$msg}"
+                ];
+            }
+        }
+        
+        // 객체 형태로 응답이 오는 경우
+        if (is_object($result) || (is_array($result) && !isset($result[0]))) {
+            $code = $result->code ?? $result['code'] ?? '';
+            $msg = $result->msg ?? $result['msg'] ?? '';
+            
+            if ($code === '1000') {
+                return [
+                    'success' => true,
+                    'data' => $result,
+                    'message' => '주문 사인 조회 성공'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'data' => null,
+                    'message' => "주문 사인 조회 실패: [{$code}] {$msg}"
                 ];
             }
         }

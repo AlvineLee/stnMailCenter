@@ -36,6 +36,8 @@ class DeliveryModel extends Model
      */
     public function getDeliveryList($filters = [], $page = 1, $perPage = 20)
     {
+        log_message('debug', 'DeliveryModel::getDeliveryList - Filters: ' . json_encode($filters, JSON_UNESCAPED_UNICODE));
+        
         $builder = $this->db->table('tbl_orders o');
         
         // tbl_orders의 모든 필드 선택
@@ -72,8 +74,10 @@ class DeliveryModel extends Model
         
         // 서브도메인 기반 필터링 (최우선)
         $hasSubdomainFilter = isset($filters['subdomain_comp_code']) && $filters['subdomain_comp_code'];
+        log_message('debug', 'DeliveryModel::getDeliveryList - hasSubdomainFilter: ' . ($hasSubdomainFilter ? 'true' : 'false'));
         
         if ($hasSubdomainFilter) {
+            log_message('debug', 'DeliveryModel::getDeliveryList - Applying subdomain filter: ' . $filters['subdomain_comp_code']);
             // 서브도메인으로 접근한 경우 해당 고객사만 조회
             $subdomainCompCode = $filters['subdomain_comp_code'];
             
@@ -130,7 +134,9 @@ class DeliveryModel extends Model
             
             // 서브도메인 필터가 있을 때 user_type별 추가 필터링
             if (isset($filters['user_type'])) {
+                log_message('debug', 'DeliveryModel::getDeliveryList - Subdomain: user_type=' . $filters['user_type']);
                 if ($filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
+                    log_message('debug', 'DeliveryModel::getDeliveryList - Subdomain: Applying user_type=3 filter with user_company=' . $filters['user_company']);
                     // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
                     // 인성 API 주문: u_list.user_company로 필터링
                     // 일반 주문: o.company_name으로 필터링 (comp_code로 comp_name 조회 필요)
@@ -166,26 +172,70 @@ class DeliveryModel extends Model
                     }
                 } elseif ($filters['user_type'] == '5') {
                     // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
-                    // 서브도메인 필터가 이미 적용되어 있으므로 추가 필터링 불필요
-                    // (서브도메인 필터가 comp_code로 필터링하므로)
+                    // 서브도메인 필터가 있을 때는 이미 필터링됨
+                    // 추가 필터링 불필요
+                    log_message('debug', 'DeliveryModel::getDeliveryList - Subdomain: user_type=5, no additional filter needed');
                 }
                 // user_type = 1: 서브도메인 필터만 적용 (추가 필터 없음)
             }
         }
         // user_dept 필터링 (서브도메인 필터가 없을 때, user_class 3 이상일 때)
         if (isset($filters['user_dept']) && !empty($filters['user_dept'])) {
+            log_message('debug', 'DeliveryModel::getDeliveryList - Applying user_dept filter: ' . $filters['user_dept']);
             $builder->where('u_list.user_dept', $filters['user_dept']);
         }
         
         // 정산관리부서 필터링 (서브도메인 필터가 없을 때, user_class 4일 때)
         if (isset($filters['settlement_depts']) && is_array($filters['settlement_depts']) && !empty($filters['settlement_depts'])) {
+            log_message('debug', 'DeliveryModel::getDeliveryList - Applying settlement_depts filter: ' . json_encode($filters['settlement_depts']));
             $builder->whereIn('u_list.user_dept', $filters['settlement_depts']);
         } elseif (isset($filters['settlement_depts']) && is_array($filters['settlement_depts']) && empty($filters['settlement_depts'])) {
             // 정산관리부서가 설정되지 않았으면 빈 결과
+            log_message('debug', 'DeliveryModel::getDeliveryList - settlement_depts is empty array, applying false condition');
             $builder->where('1', '0'); // 항상 false 조건
         }
         // 서브도메인 필터가 없을 때 daumdata 로그인 필터링
-        elseif (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
+        // m_code, cc_code가 세션에 있으면 customer_id(거래처번호)로 직접 필터링
+        // user_type=5일 때도 env1=1이면 comp_code 필터가 필요함
+        if (!$hasSubdomainFilter) {
+            $loginType = $filters['login_type'] ?? null;
+            log_message('debug', 'DeliveryModel::getDeliveryList - loginType: ' . ($loginType ?? 'null'));
+            if ($loginType === 'daumdata') {
+                log_message('debug', 'DeliveryModel::getDeliveryList - daumdata login, user_type: ' . ($filters['user_type'] ?? 'not set'));
+                // user_type=5이고 skip_user_company_filter가 있으면 (env1=1) comp_code 필터 추가 필요
+                // user_type=5이고 skip_user_company_filter가 없으면 user_company 필터가 아래에서 추가되므로 여기서는 추가하지 않음
+                // user_type=1일 때는 comp_code 필터는 유지
+                $shouldApplyCompCodeFilter = false;
+                if (!isset($filters['user_type']) || $filters['user_type'] != '5') {
+                    $shouldApplyCompCodeFilter = true;
+                } elseif (isset($filters['user_type']) && $filters['user_type'] == '5' && isset($filters['skip_user_company_filter']) && $filters['skip_user_company_filter']) {
+                    // user_type=5이고 env1=1일 때는 comp_code 필터 필요
+                    $shouldApplyCompCodeFilter = true;
+                }
+                
+                if ($shouldApplyCompCodeFilter) {
+                    $compCode = $filters['comp_code'] ?? null;
+                    if (!$compCode) {
+                        // 세션에서 comp_code 가져오기
+                        $session = \Config\Services::session();
+                        $compCode = $session->get('comp_code');
+                    }
+                    
+                    if ($compCode) {
+                        log_message('debug', 'DeliveryModel::getDeliveryList - Applying comp_code filter (daumdata): ' . $compCode);
+                        // customer_id 필드에 거래처번호가 저장되어 있으므로 직접 비교
+                        $builder->where('o.customer_id', $compCode);
+                    } else {
+                        log_message('debug', 'DeliveryModel::getDeliveryList - comp_code is null, skipping comp_code filter');
+                    }
+                } else {
+                    log_message('debug', 'DeliveryModel::getDeliveryList - user_type=5 and skip_user_company_filter not set, skipping comp_code filter (will be handled by user_company filter)');
+                }
+            }
+        }
+        
+        if (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
+            log_message('debug', 'DeliveryModel::getDeliveryList - Applying user_type=3 filter with user_company=' . $filters['user_company']);
             // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
             $compNameBuilder = $this->db->table('tbl_company_list');
             $compNameBuilder->select('comp_name');
@@ -218,41 +268,17 @@ class DeliveryModel extends Model
                 $builder->where('u_list.user_company', $filters['user_company']);
             }
         } elseif (isset($filters['user_type']) && $filters['user_type'] == '5') {
+            log_message('debug', 'DeliveryModel::getDeliveryList - user_type=5 detected');
+            log_message('debug', 'DeliveryModel::getDeliveryList - user_company: ' . ($filters['user_company'] ?? 'not set'));
+            log_message('debug', 'DeliveryModel::getDeliveryList - skip_user_company_filter: ' . (isset($filters['skip_user_company_filter']) ? 'true' : 'false'));
             // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
-            // user_company (comp_code)로 필터링
-            if (isset($filters['user_company']) && $filters['user_company']) {
-                // comp_code로 comp_name 조회
-                $compNameBuilder = $this->db->table('tbl_company_list');
-                $compNameBuilder->select('comp_name');
-                $compNameBuilder->where('comp_code', $filters['user_company']);
-                $compNameQuery = $compNameBuilder->get();
-                $userCompName = null;
-                if ($compNameQuery !== false) {
-                    $compNameResult = $compNameQuery->getRowArray();
-                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
-                        $userCompName = $compNameResult['comp_name'];
-                    }
-                }
-                
-                if ($userCompName) {
-                    // 인성 API 주문과 일반 주문 모두 comp_code/comp_name으로 필터링
-                    $builder->groupStart()
-                        ->groupStart()
-                            ->where('o.order_system', 'insung')
-                            ->where('u_list.user_company', $filters['user_company'])
-                        ->groupEnd()
-                        ->orGroupStart()
-                            ->groupStart()
-                                ->where('o.order_system IS NULL', null, true)
-                                ->orWhere('o.order_system !=', 'insung')
-                            ->groupEnd()
-                            ->where('o.company_name', $userCompName)
-                        ->groupEnd()
-                    ->groupEnd();
-                } else {
-                    // comp_name 조회 실패 시 comp_code로만 필터링
-                    $builder->where('u_list.user_company', $filters['user_company']);
-                }
+            // customer_id 필드에 거래처번호가 저장되어 있으므로 직접 비교
+            // 단, env1=1일 때는 user_company 필터 추가하지 않음 (전체 조회)
+            if (isset($filters['user_company']) && $filters['user_company'] && !isset($filters['skip_user_company_filter'])) {
+                log_message('debug', 'DeliveryModel::getDeliveryList - Applying user_company filter: ' . $filters['user_company']);
+                $builder->where('o.customer_id', $filters['user_company']);
+            } else {
+                log_message('debug', 'DeliveryModel::getDeliveryList - NOT applying user_company filter (user_company=' . ($filters['user_company'] ?? 'null') . ', skip_user_company_filter=' . (isset($filters['skip_user_company_filter']) ? 'true' : 'false') . ')');
             }
         } elseif (isset($filters['cc_code']) && $filters['cc_code']) {
             // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
@@ -279,22 +305,42 @@ class DeliveryModel extends Model
         } elseif (isset($filters['comp_name']) && $filters['comp_name']) {
             // user_type = 5: 본인 고객사의 주문접수 리스트만
             // 인성 API 주문과 일반 주문 모두 포함
+            // CLI로 저장된 데이터는 comp_no로도 필터링
             // JOIN은 이미 위에서 했음
             $builder->join('tbl_company_list cl_insung', 'u_list.user_company = cl_insung.comp_code', 'left');
             
-            $builder->groupStart()
-                ->groupStart()
-                    ->where('o.order_system', 'insung')
-                    ->where('cl_insung.comp_name', $filters['comp_name'])
-                ->groupEnd()
-                ->orGroupStart()
+            // comp_name으로 comp_code 조회 후 customer_id로 직접 필터링
+            $compCodeBuilder = $this->db->table('tbl_company_list');
+            $compCodeBuilder->select('comp_code');
+            $compCodeBuilder->where('comp_name', $filters['comp_name']);
+            $compCodeQuery = $compCodeBuilder->get();
+            $userCompCode = null;
+            if ($compCodeQuery !== false) {
+                $compCodeResult = $compCodeQuery->getRowArray();
+                if ($compCodeResult && !empty($compCodeResult['comp_code'])) {
+                    $userCompCode = $compCodeResult['comp_code'];
+                }
+            }
+            
+            if ($userCompCode) {
+                // customer_id 필드에 거래처번호가 저장되어 있으므로 직접 비교
+                $builder->where('o.customer_id', $userCompCode);
+            } else {
+                // comp_code 조회 실패 시 기존 로직
+                $builder->groupStart()
                     ->groupStart()
-                        ->where('o.order_system IS NULL', null, true)
-                        ->orWhere('o.order_system !=', 'insung')
+                        ->where('o.order_system', 'insung')
+                        ->where('cl_insung.comp_name', $filters['comp_name'])
                     ->groupEnd()
-                    ->where('o.company_name', $filters['comp_name'])
-                ->groupEnd()
-            ->groupEnd();
+                    ->orGroupStart()
+                        ->groupStart()
+                            ->where('o.order_system IS NULL', null, true)
+                            ->orWhere('o.order_system !=', 'insung')
+                        ->groupEnd()
+                        ->where('o.company_name', $filters['comp_name'])
+                    ->groupEnd()
+                ->groupEnd();
+            }
         } elseif (isset($filters['customer_id']) && $filters['customer_id']) {
             // STN 로그인: 기존 로직
             $builder->where('o.customer_id', $filters['customer_id']);
@@ -351,6 +397,7 @@ class DeliveryModel extends Model
         
         // 본인주문조회 필터 (env1=3): insung_user_id로 필터링
         if (isset($filters['insung_user_id']) && $filters['insung_user_id']) {
+            log_message('debug', 'DeliveryModel::getDeliveryList - Applying insung_user_id filter: ' . $filters['insung_user_id']);
             $builder->where('o.insung_user_id', $filters['insung_user_id']);
         }
         
@@ -358,6 +405,7 @@ class DeliveryModel extends Model
         // 인성 API를 통해 전달받은 주문은 updated_at이 현재 시간으로 업데이트되므로
         // updated_at >= 오늘날짜 조건으로 통일
         $today = date('Y-m-d');
+        log_message('debug', 'DeliveryModel::getDeliveryList - Applying date filter: DATE(o.updated_at) >= ' . $today);
         $builder->where('DATE(o.updated_at) >=', $today);
         
         // 총 개수 조회 (페이징용)
@@ -406,8 +454,7 @@ class DeliveryModel extends Model
                 $builder->orderBy($sortField, $orderDir);
             }
         } else {
-            // 기본 정렬: 인성주문번호 내림차순 (인성 API 주문의 경우), 없으면 접수일자 내림차순
-            $builder->orderBy('o.insung_order_number', 'DESC');
+            // 기본 정렬: 접수일자 역순 (모든 주문접수 리스트 통일)
             $builder->orderBy('o.order_date', 'DESC');
             $builder->orderBy('o.order_time', 'DESC');
         }

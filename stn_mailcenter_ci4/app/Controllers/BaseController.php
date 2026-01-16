@@ -172,4 +172,115 @@ abstract class BaseController extends Controller
         
         return true;
     }
+    
+    /**
+     * user_class별 필터 설정 (공통 메서드)
+     * Delivery, History, Dashboard 컨트롤러에서 공통으로 사용
+     * 
+     * @param string $loginType 로그인 타입 ('daumdata' 또는 'stn')
+     * @param string|null $userClass user_class 값
+     * @param string|null $userType user_type 값
+     * @param string|null $userCompany user_company 값
+     * @param string|null $userDept user_dept 값
+     * @param int|null $userIdx user_idx 값 (user_class=4일 때 정산관리부서 조회용)
+     * @param string|null $subdomainCompCode 서브도메인 comp_code
+     * @param string|null $userRole user_role 값 (STN 로그인용)
+     * @param string|null $customerId customer_id 값 (STN 로그인용)
+     * @return array 필터 배열
+     */
+    protected function buildUserClassFilters(
+        $loginType,
+        $userClass = null,
+        $userType = null,
+        $userCompany = null,
+        $userDept = null,
+        $userIdx = null,
+        $subdomainCompCode = null,
+        $userRole = null,
+        $customerId = null
+    ) {
+        $filters = [];
+        
+        // user_class별 필터링 (주문조회 권한)
+        // user_type과 user_class는 별개로 판단
+        // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한
+        if ($loginType === 'daumdata') {
+            if ($userClass == '1' || $userClass == '2') {
+                // user_class = 1,2: 전체 주문 리스트 (dept_name 필터 없음, user_type과 관계없이)
+                // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null; // 전체 조회
+            } elseif ($userClass == '4') {
+                // user_class = 4(정산담당자): 정산관리부서로 필터링
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null;
+                if ($userIdx) {
+                    $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
+                    $settlementDepts = $userSettlementDeptModel->getSettlementDeptNamesForQuery($userIdx);
+                    if ($settlementDepts !== null && !empty($settlementDepts)) {
+                        $filters['settlement_depts'] = $settlementDepts; // 정산관리부서 목록 필터 추가
+                    } else {
+                        // 정산관리부서가 설정되지 않았으면 빈 결과
+                        $filters['settlement_depts'] = [];
+                    }
+                } else {
+                    $filters['settlement_depts'] = [];
+                }
+            } elseif ($userClass == '5') {
+                // user_class = 5(일반): env1 확인 후 필터링 결정
+                $compCodeForEnv = $subdomainCompCode ?? $userCompany;
+                $env1 = null;
+                if ($compCodeForEnv) {
+                    $db = \Config\Database::connect();
+                    $envBuilder = $db->table('tbl_company_env');
+                    $envBuilder->select('env1');
+                    $envBuilder->where('comp_code', $compCodeForEnv);
+                    $envQuery = $envBuilder->get();
+                    if ($envQuery !== false) {
+                        $envResult = $envQuery->getRowArray();
+                        if ($envResult && isset($envResult['env1'])) {
+                            $env1 = $envResult['env1'];
+                        }
+                    }
+                }
+                
+                // env1=1(전체 조회)일 때는 user_company 필터만 추가하지 않음 (comp_code 필터는 유지)
+                if ($env1 != '1') {
+                    $filters['user_type'] = '5';
+                    $filters['user_company'] = $userCompany; // 같은 회사의 모든 주문 조회
+                } else {
+                    // env1=1(전체 조회): user_company 필터만 제거, comp_code 필터는 유지
+                    // user_type=5로 유지하되, user_company 필터는 추가하지 않도록 플래그 설정
+                    $filters['user_type'] = '5';
+                    $filters['skip_user_company_filter'] = true;
+                }
+            } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
+                // user_class = 3 이상: 부서명으로 필터링 (user_class=5는 위에서 처리됨)
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null;
+                $filters['user_dept'] = $userDept; // 부서명 필터 추가
+            } elseif ($userClass == '3') {
+                // user_class = 3(부서장): 전체 주문 리스트 (dept_name이 없을 경우)
+                $filters['user_type'] = '1';
+                $filters['customer_id'] = null; // 전체 조회
+            } else {
+                // user_class가 없거나 다른 값인 경우 user_type으로 폴백
+                if ($userType == '1') {
+                    $filters['user_type'] = '1';
+                    $filters['customer_id'] = null;
+                } elseif ($userType == '3') {
+                    $filters['user_type'] = '3';
+                    $filters['user_company'] = $userCompany;
+                } elseif ($userType == '5') {
+                    $filters['user_type'] = '5';
+                    $filters['user_company'] = $userCompany;
+                }
+            }
+        } else {
+            // STN 로그인인 경우 기존 로직
+            $filters['customer_id'] = $userRole !== 'super_admin' ? $customerId : null;
+        }
+        
+        return $filters;
+    }
 }

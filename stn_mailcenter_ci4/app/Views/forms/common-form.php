@@ -247,7 +247,7 @@ if (session()->get('is_logged_in')) {
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <input type="tel" id="destination_contact" name="destination_contact" value="<?= old('destination_contact') ?>" placeholder="연락처" required
+                <input type="tel" id="destination_contact" name="destination_contact" value="<?= old('destination_contact') ?>" placeholder="연락처"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
         </div>
@@ -258,7 +258,7 @@ if (session()->get('is_logged_in')) {
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
             <div class="space-y-1">
-                <input type="text" id="destination_manager" name="destination_manager" value="<?= old('destination_manager') ?>" placeholder="담당" required lang="ko"
+                <input type="text" id="destination_manager" name="destination_manager" value="<?= old('destination_manager') ?>" placeholder="담당" lang="ko"
                        class="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white">
             </div>
         </div>
@@ -860,19 +860,25 @@ document.addEventListener('DOMContentLoaded', function() {
     let destinationHoverTimeout = null;
     let isDestinationPopupVisible = false;
     
-    if (recentDestinationBtn && recentDestinationOrdersPopup) {
-        // PC: hover 이벤트로 팝오버 표시
+    if (recentDestinationBtn && recentDestinationOrdersPopup && recentDestinationOrdersList) {
+        // 데스크톱: hover 이벤트
         recentDestinationBtn.addEventListener('mouseenter', function() {
             clearTimeout(destinationHoverTimeout);
-            if (!isDestinationPopupVisible) {
-                loadRecentDestinationOrders();
-            }
+            destinationHoverTimeout = setTimeout(function() {
+                if (!isDestinationPopupVisible) {
+                    loadRecentDestinationOrders();
+                }
+            }, 300); // 300ms 후 표시 (출발지와 동일)
         });
         
+        // 마우스 이탈 시
         recentDestinationBtn.addEventListener('mouseleave', function() {
+            clearTimeout(destinationHoverTimeout);
             destinationHoverTimeout = setTimeout(function() {
-                hideRecentDestinationOrdersPopup();
-            }, 200);
+                if (!isDestinationPopupVisible) {
+                    hideRecentDestinationOrdersPopup();
+                }
+            }, 200); // 200ms 후 숨김
         });
         
         // 팝오버에 마우스 진입 시 유지
@@ -1319,10 +1325,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function showRecentDestinationOrdersPopup() {
         if (recentDestinationOrdersPopup) {
             recentDestinationOrdersPopup.classList.remove('hidden');
+            // 위치 조정을 먼저 수행 (표시 전에 위치 계산)
+            adjustDestinationPopupPosition();
             setTimeout(function() {
                 recentDestinationOrdersPopup.classList.remove('opacity-0', 'translate-y-[-10px]');
                 recentDestinationOrdersPopup.classList.add('opacity-100', 'translate-y-0');
-                adjustDestinationPopupPosition();
+                // 표시 후 다시 위치 조정 (레이아웃이 완료된 후)
+                setTimeout(function() {
+                    adjustDestinationPopupPosition();
+                }, 50);
             }, 10);
             isDestinationPopupVisible = true;
         }
@@ -1342,16 +1353,30 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 도착지 팝오버 위치 조정
     function adjustDestinationPopupPosition() {
-        if (!recentDestinationOrdersPopup || !isDestinationPopupVisible) return;
+        if (!recentDestinationOrdersPopup) return;
         
         const popup = recentDestinationOrdersPopup;
-        const rect = popup.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
+        const button = recentDestinationBtn;
+        if (!button) return;
         
+        // 팝오버가 hidden 상태일 때도 위치 계산을 위해 임시로 표시
+        const wasHidden = popup.classList.contains('hidden');
+        if (wasHidden) {
+            popup.classList.remove('hidden');
+            popup.style.visibility = 'hidden';
+        }
+        
+        const buttonRect = button.getBoundingClientRect();
+        const popupRect = popup.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
+        // PC 모드: 오른쪽 끝을 버튼의 오른쪽 끝과 맞춤
         popup.style.right = '0';
         popup.style.left = 'auto';
         
-        if (rect.bottom > viewportHeight) {
+        // 아래로 넘어가면 위로 조정
+        if (popupRect.bottom > viewportHeight) {
             popup.style.top = 'auto';
             popup.style.bottom = '100%';
             popup.style.marginTop = '0';
@@ -1361,6 +1386,23 @@ document.addEventListener('DOMContentLoaded', function() {
             popup.style.bottom = 'auto';
             popup.style.marginTop = '0.25rem';
             popup.style.marginBottom = '0';
+        }
+        
+        // 왼쪽으로 넘어가면 오른쪽 정렬
+        const newRect = popup.getBoundingClientRect();
+        if (newRect.left < 0) {
+            popup.style.left = '0';
+            popup.style.right = 'auto';
+        }
+        
+        // 오른쪽으로 넘어가면 왼쪽 정렬
+        if (newRect.right > viewportWidth) {
+            popup.style.right = '0';
+            popup.style.left = 'auto';
+        }
+        
+        if (wasHidden) {
+            popup.style.visibility = '';
         }
     }
     

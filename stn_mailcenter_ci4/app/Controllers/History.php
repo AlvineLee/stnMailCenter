@@ -63,7 +63,9 @@ class History extends BaseController
             'start_date' => $startDate,
             'end_date' => $endDate,
             'order_by' => $orderBy,
-            'order_dir' => $orderDir
+            'order_dir' => $orderDir,
+            'login_type' => $loginType,
+            'comp_code' => session()->get('comp_code')
         ];
         
         // 서브도메인 기반 필터링 (우선순위 1)
@@ -131,74 +133,26 @@ class History extends BaseController
             }
         }
         
-        // user_class별 필터링 (주문조회 권한)
-        // user_type과 user_class는 별개로 판단
-        // user_class=1,2일 때는 user_type과 관계없이 전체 조회 권한
-        if ($loginType === 'daumdata') {
-            if ($userClass == '1' || $userClass == '2') {
-                // user_class = 1,2: 전체 주문 리스트 (dept_name 필터 없음, user_type과 관계없이)
-                // 서브도메인이 있으면 서브도메인 내 전체, 없으면 전체
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null;
-            } elseif ($userClass == '4') {
-                // user_class = 4(정산담당자): 정산관리부서로 필터링
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null;
-                if ($userIdx) {
-                    $userSettlementDeptModel = new \App\Models\UserSettlementDeptModel();
-                    $settlementDepts = $userSettlementDeptModel->getSettlementDeptNamesForQuery($userIdx);
-                    if ($settlementDepts !== null && !empty($settlementDepts)) {
-                        $filters['settlement_depts'] = $settlementDepts; // 정산관리부서 목록 필터 추가
-                    } else {
-                        // 정산관리부서가 설정되지 않았으면 빈 결과
-                        $filters['settlement_depts'] = [];
-                    }
-                } else {
-                    $filters['settlement_depts'] = [];
-                }
-            } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
-                // user_class = 3 이상: 부서명으로 필터링
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null;
-                $filters['user_dept'] = $userDept; // 부서명 필터 추가
-            } elseif ($userClass == '3') {
-                // user_class = 3(부서장): 전체 주문 리스트 (dept_name이 없을 경우)
-                $filters['user_type'] = '1';
-                $filters['customer_id'] = null;
-            } elseif ($userClass == '5') {
-                // user_class = 5(일반): 같은 회사(comp_code)의 모든 주문 조회
-                // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
-                if ($userIdx) {
-                    $filters['user_idx'] = $userIdx;
-                }
-                if ($userId) {
-                    $filters['user_id'] = $userId;
-                }
-                $filters['user_type'] = '5';
-                $filters['user_company'] = $userCompany; // 같은 회사의 모든 주문 조회
-            } else {
-                // user_class가 없거나 다른 값인 경우 user_type으로 폴백
-                if ($userType == '1') {
-                    $filters['user_type'] = '1';
-                    $filters['customer_id'] = null;
-                } elseif ($userType == '3') {
-                    $filters['user_type'] = '3';
-                    $filters['user_company'] = $userCompany;
-                } elseif ($userType == '5') {
-                    // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
-                    if ($userIdx) {
-                        $filters['user_idx'] = $userIdx;
-                    }
-                    if ($userId) {
-                        $filters['user_id'] = $userId;
-                    }
-                    $filters['user_type'] = '5';
-                    $filters['user_company'] = $userCompany;
-                }
-            }
-        } else {
-            // STN 로그인인 경우 기존 로직
-            $filters['customer_id'] = $userRole !== 'super_admin' ? $customerId : null;
+        // user_class별 필터링 (주문조회 권한) - 공통 메서드 사용
+        $userClassFilters = $this->buildUserClassFilters(
+            $loginType,
+            $userClass,
+            $userType,
+            $userCompany,
+            $userDept,
+            $userIdx,
+            $subdomainCompCode,
+            $userRole,
+            $customerId
+        );
+        $filters = array_merge($filters, $userClassFilters);
+        
+        // user_idx와 user_id를 filters에 추가 (HistoryModel에서 사용)
+        if ($userIdx) {
+            $filters['user_idx'] = $userIdx;
+        }
+        if ($userId) {
+            $filters['user_id'] = $userId;
         }
         
         // 본인주문조회(env1=3) 필터링: 일반 등급(user_class=5)일 때만 insung_user_id로 필터링
@@ -499,6 +453,9 @@ class History extends BaseController
                 
                 // 인성 API 주문 상세 동기화
                 $this->syncInsungOrderDetailsViaCLI();
+                
+                // 일양 API 주문 상태 동기화 (order_system='ilyang'인 주문들)
+                $this->syncIlyangOrdersViaCLI($startDate, $endDate);
             } catch (\Exception $e) {
                 // 동기화 실패해도 리스트는 표시
                 log_message('error', "Failed to trigger Insung sync on list page: " . $e->getMessage());
@@ -598,6 +555,48 @@ class History extends BaseController
             
         } catch (\Exception $e) {
             log_message('error', "Exception in syncInsungOrdersViaCLI: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 리스트 페이지 진입 시 일양 API 주문 상태 동기화 (CLI 명령어로 백그라운드 실행)
+     * 
+     * @param string $startDate 시작 날짜
+     * @param string $endDate 종료 날짜
+     */
+    private function syncIlyangOrdersViaCLI($startDate = null, $endDate = null)
+    {
+        try {
+            // 프로젝트 루트 경로 찾기
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+            
+            // spark 파일이 존재하는지 확인
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                return;
+            }
+            
+            // 날짜 설정 (기본값: 오늘 날짜)
+            $today = date('Y-m-d');
+            $syncStartDate = $startDate ?? $today;
+            $syncEndDate = $endDate ?? $today;
+            
+            // CLI 명령어 구성
+            $command = sprintf(
+                'php %s ilyang:sync-orders %s %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                escapeshellarg($syncStartDate),
+                escapeshellarg($syncEndDate)
+            );
+            
+            // 명령어 실행
+            exec($command);
+            
+            // log_message('info', "Ilyang orders sync CLI command triggered on list page: {$command}");
+            
+        } catch (\Exception $e) {
+            log_message('error', "Exception in syncIlyangOrdersViaCLI: " . $e->getMessage());
         }
     }
     
@@ -1021,6 +1020,205 @@ class History extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => '주문 상세 정보 조회 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+    
+    /**
+     * 인성 API 주문 사인 조회
+     */
+    public function getOrderSign()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $serialNumber = $this->request->getGet('serial_number') ?? $this->request->getGet('order_number');
+        
+        if (empty($serialNumber)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문번호가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        // API 정보 조회
+        $mCode = session()->get('m_code');
+        $ccCode = session()->get('cc_code');
+        $token = session()->get('token');
+        $apiIdx = session()->get('api_idx');
+        $userId = session()->get('user_id') ?? '';
+        
+        // 세션에 없으면 서브도메인 또는 DB에서 조회
+        if (!$mCode || !$ccCode || !$token || !$apiIdx) {
+            $subdomainConfig = config('Subdomain');
+            $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+            
+            // 서브도메인이 있으면 서브도메인 기반으로 조회
+            if ($currentSubdomain && $currentSubdomain !== 'default') {
+                $apiInfo = $subdomainConfig->getApiInfoForSubdomain($currentSubdomain);
+                
+                if ($apiInfo) {
+                    $mCode = $apiInfo['m_code'] ?? $mCode;
+                    $ccCode = $apiInfo['cc_code'] ?? $ccCode;
+                    $token = $apiInfo['token'] ?? $token;
+                    $apiIdx = $apiInfo['api_idx'] ?? $apiIdx;
+                    
+                    // 세션에 저장
+                    session()->set('m_code', $mCode);
+                    session()->set('cc_code', $ccCode);
+                    session()->set('token', $token);
+                    session()->set('api_idx', $apiIdx);
+                }
+            } else {
+                // 서브도메인이 없으면 세션의 user_company 또는 cc_code로 조회
+                $userCompany = session()->get('user_company');
+                $ccCodeFromSession = session()->get('cc_code');
+                
+                if ($userCompany || $ccCodeFromSession) {
+                    $insungApiListModel = new \App\Models\InsungApiListModel();
+                    
+                    if ($ccCodeFromSession) {
+                        // cc_code로 조회
+                        $apiInfo = $insungApiListModel->getApiInfoByCcCode($ccCodeFromSession);
+                    } elseif ($userCompany) {
+                        // user_company로 조회 (comp_code -> cc_code -> api_info)
+                        try {
+                            $db = \Config\Database::connect();
+                            $compBuilder = $db->table('tbl_company_list c');
+                            $compBuilder->select('
+                                d.idx as api_idx,
+                                d.mcode as m_code,
+                                d.cccode as cc_code,
+                                d.token
+                            ');
+                            $compBuilder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'inner');
+                            $compBuilder->join('tbl_api_list d', 'cc.cc_apicode = d.idx', 'inner');
+                            $compBuilder->where('c.comp_code', $userCompany);
+                            $compQuery = $compBuilder->get();
+                            
+                            if ($compQuery !== false) {
+                                $apiInfo = $compQuery->getRowArray();
+                            }
+                        } catch (\Exception $e) {
+                            log_message('error', 'History::getOrderSign - Error getting API info: ' . $e->getMessage());
+                            $apiInfo = null;
+                        }
+                    }
+                    
+                    if ($apiInfo) {
+                        $mCode = $apiInfo['m_code'] ?? $apiInfo['mcode'] ?? $mCode;
+                        $ccCode = $apiInfo['cc_code'] ?? $apiInfo['cccode'] ?? $ccCode;
+                        $token = $apiInfo['token'] ?? $token;
+                        $apiIdx = $apiInfo['api_idx'] ?? $apiInfo['idx'] ?? $apiIdx;
+                        
+                        // 세션에 저장
+                        session()->set('m_code', $mCode);
+                        session()->set('cc_code', $ccCode);
+                        session()->set('token', $token);
+                        session()->set('api_idx', $apiIdx);
+                    }
+                }
+            }
+        }
+
+        if (!$mCode || !$ccCode || !$token || !$apiIdx) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보가 설정되지 않았습니다.'
+            ])->setStatusCode(500);
+        }
+
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+            
+            // 인성 API 주문 사인 조회
+            $orderSignResult = $insungApiService->getOrderSign($mCode, $ccCode, $token, $userId, $serialNumber, $apiIdx);
+            
+            if (!$orderSignResult || !isset($orderSignResult['success']) || !$orderSignResult['success']) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $orderSignResult['message'] ?? '주문 사인 정보를 가져올 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            $signData = $orderSignResult['data'] ?? null;
+            
+            if (!$signData) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 사인 데이터가 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 응답 데이터 추출 (departure_sign, destination_sign, receipt_url)
+            $result = [
+                'departure_sign' => '',
+                'destination_sign' => '',
+                'receipt_url' => ''
+            ];
+            
+            // JSON 응답 구조에 따라 데이터 추출
+            // 배열의 첫 번째 요소에서 추출하거나, 직접 객체에서 추출
+            $dataItem = null;
+            
+            // signData가 이미 객체로 전달되므로 직접 사용
+            if (is_array($signData)) {
+                // 배열인 경우 departure_sign, destination_sign, receipt_url 필드가 있는 요소 찾기
+                $dataItem = null;
+                foreach ($signData as $item) {
+                    if (is_array($item)) {
+                        if (isset($item['departure_sign']) || isset($item['destination_sign']) || isset($item['receipt_url'])) {
+                            $dataItem = $item;
+                            break;
+                        }
+                    } elseif (is_object($item)) {
+                        if (isset($item->departure_sign) || isset($item->destination_sign) || isset($item->receipt_url)) {
+                            $dataItem = $item;
+                            break;
+                        }
+                    }
+                }
+                
+                // 필드가 있는 요소를 찾지 못한 경우 첫 번째 요소 사용
+                if (!$dataItem && isset($signData[0])) {
+                    $dataItem = $signData[0];
+                } elseif (!$dataItem) {
+                    // 배열이지만 인덱스가 없는 경우 (연관 배열)
+                    $dataItem = $signData;
+                }
+            } elseif (is_object($signData)) {
+                $dataItem = $signData;
+            }
+            
+            if ($dataItem) {
+                // departure_sign 추출 (배열과 객체 모두 처리)
+                if (is_array($dataItem)) {
+                    $result['departure_sign'] = isset($dataItem['departure_sign']) ? (string)$dataItem['departure_sign'] : '';
+                    $result['destination_sign'] = isset($dataItem['destination_sign']) ? (string)$dataItem['destination_sign'] : '';
+                    $result['receipt_url'] = isset($dataItem['receipt_url']) ? (string)$dataItem['receipt_url'] : '';
+                } elseif (is_object($dataItem)) {
+                    $result['departure_sign'] = isset($dataItem->departure_sign) ? (string)$dataItem->departure_sign : '';
+                    $result['destination_sign'] = isset($dataItem->destination_sign) ? (string)$dataItem->destination_sign : '';
+                    $result['receipt_url'] = isset($dataItem->receipt_url) ? (string)$dataItem->receipt_url : '';
+                }
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $result
+            ]);
+            
+        } catch (\Exception $e) {
+            log_message('error', "History::getOrderSign - Error: " . $e->getMessage());
+            log_message('error', "History::getOrderSign - Stack trace: " . $e->getTraceAsString());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 사인 정보 조회 중 오류가 발생했습니다: ' . $e->getMessage()
             ])->setStatusCode(500);
         }
     }

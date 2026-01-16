@@ -62,11 +62,23 @@ class InsungUsersListModel extends Model
         $encryptionHelper = new EncryptionHelper();
         
         foreach ($this->encryptedFields as $field) {
-            if (isset($data['data'][$field]) && !empty($data['data'][$field])) {
-                $encrypted = $encryptionHelper->encrypt($data['data'][$field]);
-                if ($encrypted !== false) {
-                    $data['data'][$field] = $encrypted;
+            if (isset($data['data'][$field])) {
+                $originalValue = $data['data'][$field];
+                // null이 아니고 빈 문자열이 아니면 암호화 처리
+                if ($originalValue !== null && $originalValue !== '') {
+                    // log_message('debug', "InsungUsersListModel::encryptUserData - Processing field: {$field}, value length: " . strlen($originalValue));
+                    $encrypted = $encryptionHelper->encrypt($originalValue);
+                    if ($encrypted !== false) {
+                        $data['data'][$field] = $encrypted;
+                        // log_message('debug', "InsungUsersListModel::encryptUserData - Successfully encrypted field: {$field}, encrypted length: " . strlen($encrypted));
+                    } else {
+                        log_message('error', "InsungUsersListModel::encryptUserData - Failed to encrypt field: {$field}");
+                    }
+                } else {
+                    // log_message('debug', "InsungUsersListModel::encryptUserData - Skipping field: {$field} (null or empty)");
                 }
+            } else {
+                // log_message('debug', "InsungUsersListModel::encryptUserData - Field not found in data: {$field}");
             }
         }
         

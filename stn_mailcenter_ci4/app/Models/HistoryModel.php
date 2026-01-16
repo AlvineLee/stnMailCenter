@@ -152,8 +152,9 @@ class HistoryModel extends Model
                     }
                 } elseif ($filters['user_type'] == '5') {
                     // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
-                    // 서브도메인 필터가 이미 적용되어 있으므로 추가 필터링 불필요
-                    // (서브도메인 필터가 comp_code로 필터링하므로)
+                    // CLI로 저장된 데이터는 comp_no로 필터링
+                    // 서브도메인 필터가 있을 때는 이미 comp_no로 필터링됨
+                    // 추가 필터링 불필요
                 }
                 // user_type = 1: 서브도메인 필터만 적용 (추가 필터 없음)
             }
@@ -171,7 +172,39 @@ class HistoryModel extends Model
             $builder->where('1', '0'); // 항상 false 조건
         }
         // 서브도메인 필터가 없을 때 daumdata 로그인 필터링
-        elseif (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
+        // m_code, cc_code가 세션에 있으면 customer_id(거래처번호)로 직접 필터링
+        // user_type=5일 때도 env1=1이면 comp_code 필터가 필요함
+        if (!$hasSubdomainFilter) {
+            $loginType = $filters['login_type'] ?? null;
+            if ($loginType === 'daumdata') {
+                // user_type=5이고 skip_user_company_filter가 있으면 (env1=1) comp_code 필터 추가 필요
+                // user_type=5이고 skip_user_company_filter가 없으면 user_company 필터가 아래에서 추가되므로 여기서는 추가하지 않음
+                // user_type=1일 때는 comp_code 필터는 유지
+                $shouldApplyCompCodeFilter = false;
+                if (!isset($filters['user_type']) || $filters['user_type'] != '5') {
+                    $shouldApplyCompCodeFilter = true;
+                } elseif (isset($filters['user_type']) && $filters['user_type'] == '5' && isset($filters['skip_user_company_filter']) && $filters['skip_user_company_filter']) {
+                    // user_type=5이고 env1=1일 때는 comp_code 필터 필요
+                    $shouldApplyCompCodeFilter = true;
+                }
+                
+                if ($shouldApplyCompCodeFilter) {
+                    $compCode = $filters['comp_code'] ?? null;
+                    if (!$compCode) {
+                        // 세션에서 comp_code 가져오기
+                        $session = \Config\Services::session();
+                        $compCode = $session->get('comp_code');
+                    }
+                    
+                    if ($compCode) {
+                        // customer_id 필드에 거래처번호가 저장되어 있으므로 직접 비교
+                        $builder->where('o.customer_id', $compCode);
+                    }
+                }
+            }
+        }
+        
+        if (isset($filters['user_type']) && $filters['user_type'] == '3' && isset($filters['user_company']) && $filters['user_company']) {
             // user_type = 3: user_company가 본인의 user_company와 같은 데이터들
             $compNameBuilder = $this->db->table('tbl_company_list');
             $compNameBuilder->select('comp_name');
@@ -205,40 +238,9 @@ class HistoryModel extends Model
             }
         } elseif (isset($filters['user_type']) && $filters['user_type'] == '5') {
             // user_type = 5: 같은 회사(comp_code)의 모든 주문 조회
-            // user_company (comp_code)로 필터링
+            // customer_id 필드에 거래처번호가 저장되어 있으므로 직접 비교
             if (isset($filters['user_company']) && $filters['user_company']) {
-                // comp_code로 comp_name 조회
-                $compNameBuilder = $this->db->table('tbl_company_list');
-                $compNameBuilder->select('comp_name');
-                $compNameBuilder->where('comp_code', $filters['user_company']);
-                $compNameQuery = $compNameBuilder->get();
-                $userCompName = null;
-                if ($compNameQuery !== false) {
-                    $compNameResult = $compNameQuery->getRowArray();
-                    if ($compNameResult && !empty($compNameResult['comp_name'])) {
-                        $userCompName = $compNameResult['comp_name'];
-                    }
-                }
-                
-                if ($userCompName) {
-                    // 인성 API 주문과 일반 주문 모두 comp_code/comp_name으로 필터링
-                    $builder->groupStart()
-                        ->groupStart()
-                            ->where('o.order_system', 'insung')
-                            ->where('u_list.user_company', $filters['user_company'])
-                        ->groupEnd()
-                        ->orGroupStart()
-                            ->groupStart()
-                                ->where('o.order_system IS NULL', null, true)
-                                ->orWhere('o.order_system !=', 'insung')
-                            ->groupEnd()
-                            ->where('o.company_name', $userCompName)
-                        ->groupEnd()
-                    ->groupEnd();
-                } else {
-                    // comp_name 조회 실패 시 comp_code로만 필터링
-                    $builder->where('u_list.user_company', $filters['user_company']);
-                }
+                $builder->where('o.customer_id', $filters['user_company']);
             }
         } elseif (isset($filters['cc_code']) && $filters['cc_code']) {
             // user_type = 3: 소속 콜센터의 고객사 주문접수 리스트만
@@ -404,8 +406,7 @@ class HistoryModel extends Model
                 $builder->orderBy($sortField, $orderDir);
             }
         } else {
-            // 기본 정렬: 인성주문번호 내림차순 (인성 API 주문의 경우), 없으면 접수일자 내림차순
-            $builder->orderBy('o.insung_order_number', 'DESC');
+            // 기본 정렬: 접수일자 역순 (모든 주문접수 리스트 통일)
             $builder->orderBy('o.order_date', 'DESC');
             $builder->orderBy('o.order_time', 'DESC');
         }

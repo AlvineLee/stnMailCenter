@@ -136,7 +136,12 @@ class Dashboard extends BaseController
             } else {
                 $settlementDeptsParam = [];
             }
+        } elseif ($userClass == '5') {
+            // user_class=5는 compCodeForEnv만 설정하고 user_dept 필터는 적용하지 않음
+            $userDeptParam = null;
+            $settlementDeptsParam = null;
         } elseif (isset($userClass) && (int)$userClass >= 3 && !empty($userDept)) {
+            // user_class = 3 이상: 부서명으로 필터링 (user_class=5는 위에서 처리됨)
             $userDeptParam = $userDept;
             $settlementDeptsParam = null;
         }
@@ -481,12 +486,18 @@ class Dashboard extends BaseController
             // ckey 값 확인 (디버깅용 - 처음 10자만 표시)
             $ckeyPreview = strlen($ckey) > 10 ? substr($ckey, 0, 10) . '...' : $ckey;
             
+            // [자동 토큰 갱신 비활성화] 다중 서버 환경에서 토큰 갱신 시 다른 서버의 요청이 실패할 수 있으므로
+            // 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 합니다.
             // InsungApiService 인스턴스 생성
             $insungApi = new InsungApiService();
             
-            // 토큰 갱신
-            $newToken = $insungApi->updateTokenKey($apiIdx);
+            // [자동 토큰 갱신 비활성화] 다중 서버 환경에서 토큰 갱신 시 다른 서버의 요청이 실패할 수 있으므로
+            // 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 합니다.
+            log_message('warning', "Dashboard: Token refresh requested but auto-refresh is disabled. Manual token refresh required for api_idx: {$apiIdx}.");
+            // $newToken = $insungApi->updateTokenKey($apiIdx); // 자동 토큰 갱신 비활성화
+            $newToken = false; // 자동 갱신 비활성화
             
+            // 자동 갱신이 비활성화되어 있으므로 실패 메시지 반환
             if ($newToken) {
                 // 갱신된 토큰으로 세션 업데이트
                 session()->set('token', $newToken);
@@ -509,17 +520,15 @@ class Dashboard extends BaseController
                     ]
                 ]);
             } else {
-                // 로그 파일에서 최근 에러 확인을 위한 안내
+                // [자동 토큰 갱신 비활성화] 다중 서버 환경에서 토큰 갱신 시 다른 서버의 요청이 실패할 수 있으므로
+                // 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 합니다.
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => '토큰 갱신 실패',
+                    'message' => '자동 토큰 갱신이 비활성화되어 있습니다. 관리자 화면에서 수동으로 토큰을 갱신해주세요.',
                     'api_idx' => $apiIdx,
                     'mcode' => $mcode,
                     'cccode' => $cccode,
-                    'ckey_exists' => !empty($ckey),
-                    'ckey_length' => strlen($ckey),
-                    'ckey_preview' => $ckeyPreview,
-                    'note' => 'ckey 인증 실패. DB의 ckey 값이 인성 API 서버에 등록된 값과 일치하는지 확인하세요.'
+                    'note' => '다중 서버 환경에서 자동 토큰 갱신은 다른 서버의 요청 실패를 유발할 수 있어 비활성화되었습니다.'
                 ]);
             }
             

@@ -44,8 +44,7 @@
                 { id: 'departure_manager', name: '출발지 담당' },
                 { id: 'departure_address', name: '출발지 주소' },
                 { id: 'departure_detail', name: '출발지 상세주소' },
-                { id: 'destination_contact', name: '도착지 연락처' },
-                { id: 'destination_manager', name: '도착지 담당' },
+                // 도착지 연락처와 담당은 선택사항으로 변경
                 { id: 'destination_address', name: '도착지 주소' },
                 { id: 'destination_detail', name: '도착지 상세주소' }
             ];

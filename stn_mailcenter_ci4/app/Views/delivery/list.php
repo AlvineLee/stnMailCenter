@@ -137,6 +137,8 @@
                     <td class="px-4 py-2 text-sm" data-column-index="3">
                         <?php if ($order['show_map_on_click'] ?? false): ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)"><?= esc($order['status_label'] ?? '-') ?></span>
+                        <?php elseif ($order['show_ilyang_detail'] ?? false): ?>
+                            <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="viewIlyangDetail('<?= esc($order['ilyang_tracking_number'] ?? '') ?>')"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php else: ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php endif; ?>
@@ -223,6 +225,7 @@
     </div>
 </div>
 
+<?php echo view('delivery/ilyang_detail_modal'); ?>
 
 <script src="<?= base_url('assets/js/common-library.js') ?>"></script>
 <script>
@@ -947,8 +950,32 @@ function printWaybill(orderNumber, trackingNumber) {
         return;
     }
     
+    // 컨텐츠 크기에 맞게 팝업 크기 조정 (max-width: 800px + padding + 여유공간)
+    const popupWidth = 860;  // 800px 컨텐츠 + 40px padding + 20px 여유
+    const popupHeight = 700; // 컨텐츠에 맞게 조정된 높이
+    
     // 새 창에서 송장출력 페이지 열기
-    window.open(`/delivery/printWaybill?order_number=${encodeURIComponent(orderNumber)}&tracking_number=${encodeURIComponent(trackingNumber)}`, '_blank', 'width=800,height=1000');
+    const popup = window.open(
+        `/delivery/printWaybill?order_number=${encodeURIComponent(orderNumber)}&tracking_number=${encodeURIComponent(trackingNumber)}`, 
+        '_blank', 
+        `width=${popupWidth},height=${popupHeight},scrollbars=yes,resizable=yes`
+    );
+    
+    // 팝업이 로드된 후 컨텐츠 크기에 맞게 조정
+    if (popup) {
+        popup.addEventListener('load', function() {
+            try {
+                const contentHeight = popup.document.body.scrollHeight;
+                const contentWidth = popup.document.body.scrollWidth;
+                // 컨텐츠 크기 + 여유공간(40px)으로 조정
+                const adjustedHeight = Math.min(contentHeight + 40, screen.height - 100);
+                const adjustedWidth = Math.min(contentWidth + 40, screen.width - 100);
+                popup.resizeTo(adjustedWidth, adjustedHeight);
+            } catch (e) {
+                // 크로스 오리진 제한으로 인한 오류는 무시
+            }
+        });
+    }
 }
 
 // 송장출력 함수 (주문상세 모달에서)
@@ -961,8 +988,32 @@ function printWaybillFromDetail() {
         return;
     }
     
+    // 컨텐츠 크기에 맞게 팝업 크기 조정 (max-width: 800px + padding + 여유공간)
+    const popupWidth = 860;  // 800px 컨텐츠 + 40px padding + 20px 여유
+    const popupHeight = 700; // 컨텐츠에 맞게 조정된 높이
+    
     // 새 창에서 송장출력 페이지 열기
-    window.open(`/delivery/printWaybill?order_number=${encodeURIComponent(orderNumber)}&tracking_number=${encodeURIComponent(trackingNumber)}`, '_blank', 'width=800,height=1000');
+    const popup = window.open(
+        `/delivery/printWaybill?order_number=${encodeURIComponent(orderNumber)}&tracking_number=${encodeURIComponent(trackingNumber)}`, 
+        '_blank', 
+        `width=${popupWidth},height=${popupHeight},scrollbars=yes,resizable=yes`
+    );
+    
+    // 팝업이 로드된 후 컨텐츠 크기에 맞게 조정
+    if (popup) {
+        popup.addEventListener('load', function() {
+            try {
+                const contentHeight = popup.document.body.scrollHeight;
+                const contentWidth = popup.document.body.scrollWidth;
+                // 컨텐츠 크기 + 여유공간(40px)으로 조정
+                const adjustedHeight = Math.min(contentHeight + 40, screen.height - 100);
+                const adjustedWidth = Math.min(contentWidth + 40, screen.width - 100);
+                popup.resizeTo(adjustedWidth, adjustedHeight);
+            } catch (e) {
+                // 크로스 오리진 제한으로 인한 오류는 무시
+            }
+        });
+    }
 }
 
 function cancelOrder(orderId) {
@@ -970,6 +1021,262 @@ function cancelOrder(orderId) {
     if (confirm('정말로 이 주문을 취소하시겠습니까?')) {
         alert('주문 취소: ' + orderId);
     }
+}
+
+// 일양 배송정보 상세 조회
+function viewIlyangDetail(trackingNumber) {
+    if (!trackingNumber) {
+        alert('운송장번호가 없습니다.');
+        return;
+    }
+    
+    // 모달 열기
+    const modal = document.getElementById('ilyangDetailModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    
+    // 로딩 상태 표시
+    const content = document.getElementById('ilyang-detail-content');
+    content.innerHTML = `
+        <div class="text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <p class="mt-4 text-gray-600">배송정보를 조회하는 중입니다...</p>
+        </div>
+    `;
+    
+    // API 호출
+    fetch(`/delivery/getIlyangDeliveryDetail?tracking_number=${encodeURIComponent(trackingNumber)}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data) {
+            populateIlyangDetail(data.data);
+        } else {
+            content.innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-red-600">${data.message || '배송정보를 조회할 수 없습니다.'}</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        content.innerHTML = `
+            <div class="text-center py-8">
+                <p class="text-red-600">배송정보 조회 중 오류가 발생했습니다.</p>
+            </div>
+        `;
+    });
+}
+
+// 일양 배송정보 상세 내용 표시
+function populateIlyangDetail(data) {
+    const content = document.getElementById('ilyang-detail-content');
+    
+    // API 응답 구조 파싱
+    const head = data.head || {};
+    const traces = data.body?.trace || [];
+    
+    if (traces.length === 0) {
+        content.innerHTML = `
+            <div class="text-center py-8">
+                <p class="text-gray-600">배송정보가 없습니다.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // 첫 번째 배송정보 추출 (일반적으로 1건)
+    const trace = traces[0];
+    const hawbNo = trace.hawb_no || '';
+    const orderNo = trace.order_no || '';
+    const sendnm = trace.sendnm || '';
+    const recevnm = trace.recevnm || '';
+    const eventymd = trace.eventymd || '';
+    const eventnm = trace.eventnm || '';
+    const signernm = trace.signernm || '';
+    const itemlist = trace.itemlist || [];
+    
+    // 배송 추적 이력 추출
+    let traceHistory = [];
+    itemlist.forEach(itemGroup => {
+        const items = itemGroup.item || [];
+        const itemsArray = Array.isArray(items) ? items : [items];
+        itemsArray.forEach(item => {
+            if (item) {
+                traceHistory.push(item);
+            }
+        });
+    });
+    
+    // 날짜+시간 기준으로 정렬 (최신순)
+    traceHistory.sort((a, b) => {
+        const dateA = (a.status_date || '') + ' ' + (a.status_time || '');
+        const dateB = (b.status_date || '') + ' ' + (b.status_time || '');
+        return dateB.localeCompare(dateA);
+    });
+    
+    // 배송상태 코드 매핑
+    const traceCodeMap = {
+        'PU': '발송사무소 인수',
+        'AR': '배송경유지 도착',
+        'BG': '배송경유지 출고',
+        'WC': '직원 배송중',
+        'DL': '배달완료',
+        'EX': '미배달'
+    };
+    
+    const nonDeliveryCodeMap = {
+        'BA': '주소불명',
+        'CA': '폐문부재',
+        'CM': '이사불명',
+        'NH': '수취인부재',
+        'RD': '수취거절',
+        'ND': '배달누락'
+    };
+    
+    let html = `
+        <div class="space-y-6">
+            <!-- 기본 정보 -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="text-lg font-bold mb-4 text-gray-800">기본 정보</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">운송장번호</label>
+                        <p class="text-base font-bold text-gray-900">${hawbNo || '-'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">주문번호</label>
+                        <p class="text-base text-gray-900">${orderNo || '-'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">배송일자</label>
+                        <p class="text-base text-gray-900">${eventymd || '-'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">배송결과</label>
+                        <p class="text-base text-gray-900">${eventnm || '-'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">수취인</label>
+                        <p class="text-base text-gray-900">${signernm || '-'}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 발송인/수취인 정보 -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                    <h4 class="text-lg font-bold mb-3 text-blue-800">발송인</h4>
+                    <p class="text-base font-semibold text-gray-900">${sendnm || '-'}</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 border-2 border-green-200">
+                    <h4 class="text-lg font-bold mb-3 text-green-800">수취인</h4>
+                    <p class="text-base font-semibold text-gray-900">${recevnm || '-'}</p>
+                </div>
+            </div>
+            
+            <!-- 배송 추적 이력 -->
+            <div class="bg-white rounded-lg border border-gray-200">
+                <h4 class="text-lg font-bold mb-4 p-4 bg-gray-100 border-b border-gray-200 text-gray-800">배송 추적 이력</h4>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">순서</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">날짜</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">시간</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">배송지점</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">지점코드</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">배송상태</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">상태설명</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">미배송사유</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+    `;
+    
+    if (traceHistory.length === 0) {
+        html += `
+            <tr>
+                <td colspan="8" class="px-4 py-8 text-center text-gray-500">배송 추적 이력이 없습니다.</td>
+            </tr>
+        `;
+    } else {
+        traceHistory.forEach((item, index) => {
+            const statusDate = item.status_date || '-';
+            const statusTime = item.status_time || '-';
+            const station = item.station || '-';
+            const empnm = item.empnm || '-';
+            const tracecode = item.tracecode || '-';
+            const tracestatus = item.tracestatus || traceCodeMap[tracecode] || '-';
+            const nondlcode = item.nondlcode || '-';
+            const nondelivreasnnm = item.nondelivreasnnm || nonDeliveryCodeMap[nondlcode] || '-';
+            
+            html += `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-sm text-gray-900">${traceHistory.length - index}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${statusDate}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${statusTime}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${station}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${empnm}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tracecode === 'DL' ? 'bg-green-100 text-green-800' : tracecode === 'EX' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}">
+                            ${tracecode}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${tracestatus}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${nondelivreasnnm}</td>
+                </tr>
+            `;
+        });
+    }
+    
+    html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- API 응답 정보 -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="text-lg font-bold mb-4 text-gray-800">API 응답 정보</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <label class="font-semibold text-gray-600">응답코드</label>
+                        <p class="text-gray-900">${head.returnCode || '-'}</p>
+                    </div>
+                    <div>
+                        <label class="font-semibold text-gray-600">응답설명</label>
+                        <p class="text-gray-900">${head.returnDesc || '-'}</p>
+                    </div>
+                    <div>
+                        <label class="font-semibold text-gray-600">전체 건수</label>
+                        <p class="text-gray-900">${head.totalCount || 0}</p>
+                    </div>
+                    <div>
+                        <label class="font-semibold text-gray-600">성공 건수</label>
+                        <p class="text-gray-900">${head.successCount || 0}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+// 일양 배송정보 상세 모달 닫기
+function closeIlyangDetail() {
+    const modal = document.getElementById('ilyangDetailModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = 'auto';
 }
 
 // 테이블 헤더 드래그 앤 드롭 기능

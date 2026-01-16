@@ -64,4 +64,3 @@ function maskPhone(phone, userType, loginUserId, orderInsungUserId) {
     }
     return phone;
 }
-

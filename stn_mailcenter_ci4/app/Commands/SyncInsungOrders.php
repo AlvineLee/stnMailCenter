@@ -107,31 +107,41 @@ class SyncInsungOrders extends BaseCommand
                 CLI::write("거래처 코드: {$compCode} (user_class={$userClass})", 'green');
             }
             
-            // user_class별 파라미터 설정
-            $staffCode = null;
-            // CLI 연동 시에는 부서명 파라미터를 전달하지 않음 (DB 조회 시에만 user_dept 필터링 적용)
-            $deptName = null;
-            
-            // user_type = 5일 때 staff_code 사용 (user_class=1,2일 때는 제외)
-            if ($userType == '5' && !empty($userCode) && $userClass != '1' && $userClass != '2') {
-                $staffCode = $userCode;
-                CLI::write("사용자 코드 파라미터 추가: staff_code={$userCode} (user_type=5, user_class={$userClass})", 'green');
-            } elseif ($userType == '5' && ($userClass == '1' || $userClass == '2')) {
-                CLI::write("사용자 코드 파라미터 제외 (user_type=5, user_class={$userClass})", 'yellow');
-            }
-
-            // 본인오더조회(env1=3) 확인
+            // 본인오더조회(env1=3) 확인 (staff_code 설정 전에 먼저 확인)
             $db = \Config\Database::connect();
             $envBuilder = $db->table('tbl_company_env');
             $envBuilder->select('env1');
             $envBuilder->where('comp_code', $compCode);
             $envQuery = $envBuilder->get();
             $isSelfOrderOnly = false;
+            $env1 = null;
             if ($envQuery !== false) {
                 $envInfo = $envQuery->getRowArray();
-                if ($envInfo && isset($envInfo['env1']) && $envInfo['env1'] == '3') {
-                    $isSelfOrderOnly = true;
-                    CLI::write("본인오더조회 모드: 로그인한 사용자의 주문만 저장합니다.", 'yellow');
+                if ($envInfo && isset($envInfo['env1'])) {
+                    $env1 = $envInfo['env1'];
+                    if ($env1 == '3') {
+                        $isSelfOrderOnly = true;
+                        CLI::write("본인오더조회 모드: 로그인한 사용자의 주문만 저장합니다.", 'yellow');
+                    }
+                }
+            }
+            
+            // user_class별 파라미터 설정
+            $staffCode = null;
+            // CLI 연동 시에는 부서명 파라미터를 전달하지 않음 (DB 조회 시에만 user_dept 필터링 적용)
+            $deptName = null;
+            
+            // user_type = 5일 때 staff_code 사용
+            // 단, env1=1(전체 조회)이거나 user_class=1,2일 때는 제외
+            if ($userType == '5' && !empty($userCode)) {
+                // env1=1(전체 조회)이면 staff_code 제외
+                if ($env1 == '1') {
+                    CLI::write("사용자 코드 파라미터 제외 (user_type=5, env1=1: 전체 조회)", 'yellow');
+                } elseif ($userClass == '1' || $userClass == '2') {
+                    CLI::write("사용자 코드 파라미터 제외 (user_type=5, user_class={$userClass})", 'yellow');
+                } else {
+                    $staffCode = $userCode;
+                    CLI::write("사용자 코드 파라미터 추가: staff_code={$userCode} (user_type=5, user_class={$userClass}, env1={$env1})", 'green');
                 }
             }
 

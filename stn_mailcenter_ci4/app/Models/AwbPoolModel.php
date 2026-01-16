@@ -41,16 +41,26 @@ class AwbPoolModel extends Model
         $awbRecord = $this->where('awb_no', $awbNo)->first();
         
         if (!$awbRecord) {
+            log_message('error', "AwbPoolModel::markAsUsed - AWB record not found: awb_no={$awbNo}, order_no={$orderNumber}");
             return false;
         }
         
         $pkColumn = isset($awbRecord['id']) ? 'id' : 'awb_no';
         $pkValue = $awbRecord[$pkColumn];
         
-        return $this->update($pkValue, [
+        $updateResult = $this->update($pkValue, [
             'order_no' => $orderNumber,
             'used_at' => date('Y-m-d H:i:s')
         ]);
+        
+        if (!$updateResult) {
+            log_message('error', "AwbPoolModel::markAsUsed - Update failed: awb_no={$awbNo}, order_no={$orderNumber}, pkValue={$pkValue}, pkColumn={$pkColumn}");
+            // update() 실패 시 markAsUsedByAwbNo로 재시도
+            return $this->markAsUsedByAwbNo($awbNo, $orderNumber);
+        }
+        
+        log_message('debug', "AwbPoolModel::markAsUsed - Success: awb_no={$awbNo}, order_no={$orderNumber}, pkValue={$pkValue}");
+        return true;
     }
 
     /**
@@ -58,14 +68,33 @@ class AwbPoolModel extends Model
      */
     public function markAsUsedByAwbNo($awbNo, $orderNumber)
     {
-        $this->where('awb_no', $awbNo)
+        // 먼저 레코드 존재 확인
+        $awbRecord = $this->where('awb_no', $awbNo)->first();
+        
+        if (!$awbRecord) {
+            log_message('error', "AwbPoolModel::markAsUsedByAwbNo - AWB record not found: awb_no={$awbNo}, order_no={$orderNumber}");
+            return false;
+        }
+        
+        // 업데이트 실행
+        $updateResult = $this->where('awb_no', $awbNo)
              ->set([
                  'order_no' => $orderNumber,
                  'used_at' => date('Y-m-d H:i:s')
              ])
              ->update();
         
-        return $this->db->affectedRows() > 0;
+        $affectedRows = $this->db->affectedRows();
+        
+        if ($affectedRows > 0) {
+            log_message('debug', "AwbPoolModel::markAsUsedByAwbNo - Success: awb_no={$awbNo}, order_no={$orderNumber}, affectedRows={$affectedRows}");
+            return true;
+        } else {
+            // 업데이트 결과가 false이거나 영향받은 행이 0인 경우
+            $dbError = $this->db->error();
+            log_message('error', "AwbPoolModel::markAsUsedByAwbNo - Failed: awb_no={$awbNo}, order_no={$orderNumber}, affectedRows={$affectedRows}, updateResult=" . ($updateResult ? 'true' : 'false') . ", DB error: " . ($dbError['message'] ?? 'none'));
+            return false;
+        }
     }
 }
 

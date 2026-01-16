@@ -54,6 +54,15 @@ class OrderModel extends Model
         'item_type',
         'quantity',
         'unit',
+        'weight',
+        'dimensions',
+        'insurance_amount',
+        'bag_type',
+        'bag_material',
+        'box_selection',
+        'box_quantity',
+        'pouch_selection',
+        'pouch_quantity',
         'delivery_content',
         'box_medium_overload',
         'pouch_medium_overload',
@@ -102,7 +111,11 @@ class OrderModel extends Model
         'sfast',
         'happy_call',
         'car_type',
-        'cargo_name'
+        'cargo_name',
+        'delivery_completed_date',
+        'delivery_receiver_name',
+        'delivery_trace_history',
+        'ilyang_trace_code'
     ];
 
     // Dates
@@ -341,6 +354,11 @@ class OrderModel extends Model
             $db = \Config\Database::connect();
             $db->query('SELECT 1');
             
+            // 전화번호 필드 암호화 처리 (인성 접수 데이터와 동일)
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+            $orderData = $encryptionHelper->encryptFields($orderData, $phoneFields);
+            
             $orderId = $this->insert($orderData);
             
             if (!$orderId) {
@@ -381,6 +399,11 @@ class OrderModel extends Model
         if ($trackingNumber !== null) {
             $updateData['shipping_tracking_number'] = $trackingNumber;
         }
+        
+        // 전화번호 필드 암호화 처리 (업데이트 시에도 적용)
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
+        $updateData = $encryptionHelper->encryptFields($updateData, $phoneFields);
         
         return $this->update($orderId, $updateData);
     }

@@ -7,15 +7,20 @@ class IpHelper
     /**
      * 클라이언트의 실제 공인 IP 주소를 가져옵니다.
      * 프록시, 로드밸런서 등을 고려하여 가장 정확한 IP를 반환합니다.
+     * 공인 IP를 우선적으로 반환하며, 사설 IP인 경우 외부 서비스를 통해 공인 IP를 확인합니다.
      */
     public static function getRealIpAddress()
     {
+        $candidateIps = [];
+        
         // 1. X-Forwarded-For 헤더 확인 (가장 우선순위)
         if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-            $ip = trim($ips[0]);
-            if (self::isValidIp($ip)) {
-                return $ip;
+            foreach ($ips as $ip) {
+                $ip = trim($ip);
+                if (self::isValidIp($ip)) {
+                    $candidateIps[] = $ip;
+                }
             }
         }
 
@@ -23,7 +28,7 @@ class IpHelper
         if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
             $ip = trim($_SERVER['HTTP_X_REAL_IP']);
             if (self::isValidIp($ip)) {
-                return $ip;
+                $candidateIps[] = $ip;
             }
         }
 
@@ -31,7 +36,7 @@ class IpHelper
         if (!empty($_SERVER['HTTP_X_CLIENT_IP'])) {
             $ip = trim($_SERVER['HTTP_X_CLIENT_IP']);
             if (self::isValidIp($ip)) {
-                return $ip;
+                $candidateIps[] = $ip;
             }
         }
 
@@ -39,7 +44,7 @@ class IpHelper
         if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
             $ip = trim($_SERVER['HTTP_CF_CONNECTING_IP']);
             if (self::isValidIp($ip)) {
-                return $ip;
+                $candidateIps[] = $ip;
             }
         }
 
@@ -47,8 +52,28 @@ class IpHelper
         if (!empty($_SERVER['REMOTE_ADDR'])) {
             $ip = trim($_SERVER['REMOTE_ADDR']);
             if (self::isValidIp($ip)) {
-                return $ip;
+                $candidateIps[] = $ip;
             }
+        }
+
+        // 후보 IP 중에서 공인 IP를 우선적으로 선택
+        foreach ($candidateIps as $ip) {
+            if (!self::isPrivateIp($ip)) {
+                return $ip; // 공인 IP 발견
+            }
+        }
+
+        // 모든 후보가 사설 IP인 경우, 첫 번째 IP 반환 (내부망 환경)
+        if (!empty($candidateIps)) {
+            $firstIp = $candidateIps[0];
+            // 사설 IP인 경우 외부 서비스를 통해 공인 IP 확인 시도
+            if (self::isPrivateIp($firstIp)) {
+                $publicIp = self::getPublicIpFromService();
+                if ($publicIp) {
+                    return $publicIp;
+                }
+            }
+            return $firstIp;
         }
 
         return '127.0.0.1'; // 기본값

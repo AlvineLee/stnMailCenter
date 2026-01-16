@@ -275,7 +275,7 @@ $todayFormatted = date('Y년 m월 d일');
                                     <td class="px-3 py-1.5 text-xs">
                                         <span class="status-badge <?= esc($statusClass) ?>"><?= esc($statusLabel) ?></span>
                                     </td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['user_name'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['customer_duty'] ?? '-') ?></td>
                                     <td class="px-3 py-1.5 text-xs"><?= esc($order['departure_company_name'] ?? '-') ?></td>
                                     <td class="px-3 py-1.5 text-xs"><?= esc($order['destination_company_name'] ?? '-') ?></td>
                                     <td class="px-3 py-1.5 text-xs"><?= esc($deliveryMethod) ?></td>

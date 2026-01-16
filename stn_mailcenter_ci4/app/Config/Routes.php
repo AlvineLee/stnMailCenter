@@ -104,6 +104,7 @@ $routes->group('history', function($routes) {
     $routes->get('list', 'History::list');
     $routes->post('saveColumnOrder', 'History::saveColumnOrder');
     $routes->get('getOrderDetail', 'History::getOrderDetail');
+    $routes->get('getOrderSign', 'History::getOrderSign');
 });
 
 // 즐겨찾기 관련 라우트

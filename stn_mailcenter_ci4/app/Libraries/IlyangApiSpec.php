@@ -21,7 +21,7 @@ class IlyangApiSpec
      */
     const HEADERS = [
         'accessKey' => 'STK705DBCF65E36DE41AB6E09616B96C222D7585DD1E22815C07971590C26DWN',
-        'accountNo' => '105102002',
+        'accountNo' => '105102001',
         'ediCode' => 'STNnw',
         'Content-Type' => 'application/json',
         'Charset' => 'UTF-8'
@@ -30,7 +30,7 @@ class IlyangApiSpec
     /**
      * WhiteList IP 정보
      */
-    const WHITELIST_IP = '1.217.87.178';
+    const WHITELIST_IP = '211.214.19.20';
 
     /**
      * 요청 바디 필수 필드 (운송장정보 전송 - ilyRecType: CC)
@@ -93,7 +93,7 @@ class IlyangApiSpec
     ];
 
     /**
-     * 응답 메시지 구조
+     * 응답 메시지 구조 (운송장정보 전송)
      */
     const RESPONSE_STRUCTURE = [
         'head' => [
@@ -112,6 +112,64 @@ class IlyangApiSpec
                 'ilyErrorField' => 'String(500)' // 오류항목
             ]
         ]
+    ];
+
+    /**
+     * 배송정보 조회 API 엔드포인트
+     */
+    const TRACKING_ENDPOINTS = [
+        'waybill_test' => 'https://apis.ilyanglogis.com:8999/waybillData.json',  // 운송장번호 조회 (TEST)
+        'waybill_prod' => 'https://apis.ilyanglogis.com/waybillData.json',       // 운송장번호 조회 (PROD)
+        'order_test' => 'https://apis.ilyanglogis.com:8999/orderData.json',      // 주문번호 조회 (TEST)
+        'order_prod' => 'https://apis.ilyanglogis.com/orderData.json'           // 주문번호 조회 (PROD)
+    ];
+
+    /**
+     * 배송상태 코드 (traceCode)
+     */
+    const TRACE_CODES = [
+        'PU' => '발송사무소 인수',
+        'AR' => '배송경유지 도착',
+        'BG' => '배송경유지 출고',
+        'WC' => '직원 배송중',
+        'DL' => '배달완료',
+        'EX' => '미배달'
+    ];
+
+    /**
+     * 미배송사유 코드 (nondlcode)
+     */
+    const NON_DELIVERY_CODES = [
+        'BA' => '주소불명',
+        'CA' => '폐문부재',
+        'CM' => '이사불명',
+        'NH' => '수취인부재',
+        'RD' => '수취거절',
+        'ND' => '배달누락'
+    ];
+
+    /**
+     * 응답코드 명세
+     */
+    const RESPONSE_CODES = [
+        'R0' => '성공',
+        'R1' => '실패 서버오류',
+        'R2' => '고객정보가 없습니다',
+        'R4' => '운송장 배송조회는 최대 20건까지 검색 지원합니다',
+        'R5' => '파일정보 없음',
+        'R6' => '전송데이터 건수초과',
+        'E0' => '벨리데이션 오류',
+        'E01' => '필수값 없음',
+        'E02' => '길이 오류',
+        'E1' => '발송(집화) 요청일자 오류',
+        'E2' => '주문번호중복',
+        'E3' => '전송파일명 없음',
+        'E4' => '운송장번호 없음',
+        'E5' => '운송장번호 중복',
+        'E6' => '운송장번호 오류',
+        'E7' => '원운송장번호 없음',
+        'E8' => '배송운임 없음',
+        'E9' => '우편번호 오류'
     ];
 
     /**

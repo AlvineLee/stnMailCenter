@@ -52,8 +52,13 @@ class IlyangApiService
     {
         $endpoint = 'logisticsData.json';
         
-        // 클라이언트 실제 IP 주소 가져오기
+        // 클라이언트 실제 IP 주소 가져오기 (공인 IP 우선)
         $clientIp = IpHelper::getRealIpAddress();
+        
+        // IP 헤더 정보 로깅 (디버깅용)
+        $ipHeaders = IpHelper::getAllIpHeaders();
+        log_message('debug', "Ilyang API - IP Headers: " . json_encode($ipHeaders, JSON_UNESCAPED_UNICODE));
+        log_message('debug', "Ilyang API - Selected Client IP: {$clientIp}, isPrivate: " . (IpHelper::isPrivateIp($clientIp) ? 'yes' : 'no'));
         
         // 요청 헤더 설정 (IlyangApiSpec 사용)
         $headers = [
@@ -81,7 +86,12 @@ class IlyangApiService
             $jsonData = json_encode($requestBody, JSON_UNESCAPED_UNICODE);
             log_message('info', "Ilyang API Request Body: " . $jsonData);
             
-            $response = $this->client->post($endpoint, [
+            // 전체 URL 구성 (base_uri와 endpoint 합치기)
+            $fullUrl = rtrim($this->baseUrl, '/') . '/' . ltrim($endpoint, '/');
+            log_message('info', "Ilyang API Full URL: {$fullUrl}");
+            
+            // CURLRequest를 전체 URL로 직접 호출
+            $response = $this->client->post($fullUrl, [
                 'headers' => $headers,
                 'body' => $jsonData,
                 'http_errors' => false
@@ -93,11 +103,45 @@ class IlyangApiService
 
             log_message('info', "Ilyang API Response - Status: {$statusCode}, Body: " . $responseBody);
 
+            // HTTP 상태 코드 확인
+            $httpSuccess = $statusCode >= 200 && $statusCode < 300;
+            
+            // 비즈니스 로직 응답 코드 확인 (returnCode와 successCount)
+            $businessSuccess = false;
+            $returnCode = '';
+            $returnDesc = '';
+            $successCount = 0;
+            $totalCount = 0;
+            
+            if ($httpSuccess && is_array($responseData) && isset($responseData['head'])) {
+                $head = $responseData['head'];
+                $returnCode = $head['returnCode'] ?? '';
+                $returnDesc = $head['returnDesc'] ?? '';
+                $successCount = (int)($head['successCount'] ?? 0);
+                $totalCount = (int)($head['totalCount'] ?? 0);
+                
+                // returnCode가 'R0' (OK)이고 successCount가 0보다 크면 성공
+                // 또는 returnCode가 없고 successCount가 0보다 크면 성공
+                if ($returnCode === 'R0' || ($returnCode === '' && $successCount > 0)) {
+                    $businessSuccess = true;
+                } else {
+                    // returnCode가 'R0'이 아니면 실패 (R2: 고객정보없음 등)
+                    log_message('warning', "Ilyang API Business Error - returnCode: {$returnCode}, returnDesc: {$returnDesc}, successCount: {$successCount}, totalCount: {$totalCount}");
+                }
+            } else {
+                // 응답 구조가 올바르지 않으면 HTTP 성공 여부만 사용
+                $businessSuccess = $httpSuccess;
+            }
+
             return [
-                'success' => $statusCode >= 200 && $statusCode < 300,
+                'success' => $httpSuccess && $businessSuccess,
                 'status_code' => $statusCode,
                 'data' => $responseData,
-                'raw_response' => $responseBody
+                'raw_response' => $responseBody,
+                'return_code' => $returnCode,
+                'return_desc' => $returnDesc,
+                'success_count' => $successCount,
+                'total_count' => $totalCount
             ];
 
         } catch (\Exception $e) {
@@ -160,7 +204,8 @@ class IlyangApiService
             'ilyBoxWgt' => $orderData['weight'] ?? '1',
             'ilyAmtCash' => $orderData['delivery_fee'] ?? '0',
             'ilyOrgAwbno' => '',
-            'ilyCusApild' => $this->ediCode
+            'ilyCusApild' => $this->ediCode,
+            'ilyCusApiId' => $this->ediCode  // 일양 API 응답에서 요구하는 필드 (ilyCusApild와 동일한 값)
         ];
 
         // 필수 필드 검증
@@ -229,23 +274,271 @@ class IlyangApiService
 
     /**
      * 배송 요청 생성 (기존 호환성 유지)
+     * 
+     * @param array $deliveryData 주문 데이터
+     * @return array API 응답 결과 (waybillData 포함)
      */
     public function createDelivery($deliveryData)
     {
         $waybillData = $this->convertOrderToWaybillData($deliveryData);
-        return $this->sendWaybillData($waybillData);
+        $result = $this->sendWaybillData($waybillData);
+        
+        // 변환된 waybillData를 결과에 포함 (일양 접수 데이터 저장용)
+        if ($result['success']) {
+            $result['waybill_data'] = $waybillData;
+        }
+        
+        return $result;
     }
 
     /**
-     * 배송 상태 조회 (향후 구현)
+     * 배송 상태 조회 (운송장번호로 조회)
+     * 
+     * @param string|array $trackingNumbers 운송장번호 (문자열 또는 배열, 최대 100건)
+     * @return array API 응답 결과
      */
-    public function getDeliveryStatus($trackingNumber)
+    public function getDeliveryStatus($trackingNumbers)
     {
-        // TODO: 일양 API 상태 조회 구현
-        return [
-            'success' => false,
-            'message' => '상태 조회 기능은 아직 구현되지 않았습니다.'
+        $endpoint = 'waybillData.json';
+        
+        // 배열이 아니면 배열로 변환
+        if (!is_array($trackingNumbers)) {
+            $trackingNumbers = [$trackingNumbers];
+        }
+        
+        // 최대 100건까지 제한
+        if (count($trackingNumbers) > 100) {
+            return [
+                'success' => false,
+                'error' => '운송장번호는 최대 100건까지 조회 가능합니다.'
+            ];
+        }
+        
+        // 클라이언트 실제 IP 주소 가져오기
+        $clientIp = IpHelper::getRealIpAddress();
+        
+        // 요청 헤더 설정
+        $headers = [
+            'accessKey' => $this->accessKey,
+            'accountNo' => $this->accountNo,
+            'ediCode' => $this->ediCode,
+            'filename' => $this->ediCode . date('Ymd_Hi'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'X-Forwarded-For' => $clientIp
         ];
+        
+        // 요청 바디 구성 (운송장번호를 쉼표로 구분)
+        $requestBody = [
+            'hawbNos' => implode(',', $trackingNumbers)
+        ];
+        
+        try {
+            $jsonData = json_encode($requestBody, JSON_UNESCAPED_UNICODE);
+            
+            // 전체 URL 구성
+            $fullUrl = rtrim($this->baseUrl, '/') . '/' . ltrim($endpoint, '/');
+            
+            // CURLRequest를 전체 URL로 직접 호출
+            $response = $this->client->post($fullUrl, [
+                'headers' => $headers,
+                'body' => $jsonData,
+                'http_errors' => false
+            ]);
+            
+            $statusCode = $response->getStatusCode();
+            $responseBody = $response->getBody();
+            $responseData = json_decode($responseBody, true);
+            
+            log_message('info', "Ilyang API getDeliveryStatus - Status: {$statusCode}, hawbNos: " . implode(',', $trackingNumbers));
+            
+            // HTTP 상태 코드 확인
+            $httpSuccess = $statusCode >= 200 && $statusCode < 300;
+            
+            // 비즈니스 로직 응답 코드 확인
+            $businessSuccess = false;
+            $returnCode = '';
+            $returnDesc = '';
+            $successCount = 0;
+            $totalCount = 0;
+            
+            if ($httpSuccess && is_array($responseData) && isset($responseData['head'])) {
+                $head = $responseData['head'];
+                $returnCode = $head['returnCode'] ?? '';
+                $returnDesc = $head['returnDesc'] ?? '';
+                $successCount = (int)($head['successCount'] ?? 0);
+                $totalCount = (int)($head['totalCount'] ?? 0);
+                
+                // returnCode가 'R0'이면 성공
+                if ($returnCode === 'R0') {
+                    $businessSuccess = true;
+                } else {
+                    log_message('warning', "Ilyang API getDeliveryStatus - Business Error: returnCode={$returnCode}, returnDesc={$returnDesc}");
+                }
+            } else {
+                $businessSuccess = $httpSuccess;
+            }
+            
+            return [
+                'success' => $httpSuccess && $businessSuccess,
+                'status_code' => $statusCode,
+                'data' => $responseData,
+                'raw_response' => $responseBody,
+                'return_code' => $returnCode,
+                'return_desc' => $returnDesc,
+                'success_count' => $successCount,
+                'total_count' => $totalCount
+            ];
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Ilyang API getDeliveryStatus Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * 주문번호로 배송 상태 조회
+     * 
+     * @param string|array $orderNumbers 주문번호 (문자열 또는 배열, 최대 50건)
+     * @return array API 응답 결과
+     */
+    public function getDeliveryStatusByOrderNo($orderNumbers)
+    {
+        $endpoint = 'orderData.json';
+        
+        // 배열이 아니면 배열로 변환
+        if (!is_array($orderNumbers)) {
+            $orderNumbers = [$orderNumbers];
+        }
+        
+        // 최대 50건까지 제한
+        if (count($orderNumbers) > 50) {
+            return [
+                'success' => false,
+                'error' => '주문번호는 최대 50건까지 조회 가능합니다.'
+            ];
+        }
+        
+        // 클라이언트 실제 IP 주소 가져오기
+        $clientIp = IpHelper::getRealIpAddress();
+        
+        // 요청 헤더 설정
+        $headers = [
+            'accessKey' => $this->accessKey,
+            'accountNo' => $this->accountNo,
+            'ediCode' => $this->ediCode,
+            'filename' => $this->ediCode . date('Ymd_Hi'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'X-Forwarded-For' => $clientIp
+        ];
+        
+        // 요청 바디 구성 (주문번호를 쉼표로 구분)
+        $requestBody = [
+            'orderNos' => implode(',', $orderNumbers)
+        ];
+        
+        try {
+            $jsonData = json_encode($requestBody, JSON_UNESCAPED_UNICODE);
+            
+            // 전체 URL 구성
+            $fullUrl = rtrim($this->baseUrl, '/') . '/' . ltrim($endpoint, '/');
+            
+            // CURLRequest를 전체 URL로 직접 호출
+            $response = $this->client->post($fullUrl, [
+                'headers' => $headers,
+                'body' => $jsonData,
+                'http_errors' => false
+            ]);
+            
+            $statusCode = $response->getStatusCode();
+            $responseBody = $response->getBody();
+            $responseData = json_decode($responseBody, true);
+            
+            log_message('info', "Ilyang API getDeliveryStatusByOrderNo - Status: {$statusCode}, orderNos: " . implode(',', $orderNumbers));
+            
+            // HTTP 상태 코드 확인
+            $httpSuccess = $statusCode >= 200 && $statusCode < 300;
+            
+            // 비즈니스 로직 응답 코드 확인
+            $businessSuccess = false;
+            $returnCode = '';
+            $returnDesc = '';
+            $successCount = 0;
+            $totalCount = 0;
+            
+            if ($httpSuccess && is_array($responseData) && isset($responseData['head'])) {
+                $head = $responseData['head'];
+                $returnCode = $head['returnCode'] ?? '';
+                $returnDesc = $head['returnDesc'] ?? '';
+                $successCount = (int)($head['successCount'] ?? 0);
+                $totalCount = (int)($head['totalCount'] ?? 0);
+                
+                // returnCode가 'R0'이면 성공
+                if ($returnCode === 'R0') {
+                    $businessSuccess = true;
+                } else {
+                    log_message('warning', "Ilyang API getDeliveryStatusByOrderNo - Business Error: returnCode={$returnCode}, returnDesc={$returnDesc}");
+                }
+            } else {
+                $businessSuccess = $httpSuccess;
+            }
+            
+            return [
+                'success' => $httpSuccess && $businessSuccess,
+                'status_code' => $statusCode,
+                'data' => $responseData,
+                'raw_response' => $responseBody,
+                'return_code' => $returnCode,
+                'return_desc' => $returnDesc,
+                'success_count' => $successCount,
+                'total_count' => $totalCount
+            ];
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Ilyang API getDeliveryStatusByOrderNo Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * 일양 배송상태 코드를 로컬 DB 상태값으로 매핑
+     * 
+     * @param string $traceCode 일양 배송상태 코드 (PU, AR, BG, WC, DL, EX)
+     * @param string $nondlcode 미배송사유 코드 (BA, CA, CM, NH, RD, ND)
+     * @return string 로컬 DB 상태값 (pending, processing, completed, delivered, cancelled)
+     */
+    public function mapTraceCodeToStatus($traceCode, $nondlcode = '')
+    {
+        // 배송상태 코드 매핑
+        $statusMap = [
+            'PU' => 'processing',  // 발송사무소 인수 -> 접수완료
+            'AR' => 'processing',  // 배송경유지 도착 -> 접수완료
+            'BG' => 'completed',   // 배송경유지 출고 -> 배송중
+            'WC' => 'completed',   // 직원 배송중 -> 배송중
+            'DL' => 'delivered',   // 배달완료 -> 배송완료
+            'EX' => 'processing'   // 미배달 -> 접수완료 (재배송 가능)
+        ];
+        
+        // 기본 상태값
+        $status = $statusMap[$traceCode] ?? 'processing';
+        
+        // 미배송사유가 있는 경우 (EX 상태일 때)
+        if ($traceCode === 'EX' && !empty($nondlcode)) {
+            // 수취거절(RD)인 경우 취소로 처리
+            if ($nondlcode === 'RD') {
+                $status = 'cancelled';
+            }
+            // 그 외 미배송은 접수완료 상태 유지 (재배송 가능)
+        }
+        
+        return $status;
     }
 
     /**
