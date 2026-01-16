@@ -860,10 +860,12 @@ class OrderModel extends Model
                     }
                 }
                 
-                // pickup_time 추출 (예약일시용, 있으면 reserve_date에 저장)
-                $pickupTimeStr = $getOrderItemValue(null, 'pickup_time') ?? $getValue($getOrderItemValue(3), 'pickup_time');
-                if ($pickupTimeStr && !empty(trim($pickupTimeStr))) {
-                    $orderRecord['reserve_date'] = $pickupTimeStr;
+                // resolve_time 추출 (예약시간, /api/order_list/dept/detail API에서 제공)
+                $resolveTimeStr = $getOrderItemValue(null, 'resolve_time') ?? $getValue($getOrderItemValue(3), 'resolve_time');
+                if ($resolveTimeStr && !empty(trim($resolveTimeStr))) {
+                    $orderRecord['resolve_time'] = $parseDateTime($resolveTimeStr);
+                    // resolve_time이 있으면 reserve_date에 저장 (예약시간)
+                    $orderRecord['reserve_date'] = $parseDateTime($resolveTimeStr);
                 }
                 
                 // allocation_time: "12-08 10:09" 형식 -> "2025-12-08 10:09:00"
@@ -881,6 +883,10 @@ class OrderModel extends Model
                 $pickupTimeStr = $getOrderItemValue(null, 'pickup_time') ?? $getValue($getOrderItemValue(3), 'pickup_time');
                 if ($pickupTimeStr) {
                     $orderRecord['pickup_time'] = $parseDateTime($pickupTimeStr);
+                    // resolve_time이 없고 pickup_time이 있으면 reserve_date에 저장 (예약일 때는 예약시간)
+                    if (empty($orderRecord['reserve_date'])) {
+                        $orderRecord['reserve_date'] = $parseDateTime($pickupTimeStr);
+                    }
                 }
                 
                 // complete_time

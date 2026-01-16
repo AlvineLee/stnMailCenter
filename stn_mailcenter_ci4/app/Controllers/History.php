@@ -853,6 +853,78 @@ class History extends BaseController
                     'message' => '주문 상세 데이터가 없습니다.'
                 ])->setStatusCode(404);
             }
+            
+            // 예약일 필드 업데이트 (resolve_time 또는 pickup_time을 reserve_date에 저장)
+            try {
+                $db = \Config\Database::connect();
+                $orderBuilder = $db->table('tbl_orders');
+                $orderBuilder->where('insung_order_number', $serialNumber);
+                $orderQuery = $orderBuilder->get();
+                
+                if ($orderQuery !== false) {
+                    $order = $orderQuery->getRowArray();
+                    
+                    if ($order) {
+                        // 헬퍼 함수: 객체/배열에서 값 추출
+                        $getValue = function($data, $key, $default = null) {
+                            if (is_object($data)) {
+                                return $data->$key ?? $default;
+                            } elseif (is_array($data)) {
+                                return $data[$key] ?? $default;
+                            }
+                            return $default;
+                        };
+                        
+                        // 헬퍼 함수: 날짜/시간 파싱
+                        $parseDateTime = function($value) {
+                            if (empty($value)) return null;
+                            $timestamp = strtotime($value);
+                            return $timestamp ? date('Y-m-d H:i:s', $timestamp) : null;
+                        };
+                        
+                        $updateData = [];
+                        
+                        // $apiData[3]: 주문 시간 정보 (order_time, allocation_time, pickup_time, resolve_time, complete_time)
+                        if (isset($orderData[3])) {
+                            $timeInfo = $orderData[3];
+                            
+                            // pickup_time (픽업시간)
+                            $pickupTime = $getValue($timeInfo, 'pickup_time');
+                            $parsedPickup = null;
+                            if ($pickupTime) {
+                                $parsedPickup = $parseDateTime($pickupTime);
+                            }
+                            
+                            // resolve_time (예약시간)
+                            $resolveTime = $getValue($timeInfo, 'resolve_time');
+                            if ($resolveTime) {
+                                $parsedResolve = $parseDateTime($resolveTime);
+                                if ($parsedResolve) {
+                                    $updateData['resolve_time'] = $parsedResolve;
+                                    // resolve_time이 있으면 reserve_date에도 저장 (예약시간)
+                                    $updateData['reserve_date'] = $parsedResolve;
+                                }
+                            } elseif ($parsedPickup && empty($order['reserve_date'] ?? null)) {
+                                // resolve_time이 없고 pickup_time이 있으면 reserve_date에 저장 (예약일 때는 예약시간)
+                                $updateData['reserve_date'] = $parsedPickup;
+                            }
+                            
+                            // 업데이트 실행
+                            if (!empty($updateData)) {
+                                $updateData['updated_at'] = date('Y-m-d H:i:s');
+                                $orderBuilder = $db->table('tbl_orders');
+                                $orderBuilder->where('insung_order_number', $serialNumber);
+                                $orderBuilder->update($updateData);
+                                
+                                log_message('info', "History::getOrderDetail - 예약일 필드 업데이트 완료: serial_number={$serialNumber}, reserve_date=" . ($updateData['reserve_date'] ?? 'N/A'));
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // 예약일 필드 업데이트 실패해도 상세 정보는 반환
+                log_message('error', "History::getOrderDetail - 예약일 필드 업데이트 실패: " . $e->getMessage());
+            }
 
             // 인성 API 응답 구조: 배열 형태로 여러 객체가 들어있음
             // 모든 필드를 평탄화하여 추출

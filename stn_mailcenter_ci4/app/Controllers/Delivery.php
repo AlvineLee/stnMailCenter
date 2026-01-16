@@ -1272,6 +1272,7 @@ class Delivery extends BaseController
                         
                         // pickup_time (픽업시간)
                         $pickupTime = $getValue($timeInfo, 'pickup_time');
+                        $parsedPickup = null;
                         if ($pickupTime) {
                             $parsedPickup = $parseDateTime($pickupTime);
                             if ($parsedPickup && $parsedPickup !== ($order['pickup_time'] ?? null)) {
@@ -1285,7 +1286,12 @@ class Delivery extends BaseController
                             $parsedResolve = $parseDateTime($resolveTime);
                             if ($parsedResolve && $parsedResolve !== ($order['resolve_time'] ?? null)) {
                                 $updateData['resolve_time'] = $parsedResolve;
+                                // resolve_time이 있으면 reserve_date에도 저장 (예약시간)
+                                $updateData['reserve_date'] = $parsedResolve;
                             }
+                        } elseif ($parsedPickup && empty($order['reserve_date'] ?? null)) {
+                            // resolve_time이 없고 pickup_time이 있으면 reserve_date에 저장 (예약일 때는 예약시간)
+                            $updateData['reserve_date'] = $parsedPickup;
                         }
                         
                         // complete_time (완료시간)
