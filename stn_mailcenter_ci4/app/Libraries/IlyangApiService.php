@@ -78,8 +78,9 @@ class IlyangApiService
 
         try {
             // WhiteList IP 검증 로그
+            $whitelistIps = is_array(IlyangApiSpec::WHITELIST_IP) ? IlyangApiSpec::WHITELIST_IP : [IlyangApiSpec::WHITELIST_IP];
             log_message('info', "Ilyang API Request - Base URL: {$this->baseUrl}, Endpoint: {$endpoint}");
-            log_message('info', "Ilyang API Request - Client IP: {$clientIp}, WhiteList IP: " . IlyangApiSpec::WHITELIST_IP);
+            log_message('info', "Ilyang API Request - Client IP: {$clientIp}, WhiteList IP: " . implode(', ', $whitelistIps));
             log_message('info', "Ilyang API Headers: " . json_encode($headers, JSON_UNESCAPED_UNICODE));
             
             // JSON 데이터를 문자열로 변환

@@ -28,9 +28,13 @@ class IlyangApiSpec
     ];
 
     /**
-     * WhiteList IP 정보
+     * WhiteList IP 정보 (배열, 최대 3개)
      */
-    const WHITELIST_IP = '211.214.19.20';
+    const WHITELIST_IP = [
+        '211.214.19.20', /*로컬개발서버*/
+        '211.214.19.93', /*개발서버*/
+        '223.130.131.136' /* 운영서버 */
+    ];
 
     /**
      * 요청 바디 필수 필드 (운송장정보 전송 - ilyRecType: CC)
