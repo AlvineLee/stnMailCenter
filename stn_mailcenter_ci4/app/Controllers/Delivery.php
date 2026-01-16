@@ -48,7 +48,21 @@ class Delivery extends BaseController
         $startDate = $this->request->getGet('start_date') ?? $today;
         $endDate = $this->request->getGet('end_date') ?? $today;
         $page = (int)($this->request->getGet('page') ?? 1);
-        $perPage = 20;
+        
+        // 모바일 디바이스 감지 (User-Agent 확인)
+        $userAgent = $this->request->getUserAgent();
+        $isMobile = false;
+        if ($userAgent) {
+            $mobileKeywords = ['mobile', 'android', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone', 'opera mini', 'opera mobi'];
+            $userAgentString = strtolower($userAgent->getAgentString());
+            foreach ($mobileKeywords as $keyword) {
+                if (strpos($userAgentString, $keyword) !== false) {
+                    $isMobile = true;
+                    break;
+                }
+            }
+        }
+        $perPage = $isMobile ? 15 : 20;
         
         // 정렬 파라미터
         $orderBy = $this->request->getGet('order_by') ?? null;

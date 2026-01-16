@@ -3,8 +3,15 @@
 <?= $this->section('content') ?>
 <div class="list-page-container">
 
+    <!-- 검색 조건 펼치기/접기 버튼 -->
+    <div class="mb-3 flex justify-end">
+        <button type="button" id="toggleSearchBtn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <span id="toggleSearchText">🔍 검색 조건 펼치기</span>
+        </button>
+    </div>
+
     <!-- 검색 및 필터 영역 -->
-    <div class="search-compact">
+    <div class="search-compact" id="searchFilterArea" style="display: none;">
         <?= form_open('/history/list', ['method' => 'GET', 'id' => 'searchForm']) ?>
         <div class="search-filter-container">
             <div class="search-filter-item">
@@ -42,6 +49,27 @@
         </div>
         <?= form_close() ?>
     </div>
+
+    <!-- 검색 조건 토글 스크립트 -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('toggleSearchBtn');
+        const searchArea = document.getElementById('searchFilterArea');
+        const toggleText = document.getElementById('toggleSearchText');
+        
+        // 기본적으로는 접혀진 상태 유지 (URL 파라미터와 관계없이)
+        
+        toggleBtn.addEventListener('click', function() {
+            if (searchArea.style.display === 'none' || searchArea.style.display === '') {
+                searchArea.style.display = 'block';
+                toggleText.textContent = '🔽 검색 조건 접기';
+            } else {
+                searchArea.style.display = 'none';
+                toggleText.textContent = '🔍 검색 조건 펼치기';
+            }
+        });
+    });
+    </script>
 
     <!-- 검색 결과 정보 -->
     <div class="mb-4 px-2 md:px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
@@ -563,6 +591,15 @@
     </div>
 </div>
 
+<style>
+/* 인성 주문 상세 팝업 모바일 반응형 */
+@media (max-width: 767px) {
+    .insung-detail-grid-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+
 <script>
 function viewInsungOrderDetail(serialNumber) {
     // 레이어 팝업이 열릴 때 사이드바 처리
@@ -851,7 +888,7 @@ function populateInsungOrderDetail(orderData) {
     
     // 첫 번째 행: 접수자 정보 | 오더 정보
     if (customerPanel || orderPanel) {
-        content += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
+        content += '<div class="insung-detail-grid-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
         content += (customerPanel || '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);"><div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">접수자 정보</div><div style="color: #6b7280; font-size: 12px;">정보 없음</div></div>');
         content += (orderPanel || '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);"><div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">오더 정보</div><div style="color: #6b7280; font-size: 12px;">정보 없음</div></div>');
         content += '</div>';
@@ -859,7 +896,7 @@ function populateInsungOrderDetail(orderData) {
     
     // 두 번째 행: 출·도착지 정보 | 배송정보
     if (locationPanel || deliveryPanel) {
-        content += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
+        content += '<div class="insung-detail-grid-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
         content += (locationPanel || '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);"><div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">출·도착지 정보</div><div style="color: #6b7280; font-size: 12px;">정보 없음</div></div>');
         content += (deliveryPanel || '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);"><div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">배송정보</div><div style="color: #6b7280; font-size: 12px;">정보 없음</div></div>');
         content += '</div>';
@@ -1008,7 +1045,7 @@ function populateOrderSign(signData) {
     }
     
     let html = '<div style="padding: 8px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 8px; width: 100%; box-sizing: border-box;">';
-    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
+    html += '<div class="insung-detail-grid-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; align-items: stretch; width: 100%;">';
     
     // 출발지 사인 패널
     html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); height: 100%;">';

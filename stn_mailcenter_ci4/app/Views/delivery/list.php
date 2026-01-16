@@ -3,8 +3,15 @@
 <?= $this->section('content') ?>
 <div class="list-page-container">
 
+    <!-- 검색 조건 펼치기/접기 버튼 -->
+    <div class="mb-3 flex justify-end">
+        <button type="button" id="toggleSearchBtn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <span id="toggleSearchText">🔍 검색 조건 펼치기</span>
+        </button>
+    </div>
+
     <!-- 검색 및 필터 영역 -->
-    <div class="search-compact">
+    <div class="search-compact" id="searchFilterArea" style="display: none;">
         <?= form_open('/delivery/list', ['method' => 'GET']) ?>
         <div class="search-filter-container">
             <div class="search-filter-item">
@@ -52,6 +59,27 @@
         </div>
         <?= form_close() ?>
     </div>
+
+    <!-- 검색 조건 토글 스크립트 -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('toggleSearchBtn');
+        const searchArea = document.getElementById('searchFilterArea');
+        const toggleText = document.getElementById('toggleSearchText');
+        
+        // 기본적으로는 접혀진 상태 유지 (URL 파라미터와 관계없이)
+        
+        toggleBtn.addEventListener('click', function() {
+            if (searchArea.style.display === 'none' || searchArea.style.display === '') {
+                searchArea.style.display = 'block';
+                toggleText.textContent = '🔽 검색 조건 접기';
+            } else {
+                searchArea.style.display = 'none';
+                toggleText.textContent = '🔍 검색 조건 펼치기';
+            }
+        });
+    });
+    </script>
 
     <!-- 검색 결과 정보 -->
     <div class="mb-4 px-2 md:px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">

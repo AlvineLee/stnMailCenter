@@ -578,7 +578,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex items-center">
                         <h1 class="text-xl font-bold text-gray-900"><?= $content_header['title'] ?></h1>
-                        <p class="text-sm text-gray-900 ml-3"><?= $content_header['description'] ?></p>
+                        <p class="content-header-description text-sm text-gray-900 ml-3"><?= $content_header['description'] ?></p>
                     </div>
                     <div class="flex items-center gap-2">
                         <?php if (isset($content_header['action_button']) && !empty($content_header['action_button'])): ?>

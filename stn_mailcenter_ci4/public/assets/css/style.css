@@ -2437,17 +2437,35 @@ form > div.mb-1:first-child {
 @media (max-width: 768px) {
     .list-pagination,
     .pagination {
-        flex-wrap: wrap !important;
-        gap: 4px !important;
+        flex-wrap: nowrap !important;
+        gap: 12px !important;
         justify-content: center !important;
+        overflow-x: visible !important;
+        padding: 4px 0 !important;
     }
     
-    .page-number,
-    .nav-button {
-        min-width: 32px !important;
-        height: 32px !important;
-        font-size: 12px !important;
-        padding: 4px 8px !important;
+    /* 모바일에서는 페이지 번호 버튼 숨김 */
+    .pagination .page-number {
+        display: none !important;
+    }
+    
+    /* 모바일에서는 "처음", "마지막" 버튼 숨김 */
+    .pagination .nav-button:first-of-type,
+    .pagination .nav-button:last-of-type {
+        display: none !important;
+    }
+    
+    /* "이전", "다음" 버튼만 표시 - 더 크고 보기 좋게 */
+    .pagination .nav-button {
+        min-width: 70px !important;
+        max-width: none !important;
+        height: 40px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        padding: 8px 20px !important;
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+        border-radius: 8px !important;
     }
 }
 
@@ -2592,6 +2610,11 @@ html.list-page-html {
     white-space: nowrap !important;
     border-bottom: 1px solid #e5e7eb !important;
     line-height: 1.4 !important;
+}
+
+/* 테이블 마지막 행의 border-bottom 제거 (페이징 영역 바로 위 회색 줄 제거) */
+.list-table tbody tr:last-child td {
+    border-bottom: none !important;
 }
 
 .list-table th {
@@ -3322,4 +3345,11 @@ table thead.bg-gray-50 .delivery-list-header {
 .list-page-container .list-table-container {
     overflow: visible !important;
     max-height: none !important;
+}
+
+/* 모바일에서 상단 타이틀 영역의 설명문 숨김 */
+@media (max-width: 768px) {
+    .content-header-description {
+        display: none !important;
+    }
 }

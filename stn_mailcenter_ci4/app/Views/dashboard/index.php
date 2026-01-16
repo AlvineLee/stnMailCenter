@@ -52,115 +52,115 @@ $todayFormatted = date('Y년 m월 d일');
     </div>
     
     <!-- 통계 카드 -->
-    <div class="grid grid-cols-8 gap-4">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 bg-gray-100 rounded-lg">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 bg-gray-100 rounded-lg">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">총 주문</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['total_orders'] ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">총 주문</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['total_orders'] ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #d1ecf1;">
-                    <svg class="w-6 h-6" style="color: #0c5460;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #d1ecf1;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #0c5460;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">예약</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['reservation_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">예약</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['reservation_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #fffacd;">
-                    <svg class="w-6 h-6" style="color: #856404;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #fffacd;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #856404;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">접수</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['reception_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">접수</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['reception_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #f5deb3;">
-                    <svg class="w-6 h-6" style="color: #8b4513;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #f5deb3;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #8b4513;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">배차</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['dispatch_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">배차</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['dispatch_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #d4edda;">
-                    <svg class="w-6 h-6" style="color: #155724;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #d4edda;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #155724;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">운행</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['driving_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">운행</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['driving_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #ffffff; border: 1px solid #e0e0e0;">
-                    <svg class="w-6 h-6" style="color: #333333;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #ffffff; border: 1px solid #e0e0e0;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #333333;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">완료</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['completed_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">완료</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['completed_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #f5deb3;">
-                    <svg class="w-6 h-6" style="color: #8b4513;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #f5deb3;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #8b4513;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">대기</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['waiting_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">대기</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['waiting_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
             <div class="flex items-center">
-                <div class="p-3 rounded-lg" style="background-color: #fee2e2;">
-                    <svg class="w-6 h-6" style="color: #dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-2 sm:p-3 rounded-lg" style="background-color: #fee2e2;">
+                    <svg class="w-4 h-4 sm:w-6 sm:h-6" style="color: #dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-600">취소</p>
-                    <p class="text-2xl font-bold text-gray-900"><?= $stats['cancelled_orders'] ?? 0 ?></p>
+                <div class="ml-2 sm:ml-4">
+                    <p class="text-xs sm:text-sm font-medium text-gray-600">취소</p>
+                    <p class="text-lg sm:text-2xl font-bold text-gray-900"><?= $stats['cancelled_orders'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
@@ -184,14 +184,14 @@ $todayFormatted = date('Y년 m월 d일');
                         <table class="min-w-full bg-white border border-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">인성주문번호</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">접수일자</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">예약일</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">상태</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">담당자명</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">출발지고객명</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">도착지고객명</th>
-                                    <th class="px-3 py-1.5 text-left text-xs font-medium text-gray-700 uppercase border-b">배송수단</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">인성주문번호</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">접수일자</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">예약일</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">상태</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">담당자명</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">출발지고객명</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">도착지고객명</th>
+                                    <th class="px-3 py-1.5 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b">배송수단</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200">
@@ -269,16 +269,16 @@ $todayFormatted = date('Y년 m월 d일');
                                 $deliveryMethod = $order['car_type'] ?? $order['delivery_method'] ?? '-';
                                 ?>
                                 <tr class="hover:bg-gray-50">
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($displayOrderNumber) ?></td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($receptionDate) ?></td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['reserve_date'] ?? '-') ?></td>
-                                    <td class="px-3 py-1.5 text-xs">
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($displayOrderNumber) ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($receptionDate) ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($order['reserve_date'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs">
                                         <span class="status-badge <?= esc($statusClass) ?>"><?= esc($statusLabel) ?></span>
                                     </td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['customer_duty'] ?? '-') ?></td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['departure_company_name'] ?? '-') ?></td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($order['destination_company_name'] ?? '-') ?></td>
-                                    <td class="px-3 py-1.5 text-xs"><?= esc($deliveryMethod) ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($order['customer_duty'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($order['departure_company_name'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($order['destination_company_name'] ?? '-') ?></td>
+                                    <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($deliveryMethod) ?></td>
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
