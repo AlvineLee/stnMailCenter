@@ -36,13 +36,15 @@
                                 <select id="user_dept" class="form-input flex-1">
                                     <option value="">부서를 선택하세요</option>
                                 </select>
-                                <button type="button" 
-                                        id="settlement-depts-btn" 
+                                <?php if (($user['user_class'] ?? '') == '4'): ?>
+                                <button type="button"
+                                        id="settlement-depts-btn"
                                         onclick="openSettlementDeptsPopup()"
                                         class="flex-1 bg-white border border-gray-300 rounded text-left text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         style="padding: 6px 8px;">
                                     <span id="settlement-depts-display">정산관리부서 (복수선택가능)</span>
                                 </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="form-field">

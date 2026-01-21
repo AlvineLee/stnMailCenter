@@ -1,6 +1,25 @@
 <?= $this->extend('layouts/header') ?>
 
 <?= $this->section('content') ?>
+<style>
+/* 삭제된 주문 스타일 */
+tr.deleted-order td {
+    text-decoration: line-through !important;
+    color: #dc2626 !important;
+    opacity: 0.8;
+}
+tr.deleted-order td a {
+    text-decoration: line-through !important;
+    color: #dc2626 !important;
+}
+tr.deleted-order td .status-badge {
+    text-decoration: line-through !important;
+    opacity: 0.7;
+}
+tr.deleted-order:hover {
+    background-color: #fee2e2 !important;
+}
+</style>
 <div class="list-page-container">
 
     <!-- 검색 조건 펼치기/접기 버튼 -->
@@ -146,7 +165,13 @@
             </thead>
                 <tbody class="divide-y divide-gray-200">
                 <?php foreach ($orders as $order): ?>
-                <tr class="hover:bg-gray-50">
+                <?php
+                // 삭제된 주문인지 확인
+                $isDeleted = ($order['is_del'] ?? '') === 'Y';
+                $deletedRowClass = $isDeleted ? 'deleted-order' : '';
+                $deletedRowStyle = $isDeleted ? 'background-color: #fef2f2 !important;' : '';
+                ?>
+                <tr class="hover:bg-gray-50 <?= $deletedRowClass ?>" style="<?= $deletedRowStyle ?>">
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="1">
                         <?php
@@ -181,16 +206,21 @@
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="11"><?= esc($order['rider_tel_number'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-sm delivery-list-cell-order-number" data-column-index="12">
                         <span class="delivery-list-cell-order-number-content">
-                            <?= esc($order['display_order_number'] ?? '-') ?>
+                            <?php if ($order['show_insung_order_click'] ?? false): ?>
+                                <a href="javascript:void(0)" onclick="viewInsungOrderDetail('<?= esc($order['display_order_number']) ?>')" class="text-blue-600 hover:text-blue-800 no-underline cursor-pointer"><?= esc($order['display_order_number']) ?></a>
+                            <?php elseif ($order['show_ilyang_order_click'] ?? false): ?>
+                                <a href="javascript:void(0)" onclick="viewIlyangOrderDetail('<?= esc($order['id']) ?>', '/delivery/getIlyangOrderDetail')" class="text-orange-600 hover:text-orange-800 no-underline cursor-pointer"><?= esc($order['display_order_number']) ?></a>
+                            <?php else: ?>
+                                <?= esc($order['display_order_number'] ?? '-') ?>
+                            <?php endif; ?>
                             <?php if ($order['show_waybill_button'] ?? false): ?>
-                                <button onclick="printWaybill('<?= esc($order['order_number'] ?? '') ?>', '<?= esc($order['shipping_tracking_number'] ?? '') ?>')" 
+                                <button onclick="printWaybill('<?= esc($order['order_number'] ?? '') ?>', '<?= esc($order['shipping_tracking_number'] ?? '') ?>')"
                                         class="form-button form-button-secondary delivery-list-waybill-button">
                                     송장출력
                                 </button>
                             <?php endif; ?>
                         </span>
                     </td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="13"><?= esc($order['departure_company_name'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="14"><?= esc($order['departure_manager'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="15"><?= esc($order['departure_dong'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="16"><?= esc($order['destination_company_name'] ?? '-') ?></td>
@@ -1706,6 +1736,9 @@ function syncInsungOrders() {
 }
 <?php endif; ?>
 </script>
+
+<?= $this->include('forms/insung-order-detail-modal') ?>
+<?= $this->include('forms/ilyang-order-detail-modal') ?>
 
 <?= $this->endSection() ?>
 

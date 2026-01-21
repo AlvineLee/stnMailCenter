@@ -115,7 +115,8 @@ class OrderModel extends Model
         'delivery_completed_date',
         'delivery_receiver_name',
         'delivery_trace_history',
-        'ilyang_trace_code'
+        'ilyang_trace_code',
+        'is_del'
     ];
 
     // Dates
@@ -202,7 +203,7 @@ class OrderModel extends Model
             'max_length' => '물품 타입은 최대 50자까지 가능합니다.'
         ],
         'delivery_content' => [
-            'required' => '전달 내용은 필수입니다.',
+            'required' => '전달 ���용은 필수입니다.',
             'max_length' => '전달 내용은 최대 1000자까지 가능합니다.'
         ],
         'status' => [
@@ -358,7 +359,10 @@ class OrderModel extends Model
             $encryptionHelper = new \App\Libraries\EncryptionHelper();
             $phoneFields = ['contact', 'departure_contact', 'destination_contact', 'rider_tel_number', 'customer_tel_number', 'sms_telno'];
             $orderData = $encryptionHelper->encryptFields($orderData, $phoneFields);
-            
+
+            // 디버그: insert 직전 service_type_id 값 확인
+            log_message('debug', 'OrderModel::createOrder - service_type_id before insert: ' . var_export($orderData['service_type_id'] ?? 'NOT SET', true));
+
             $orderId = $this->insert($orderData);
             
             if (!$orderId) {
@@ -788,7 +792,8 @@ class OrderModel extends Model
                     'insung_user_id' => $insungUserIdForDb, // API 응답의 user_id 문자열 저장
                     'user_id' => $userIdxForDb, // tbl_users_list.idx (숫자)
                     'customer_id' => $customerId,
-                    'service_type_id' => 1, // 기본값
+                    // 기존 주문의 service_type_id가 있으면 유지, 없으면 기본값 1 사용
+                    'service_type_id' => $existingOrder['service_type_id'] ?? 1,
                     'order_system' => 'insung',
                     'insung_order_number' => $serialNumber,
                     'order_number' => $existingOrder['order_number'] ?? $tempOrderNumber,

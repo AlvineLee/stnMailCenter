@@ -406,13 +406,31 @@ class Delivery extends BaseController
             $formattedOrder['is_riding'] = $isRiding;
             $formattedOrder['insung_order_number_for_map'] = $insungOrderNumberForMap;
             
-            // 주문번호 표시용 (인성 API 주문의 경우 insung_order_number 우선)
-            if (($order['order_system'] ?? '') === 'insung' && !empty($order['insung_order_number'])) {
+            // 주문번호 표시용
+            $orderSystem = $order['order_system'] ?? '';
+            $orderNumber = $order['order_number'] ?? '';
+
+            // order_system이 명시되지 않았지만 order_number가 ILYANG-으로 시작하면 일양 주문
+            $isIlyangByOrderNumber = str_starts_with($orderNumber, 'ILYANG-');
+            $isIlyang = $orderSystem === 'ilyang' || $isIlyangByOrderNumber;
+            $isInsung = $orderSystem === 'insung' && !$isIlyangByOrderNumber;
+
+            if ($isInsung && !empty($order['insung_order_number'])) {
+                // 인성 주문: insung_order_number 우선
                 $formattedOrder['display_order_number'] = $order['insung_order_number'];
+            } elseif ($isIlyang) {
+                // 일양 주문: ily_awb_no(운송장번호) 또는 order_number 사용
+                $formattedOrder['display_order_number'] = $order['ily_awb_no'] ?? $order['ily_cus_ordno'] ?? $orderNumber ?: '-';
             } else {
-                $formattedOrder['display_order_number'] = $order['order_number'] ?? '-';
+                $formattedOrder['display_order_number'] = $orderNumber ?: '-';
             }
-            
+
+            // 주문번호 클릭 시 상세 팝업 표시 플래그
+            $displayOrderNumber = $formattedOrder['display_order_number'];
+            $hasDisplayOrderNumber = !empty($displayOrderNumber) && $displayOrderNumber !== '-';
+            $formattedOrder['show_insung_order_click'] = $hasDisplayOrderNumber && $isInsung;
+            $formattedOrder['show_ilyang_order_click'] = $hasDisplayOrderNumber && $isIlyang;
+
             // 송장출력 버튼 표시 조건
             $serviceName = $order['service_name'] ?? '';
             $serviceCategory = $order['service_category'] ?? '';
@@ -2117,6 +2135,85 @@ class Delivery extends BaseController
         } catch (\Exception $e) {
             log_message('error', 'Delivery::mapView - Error: ' . $e->getMessage());
             return redirect()->to('/delivery/list')->with('error', '맵 조회 중 오류가 발생했습니다.');
+        }
+    }
+
+    /**
+     * 일양 주문 상세 조회 (tbl_orders + tbl_orders_ilyang)
+     */
+    public function getIlyangOrderDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $orderId = $this->request->getGet('order_id');
+
+        if (empty($orderId)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+
+            // tbl_orders와 tbl_orders_ilyang 조인 조회
+            $orderBuilder = $db->table('tbl_orders o');
+            $orderBuilder->select('o.*, oil.*, st.service_code, st.service_name as service_type_name');
+            $orderBuilder->join('tbl_orders_ilyang oil', 'o.id = oil.order_id', 'left');
+            $orderBuilder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+            $orderBuilder->where('o.id', $orderId);
+            $orderQuery = $orderBuilder->get();
+
+            if ($orderQuery === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+            $orderData = $orderQuery->getRowArray();
+
+            if (!$orderData) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 전화번호 복호화
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['contact', 'departure_contact', 'destination_contact',
+                           'ily_snd_tel1', 'ily_snd_tel2', 'ily_rcv_tel1', 'ily_rcv_tel2'];
+            $orderData = $encryptionHelper->decryptFields($orderData, $phoneFields);
+
+            // 결제타입 라벨 변환
+            $payTypeLabels = [
+                '11' => '신용',
+                '21' => '선불',
+                '22' => '착불'
+            ];
+            if (!empty($orderData['ily_pay_type'])) {
+                $orderData['ily_pay_type_label'] = $payTypeLabels[$orderData['ily_pay_type']] ?? $orderData['ily_pay_type'];
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $orderData
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', "Delivery::getIlyangOrderDetail - Error: " . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 정보 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
         }
     }
 }

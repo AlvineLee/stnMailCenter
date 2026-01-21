@@ -1,6 +1,25 @@
 <?= $this->extend('layouts/header') ?>
 
 <?= $this->section('content') ?>
+<style>
+/* 삭제된 주문 스타일 */
+tr.deleted-order td {
+    text-decoration: line-through !important;
+    color: #dc2626 !important;
+    opacity: 0.8;
+}
+tr.deleted-order td a {
+    text-decoration: line-through !important;
+    color: #dc2626 !important;
+}
+tr.deleted-order td .status-badge {
+    text-decoration: line-through !important;
+    opacity: 0.7;
+}
+tr.deleted-order:hover {
+    background-color: #fee2e2 !important;
+}
+</style>
 <?php
 // 임시 디버그: m_code, cc_code 확인
 /*
@@ -267,8 +286,13 @@ $todayFormatted = date('Y년 m월 d일');
                                 
                                 // 배송수단
                                 $deliveryMethod = $order['car_type'] ?? $order['delivery_method'] ?? '-';
+
+                                // 삭제된 주문인지 확인
+                                $isDeleted = ($order['is_del'] ?? '') === 'Y';
+                                $deletedRowClass = $isDeleted ? 'deleted-order' : '';
+                                $deletedRowStyle = $isDeleted ? 'background-color: #fef2f2 !important;' : '';
                                 ?>
-                                <tr class="hover:bg-gray-50">
+                                <tr class="hover:bg-gray-50 <?= $deletedRowClass ?>" style="<?= $deletedRowStyle ?>">
                                     <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($displayOrderNumber) ?></td>
                                     <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($receptionDate) ?></td>
                                     <td class="px-3 py-1.5 text-sm sm:text-xs"><?= esc($order['reserve_date'] ?? '-') ?></td>

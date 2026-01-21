@@ -320,7 +320,7 @@ class Service extends BaseController
         if (!session()->get('is_logged_in')) {
             return redirect()->to('/auth/login');
         }
-        
+
         // 슈퍼 관리자는 모든 서비스 접근 가능
         // 일반 사용자는 권한 체크
         if (session()->get('user_role') !== 'super_admin') {
@@ -330,7 +330,14 @@ class Service extends BaseController
                 return redirect()->to('/dashboard')->with('error', '해당 서비스에 대한 접근 권한이 없습니다.');
             }
         }
-        
+
+        // 인성 API로 지급구분(credit) 실시간 조회 후 세션에 저장
+        // 세션에 저장하면 include 되는 하위 뷰(common-paytype 등)에서 별도 파라미터 전달 없이 접근 가능
+        $credit = $this->fetchCreditFromApi();
+        if ($credit !== null) {
+            session()->set('credit', $credit);
+        }
+
         $data = [
             'title' => "DaumData - {$serviceName}",
             'content_header' => [
@@ -343,9 +350,85 @@ class Service extends BaseController
                 'username' => session()->get('username'),
                 'company_name' => session()->get('company_name')
             ]
+            // credit은 세션에서 조회하므로 별도 전달 불필요
         ];
-        
+
         return view("service/{$serviceType}", $data);
+    }
+
+    /**
+     * 인성 API로 지급구분(credit) 조회
+     * 회원별 지급구분(credit_customer_code) 우선, 없으면 거래처 기본 지급구분(credit) 사용
+     *
+     * @return string|null credit 값 (1=선불, 2=착불, 3=신용, 4=송금, 5/6/7=카드)
+     */
+    private function fetchCreditFromApi()
+    {
+        $loginType = session()->get('login_type');
+
+        // daumdata 로그인이 아니면 세션의 credit 값 사용 (기존 방식)
+        if ($loginType !== 'daumdata') {
+            return session()->get('credit');
+        }
+
+        // 세션에서 API 정보 가져오기
+        $mCode = session()->get('m_code');
+        $ccCode = session()->get('cc_code');
+        $token = session()->get('token');
+        $apiIdx = session()->get('api_idx');
+        $userCcode = session()->get('user_ccode');
+
+        // 필수 정보가 없으면 null 반환
+        if (empty($mCode) || empty($ccCode) || empty($token) || empty($userCcode)) {
+            // log_message('debug', "Service::fetchCreditFromApi - Missing required params: mCode={$mCode}, ccCode={$ccCode}, token=" . ($token ? 'exists' : 'empty') . ", userCcode={$userCcode}");
+            return session()->get('credit'); // 폴백: 세션의 credit 사용
+        }
+
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+            // 회원 상세 조회 (c_code로 조회) - /api/member_detail/find/
+            $memberDetailResult = $insungApiService->getMemberDetailByCode($mCode, $ccCode, $token, $userCcode, $apiIdx);
+
+            // log_message('info', "Service::fetchCreditFromApi - API called with userCcode={$userCcode}");
+
+            // API 응답 구조 파싱
+            $memberInfo = null;
+            $code = '';
+            if ($memberDetailResult && (is_array($memberDetailResult) || is_object($memberDetailResult))) {
+                if (is_array($memberDetailResult) && isset($memberDetailResult[0])) {
+                    $code = $memberDetailResult[0]->code ?? $memberDetailResult[0]['code'] ?? '';
+                    if ($code === '1000' && isset($memberDetailResult[1])) {
+                        $memberInfo = is_object($memberDetailResult[1]) ? (array)$memberDetailResult[1] : $memberDetailResult[1];
+                    }
+                } elseif (is_object($memberDetailResult) && isset($memberDetailResult->Result)) {
+                    $code = $memberDetailResult->Result[0]->result_info[0]->code ?? '';
+                    if ($code === '1000' && isset($memberDetailResult->Result[1]->item[0])) {
+                        $memberInfo = (array)$memberDetailResult->Result[1]->item[0];
+                    }
+                }
+            }
+
+            // log_message('info', "Service::fetchCreditFromApi - API response code={$code}, memberInfo=" . ($memberInfo ? 'exists' : 'null'));
+
+            if ($memberInfo) {
+                // credit 값 추출 - credit_customer_code 우선 사용 (회원별 지급구분)
+                if (isset($memberInfo['credit_customer_code']) && $memberInfo['credit_customer_code'] !== '' && $memberInfo['credit_customer_code'] !== null) {
+                    $credit = $memberInfo['credit_customer_code'];
+                    // log_message('info', "Service::fetchCreditFromApi - Using credit_customer_code: {$credit}");
+                    return $credit;
+                } elseif (isset($memberInfo['credit']) && $memberInfo['credit'] !== '') {
+                    $credit = $memberInfo['credit'];
+                    // log_message('info', "Service::fetchCreditFromApi - Using credit (default): {$credit}");
+                    return $credit;
+                }
+            }
+
+            return session()->get('credit'); // 폴백: 세션의 credit 사용
+
+        } catch (\Exception $e) {
+            log_message('error', "Service::fetchCreditFromApi - API call failed: " . $e->getMessage());
+            return session()->get('credit'); // 폴백: 세션의 credit 사용
+        }
     }
     
     /**
@@ -363,7 +446,10 @@ class Service extends BaseController
         
         $serviceType = $this->request->getPost('service_type');
         $serviceName = $this->request->getPost('service_name');
-        
+
+        log_message('debug', 'submitServiceOrder - service_type from POST: ' . var_export($serviceType, true));
+        log_message('debug', 'submitServiceOrder - service_name from POST: ' . var_export($serviceName, true));
+
         // 슈퍼 관리자는 모든 서비스 접근 가능
         // 일반 사용자는 권한 체크
         if (session()->get('user_role') !== 'super_admin') {
@@ -377,9 +463,8 @@ class Service extends BaseController
             }
         }
         
-        // 디버깅 로그 추가
-        log_message('debug', 'Service submitServiceOrder: service_type=' . $serviceType . ', service_name=' . $serviceName);
-        
+        // log_message('debug', 'Service submitServiceOrder: service_type=' . $serviceType . ', service_name=' . $serviceName);
+
         // 폼 데이터 검증 (서비스 타입에 따라 다르게)
         $validation = \Config\Services::validation();
         
@@ -448,7 +533,7 @@ class Service extends BaseController
             // 1. 서비스 타입 ID 조회
             $serviceTypeId = $this->getServiceTypeId($serviceType);
             log_message('debug', 'Service type ID: ' . $serviceTypeId . ' for service: ' . $serviceType);
-            
+
             // 3. 주문 기본 정보 저장 (tbl_orders) - Model 사용
             $orderModel = new \App\Models\OrderModel();
             
@@ -604,15 +689,17 @@ class Service extends BaseController
                 }
             }
             
+            log_message('debug', 'Before createOrder - service_type_id in orderData: ' . var_export($orderData['service_type_id'] ?? 'NOT SET', true));
+
             $orderId = $orderModel->createOrder($orderData);
-            
+
             if (!$orderId) {
                 log_message('error', 'Order insert failed');
                 throw new \Exception('주문 저장에 실패했습니다.');
             }
-            
-            log_message('debug', 'Order inserted with ID: ' . $orderId);
-            
+
+            // log_message('debug', 'Order inserted with ID: ' . $orderId);
+
             // 3-1. 퀵 서비스인 경우 인성 API 주문 접수
             if (in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
                 try {
@@ -954,11 +1041,11 @@ class Service extends BaseController
                                     $orderModel->update($orderId, $updateData);
                                     log_message('info', "Ilyang API order updated: order_id={$orderId}, order_system=ilyang, order_number={$ilyangOrderNumber}, status=processing");
                                     
-                                    // 일양 접수 데이터를 별도 테이블에 저장
+                                    // 일양 접수 데이터를 별도 테���블에 저장
                                     try {
                                         $ilyangOrderModel = new \App\Models\IlyangOrderModel();
                                         
-                                        // API 응답에서 변환된 waybillData 가져오기
+                                        // API 응답에서 변��된 waybillData 가져오기
                                         if (isset($apiResult['waybill_data']) && is_array($apiResult['waybill_data'])) {
                                             $waybillData = $apiResult['waybill_data'];
                                             $saveResult = $ilyangOrderModel->saveIlyangOrderData($orderId, $waybillData);
@@ -1056,9 +1143,9 @@ class Service extends BaseController
                 ];
                 
                 $db->table('tbl_orders_quick')->insert($quickData);
-                log_message('debug', 'Quick service data inserted for order ID: ' . $orderId);
+                // log_message('debug', 'Quick service data inserted for order ID: ' . $orderId);
             }
-            
+
             // 7. 일반 서비스 전용 데이터 저장 (tbl_orders_general)
             if (in_array($serviceType, ['general-document', 'general-errand', 'general-tax'])) {
                 $serviceSubtype = '';
@@ -1095,13 +1182,13 @@ class Service extends BaseController
                 ];
                 
                 $db->table('tbl_orders_general')->insert($generalData);
-                log_message('debug', 'General service data inserted for order ID: ' . $orderId);
+                // log_message('debug', 'General service data inserted for order ID: ' . $orderId);
             }
-            
+
             // 8. 택배 서비스 전용 데이터 저장 (tbl_orders_parcel 사용 안 함, tbl_orders만 사용)
             // 택배 서비스의 경우 별도 테이블에 저장하지 않고 tbl_orders에만 저장
             if (in_array($serviceType, ['parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag'])) {
-                log_message('debug', 'Parcel service order created (tbl_orders only) for order ID: ' . $orderId);
+                // log_message('debug', 'Parcel service order created (tbl_orders only) for order ID: ' . $orderId);
             }
             
             // 9. 생활 서비스 전용 데이터 저장 (tbl_orders_life)
@@ -1149,7 +1236,7 @@ class Service extends BaseController
                 }
                 
                 $db->table('tbl_orders_life')->insert($lifeData);
-                log_message('debug', 'Life service data inserted for order ID: ' . $orderId);
+                // log_message('debug', 'Life service data inserted for order ID: ' . $orderId);
             }
             
             // 10. 특수 서비스 전용 데이터 저장 (tbl_orders_special)
@@ -1325,8 +1412,10 @@ class Service extends BaseController
      */
     private function getServiceTypeId($serviceType)
     {
+        log_message('debug', 'getServiceTypeId called with serviceType: ' . var_export($serviceType, true));
+
         $db = \Config\Database::connect();
-        
+
         $serviceTypeMap = [
             'quick-motorcycle' => 1,
             'quick-vehicle' => 2,

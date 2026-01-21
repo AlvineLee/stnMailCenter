@@ -2,192 +2,347 @@
 
 <?= $this->section('content') ?>
 <div class="list-page-container">
-    <!-- 검색 결과 정보 -->
-    <div class="mb-4 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
-            <div class="text-sm text-gray-700">
-                <?php if (!empty($cc_list)): ?>
-                    총 <?= number_format(count($cc_list)) ?>건 표시
+
+    <!-- 검색 영역 -->
+    <div class="search-compact">
+        <form method="get" id="search-form">
+            <div class="search-filter-container">
+                <div class="search-filter-item">
+                    <input type="text" name="cc_code" value="<?= esc($filters['cc_code'] ?? '') ?>" class="search-filter-input" placeholder="회사코드">
+                </div>
+                <div class="search-filter-item">
+                    <input type="text" name="cc_name" value="<?= esc($filters['cc_name'] ?? '') ?>" class="search-filter-input" placeholder="회사명">
+                </div>
+                <div class="search-filter-item">
+                    <input type="text" name="api_cccode" value="<?= esc($filters['api_cccode'] ?? '') ?>" class="search-filter-input" placeholder="API콜센터코드">
+                </div>
+                <div class="search-filter-button-wrapper">
+                    <button type="submit" class="search-button">검색</button>
+                    <a href="<?= base_url('insung/cc-list') ?>" class="search-button" style="background: #6b7280 !important;">초기화</a>
+                    <button type="button" onclick="openCcModal()" class="search-button bg-green-100 text-green-800 border-green-200">+ 콜센터 추가</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 결과 건수 -->
+    <div class="mb-2 text-xs text-gray-600">
+        총 <span class="font-semibold"><?= number_format($total_count ?? 0) ?></span>건
+    </div>
+
+    <!-- 테이블 -->
+    <div class="list-table-container">
+        <table class="list-table-compact">
+            <thead>
+                <tr>
+                    <th style="width:40px;">번호</th>
+                    <th style="width:70px;">회사코드</th>
+                    <th style="width:120px;">회사명</th>
+                    <th style="width:180px;">퀵API연계콜센타</th>
+                    <th style="width:80px;">퀵아이디</th>
+                    <th style="width:90px;">연락처</th>
+                    <th style="width:70px;">기준동명</th>
+                    <th>메모</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($cc_list)): ?>
+                    <tr>
+                        <td colspan="8" class="text-center">조회된 데이터가 없습니다.</td>
+                    </tr>
                 <?php else: ?>
-                    검색 결과가 없습니다.
+                    <?php
+                    $startNum = (($pagination['current_page'] ?? 1) - 1) * ($pagination['per_page'] ?? 20) + 1;
+                    $rowNum = $startNum;
+                    ?>
+                    <?php foreach ($cc_list as $cc): ?>
+                        <tr class="cursor-pointer" onclick="editCc(<?= esc($cc['idx']) ?>)">
+                            <td class="text-center"><?= $rowNum++ ?></td>
+                            <td><?= esc($cc['cc_code'] ?? '-') ?></td>
+                            <td><?= esc($cc['cc_name'] ?? '-') ?></td>
+                            <td>
+                                <?php if (!empty($cc['api_cccode'])): ?>
+                                    [<?= esc($cc['api_cccode']) ?>] <?= esc($cc['api_name'] ?? '') ?> (<?= esc($cc['api_code'] ?? '') ?>)
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                            <td><?= esc($cc['cc_quickid'] ?? '-') ?></td>
+                            <td><?= esc($cc['cc_telno'] ?? '-') ?></td>
+                            <td><?= esc($cc['cc_dongname'] ?? '-') ?></td>
+                            <td><?= esc($cc['cc_memo'] ?? '-') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 페이징 -->
+    <?php if (!empty($pagination) && $pagination['total_pages'] > 1): ?>
+        <div class="list-pagination">
+            <div class="pagination">
+                <?php
+                $baseUrl = base_url('insung/cc-list');
+                $queryParams = array_filter($filters);
+                $queryString = http_build_query($queryParams);
+                $currentPage = $pagination['current_page'];
+                $totalPages = $pagination['total_pages'];
+                ?>
+
+                <!-- 처음 -->
+                <?php if ($currentPage > 1): ?>
+                    <a href="<?= $baseUrl ?>?<?= $queryString ?>&page=1" class="nav-button">처음</a>
+                <?php else: ?>
+                    <span class="nav-button disabled">처음</span>
+                <?php endif; ?>
+
+                <!-- 이전 -->
+                <?php if ($currentPage > 1): ?>
+                    <a href="<?= $baseUrl ?>?<?= $queryString ?>&page=<?= $currentPage - 1 ?>" class="nav-button">이전</a>
+                <?php else: ?>
+                    <span class="nav-button disabled">이전</span>
+                <?php endif; ?>
+
+                <!-- 페이지 번호 -->
+                <?php
+                $startPage = max(1, $currentPage - 2);
+                $endPage = min($totalPages, $currentPage + 2);
+                ?>
+
+                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                    <?php if ($i === $currentPage): ?>
+                        <span class="page-number active"><?= $i ?></span>
+                    <?php else: ?>
+                        <a href="<?= $baseUrl ?>?<?= $queryString ?>&page=<?= $i ?>" class="page-number"><?= $i ?></a>
+                    <?php endif; ?>
+                <?php endfor; ?>
+
+                <!-- 다음 -->
+                <?php if ($currentPage < $totalPages): ?>
+                    <a href="<?= $baseUrl ?>?<?= $queryString ?>&page=<?= $currentPage + 1 ?>" class="nav-button">다음</a>
+                <?php else: ?>
+                    <span class="nav-button disabled">다음</span>
+                <?php endif; ?>
+
+                <!-- 마지막 -->
+                <?php if ($currentPage < $totalPages): ?>
+                    <a href="<?= $baseUrl ?>?<?= $queryString ?>&page=<?= $totalPages ?>" class="nav-button">마지막</a>
+                <?php else: ?>
+                    <span class="nav-button disabled">마지막</span>
                 <?php endif; ?>
             </div>
         </div>
-    </div>
+    <?php endif; ?>
 
-    <div class="list-table-container">
-        <?php if (empty($cc_list)): ?>
-            <div class="text-center py-8 text-gray-500">
-                콜센터 데이터가 없습니다.
-            </div>
-        <?php else: ?>
-        <div class="overflow-x-auto">
-            <table class="min-w-full bg-white border border-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">콜센터 코드</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">콜센터명</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">소속 고객사</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">연락처</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">이메일</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase border-b">주소</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    <?php foreach ($cc_list as $cc): ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2 text-sm"><?= esc($cc['cc_code'] ?? '-') ?></td>
-                        <td class="px-4 py-2 text-sm"><?= esc($cc['cc_name'] ?? '-') ?></td>
-                        <td class="px-4 py-2 text-sm text-center">
-                            <?php if (($cc['company_count'] ?? 0) > 0): ?>
-                                <button onclick="showCompanyList('<?= esc($cc['cc_code']) ?>', '<?= esc($cc['cc_name'] ?? $cc['cc_code']) ?>')" 
-                                        class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded hover:bg-blue-200 cursor-pointer">
-                                    <?= number_format($cc['company_count'] ?? 0) ?>개
-                                </button>
-                            <?php else: ?>
-                                <span class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded">
-                                    <?= number_format($cc['company_count'] ?? 0) ?>개
-                                </span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="px-4 py-2 text-sm"><?= esc($cc['contact_phone'] ?? '-') ?></td>
-                        <td class="px-4 py-2 text-sm"><?= esc($cc['contact_email'] ?? '-') ?></td>
-                        <td class="px-4 py-2 text-sm"><?= esc($cc['address'] ?? '-') ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php endif; ?>
-    </div>
 </div>
 
-<!-- 고객사 목록 레이어 팝업 -->
-<div id="companyListModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999 !important;">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-y-auto" style="z-index: 10000 !important;" onclick="event.stopPropagation()">
-        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-            <h3 class="text-lg font-bold text-gray-800 flex-1 min-w-0">
-                소속 고객사 목록 - <span id="modal-cc-name" class="whitespace-nowrap"></span>
-            </h3>
-            <button onclick="closeCompanyListModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+<!-- 콜센터 등록/수정 모달 -->
+<div id="ccModal" class="fixed inset-0 hidden items-center justify-center p-4" style="z-index: 9999 !important; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl" style="z-index: 10000 !important;">
+        <!-- 모달 헤더 -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h3 id="modalTitle" class="text-lg font-semibold text-gray-900">콜센터 등록</h3>
+            <button type="button" onclick="closeCcModal()" class="text-gray-400 hover:text-gray-600">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
         </div>
-        
-        <div class="p-6">
-            <!-- 로딩 표시 -->
-            <div id="companyListLoading" class="text-center py-8">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p class="mt-2 text-sm text-gray-600">로딩 중...</p>
-            </div>
-            
-            <!-- 고객사 목록 -->
-            <div id="companyListContent" class="hidden">
-                <div class="overflow-x-auto">
-                    <table style="background: #fafafa; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; width: 100%;">
-                        <thead>
-                            <tr>
-                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">고객사 코드</th>
-                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">고객사명</th>
-                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">대표자</th>
-                                <th style="background: #f3f4f6; text-align: center; font-size: 11px; height: 20px; padding: 3px 8px;">연락처</th>
-                            </tr>
-                        </thead>
-                        <tbody id="companyListBody">
-                            <!-- AJAX로 로드될 내용 -->
-                        </tbody>
-                    </table>
+
+        <!-- 모달 바디 -->
+        <div class="px-6 py-4">
+            <form id="ccForm">
+                <input type="hidden" id="form_mode" name="mode" value="add">
+                <input type="hidden" id="form_idx" name="idx" value="">
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">회사코드 <span class="text-red-500">*</span></label>
+                        <input type="text" id="cc_code" name="cc_code" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="회사코드">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">회사명 <span class="text-red-500">*</span></label>
+                        <input type="text" id="cc_name" name="cc_name" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="회사명">
+                    </div>
                 </div>
-                
-                <div id="companyListEmpty" class="hidden text-center py-8 text-gray-500">
-                    소속 고객사가 없습니다.
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API연계센타 <span class="text-red-500">*</span></label>
+                        <select id="cc_apicode" name="cc_apicode" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">선택하세요</option>
+                            <?php if (!empty($api_list)): ?>
+                                <?php foreach ($api_list as $api): ?>
+                                    <option value="<?= esc($api['idx']) ?>">[<?= esc($api['cccode']) ?>] <?= esc($api['api_name']) ?> (<?= esc($api['api_code']) ?>)</option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">퀵아이디 <span class="text-red-500">*</span></label>
+                        <input type="text" id="cc_quickid" name="cc_quickid" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="퀵아이디">
+                    </div>
                 </div>
-            </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">연락처</label>
+                        <input type="text" id="cc_telno" name="cc_telno" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="연락처">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">메모</label>
+                        <input type="text" id="cc_memo" name="cc_memo" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="메모">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">주소 <span class="text-red-500">*</span></label>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="cc_dongname" name="cc_dongname" class="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50" placeholder="동명" readonly>
+                        <input type="text" id="cc_addr" name="cc_addr" class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50" placeholder="주소" readonly>
+                        <button type="button" onclick="execDaumPostcode()" class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700">주소검색</button>
+                    </div>
+                    <input type="text" id="cc_addr_detail" name="cc_addr_detail" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="상세주소">
+                </div>
+            </form>
+        </div>
+
+        <!-- 모달 푸터 -->
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+            <button type="button" onclick="closeCcModal()" class="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300">취소</button>
+            <button type="button" id="btnSubmit" onclick="submitForm()" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">등록</button>
         </div>
     </div>
 </div>
 
+<!-- 카카오 주소검색 -->
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script>
-function showCompanyList(ccCode, ccName) {
-    // 레이어 팝업이 열릴 때 사이드바 처리
+function execDaumPostcode() {
+    new daum.Postcode({
+        oncomplete: function(data) {
+            document.getElementById('cc_addr').value = data.jibunAddress || data.roadAddress;
+            document.getElementById('cc_dongname').value = data.bname;
+            document.getElementById('cc_addr_detail').focus();
+        }
+    }).open();
+}
+
+function openCcModal() {
+    // 사이드바 처리
     if (typeof window.hideSidebarForModal === 'function') {
         window.hideSidebarForModal();
     }
     if (typeof window.lowerSidebarZIndex === 'function') {
         window.lowerSidebarZIndex();
     }
-    
-    document.getElementById('modal-cc-name').textContent = ccName;
-    document.getElementById('companyListModal').classList.remove('hidden');
+
+    document.getElementById('ccForm').reset();
+    document.getElementById('form_mode').value = 'add';
+    document.getElementById('form_idx').value = '';
+    document.getElementById('modalTitle').textContent = '콜센터 등록';
+    document.getElementById('btnSubmit').textContent = '등록';
+    document.getElementById('ccModal').classList.remove('hidden');
+    document.getElementById('ccModal').classList.add('flex');
     document.body.style.overflow = 'hidden';
-    document.getElementById('companyListLoading').classList.remove('hidden');
-    document.getElementById('companyListContent').classList.add('hidden');
-    document.getElementById('companyListBody').innerHTML = '';
-    document.getElementById('companyListEmpty').classList.add('hidden');
-    
-    // AJAX로 고객사 목록 조회
-    fetch(`<?= base_url('insung/getCompaniesByCc') ?>?cc_code=${encodeURIComponent(ccCode)}`)
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('companyListLoading').classList.add('hidden');
-            
-            if (data.success && data.companies && data.companies.length > 0) {
-                document.getElementById('companyListContent').classList.remove('hidden');
-                
-                let html = '';
-                data.companies.forEach((company, index) => {
-                    // style_guide.md 기준: 짝수/홀수 행 배경색 적용
-                    const rowBg = index % 2 === 0 ? '#fafafa' : '#f5f5f5';
-                    html += `
-                        <tr style="background: ${rowBg};" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='${rowBg}';">
-                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.comp_code || '-'}</td>
-                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.comp_name || '-'}</td>
-                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.comp_owner || '-'}</td>
-                            <td style="text-align: left; font-size: 12px; height: 18px; padding: 2px 8px;">${company.contact_phone || '-'}</td>
-                        </tr>
-                    `;
-                });
-                document.getElementById('companyListBody').innerHTML = html;
-            } else {
-                document.getElementById('companyListContent').classList.remove('hidden');
-                document.getElementById('companyListEmpty').classList.remove('hidden');
-            }
-        })
-        .catch(error => {
-            // console.error('Error:', error);
-            document.getElementById('companyListLoading').classList.add('hidden');
-            alert('고객사 목록을 불러오는 중 오류가 발생했습니다.');
-        });
 }
 
-function closeCompanyListModal() {
-    document.getElementById('companyListModal').classList.add('hidden');
+function closeCcModal() {
+    document.getElementById('ccModal').classList.add('hidden');
+    document.getElementById('ccModal').classList.remove('flex');
     document.body.style.overflow = 'auto';
-    
-    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+
+    // 사이드바 복원
     if (typeof window.restoreSidebarZIndex === 'function') {
         window.restoreSidebarZIndex();
     }
 }
 
-// 모달 외부 클릭 시 닫기
-document.getElementById('companyListModal')?.addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeCompanyListModal();
-    }
-});
+function editCc(idx) {
+    fetch(`<?= base_url('insung/getCcDetail') ?>?idx=${idx}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const cc = data.cc;
+                document.getElementById('form_mode').value = 'edit';
+                document.getElementById('form_idx').value = cc.idx;
+                document.getElementById('cc_code').value = cc.cc_code || '';
+                document.getElementById('cc_name').value = cc.cc_name || '';
+                document.getElementById('cc_apicode').value = cc.cc_apicode || '';
+                document.getElementById('cc_quickid').value = cc.cc_quickid || '';
+                document.getElementById('cc_telno').value = cc.cc_telno || '';
+                document.getElementById('cc_memo').value = cc.cc_memo || '';
+                document.getElementById('cc_dongname').value = cc.cc_dongname || '';
+                document.getElementById('cc_addr').value = cc.cc_addr || '';
+                document.getElementById('cc_addr_detail').value = cc.cc_addr_detail || '';
 
-// ESC 키로 팝업 닫기
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        const modal = document.getElementById('companyListModal');
-        if (modal && !modal.classList.contains('hidden')) {
-            closeCompanyListModal();
+                // 사이드바 처리
+                if (typeof window.hideSidebarForModal === 'function') {
+                    window.hideSidebarForModal();
+                }
+                if (typeof window.lowerSidebarZIndex === 'function') {
+                    window.lowerSidebarZIndex();
+                }
+
+                document.getElementById('modalTitle').textContent = '콜센터 수정';
+                document.getElementById('btnSubmit').textContent = '수정';
+                document.getElementById('ccModal').classList.remove('hidden');
+                document.getElementById('ccModal').classList.add('flex');
+                document.body.style.overflow = 'hidden';
+            } else {
+                alert(data.message || '콜센터 정보를 불러오는데 실패했습니다.');
+            }
+        })
+        .catch(error => {
+            alert('콜센터 정보를 불러오는 중 오류가 발생했습니다.');
+        });
+}
+
+function submitForm() {
+    const form = document.getElementById('ccForm');
+    const formData = new FormData(form);
+    const mode = document.getElementById('form_mode').value;
+
+    // 필수 필드 검증
+    const ccCode = document.getElementById('cc_code').value.trim();
+    const ccName = document.getElementById('cc_name').value.trim();
+    const ccApicode = document.getElementById('cc_apicode').value;
+    const ccQuickid = document.getElementById('cc_quickid').value.trim();
+    const ccDongname = document.getElementById('cc_dongname').value.trim();
+
+    if (!ccCode) { alert('회사코드를 입력해주세요.'); return; }
+    if (!ccName) { alert('회사명을 입력해주세요.'); return; }
+    if (!ccApicode) { alert('API연계센타를 선택해주세요.'); return; }
+    if (!ccQuickid) { alert('퀵아이디를 입력해주세요.'); return; }
+    if (!ccDongname) { alert('주소검색 후 입력해주세요.'); return; }
+
+    const url = mode === 'add' ? '<?= base_url('insung/addCcList') ?>' : '<?= base_url('insung/updateCcList') ?>';
+
+    fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(data.message || '처리 중 오류가 발생했습니다.');
         }
+    })
+    .catch(error => {
+        alert('처리 중 오류가 발생했습니다.');
+    });
+}
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !document.getElementById('ccModal').classList.contains('hidden')) {
+        closeCcModal();
     }
 });
 </script>
 <?= $this->endSection() ?>
-

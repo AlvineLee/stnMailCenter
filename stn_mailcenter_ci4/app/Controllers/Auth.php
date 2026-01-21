@@ -159,7 +159,40 @@ class Auth extends BaseController
         $username = $this->request->getPost('username');
         $password = $this->request->getPost('password');
         $loginType = $this->request->getPost('login_type') ?? 'stn'; // 'stn' 또는 'daumdata'
-        
+        $ipAddress = $this->request->getIPAddress(); // 내부망 IP (REMOTE_ADDR)
+        $forwardedIp = $this->getForwardedIp(); // 외부 IP (X-Forwarded-For)
+
+        // 로그인 잠금 체크
+        $loginAttemptModel = new \App\Models\LoginAttemptModel();
+        $systemSettingModel = new \App\Models\SystemSettingModel();
+
+        $loginSettings = $systemSettingModel->getLoginSettings();
+        $maxAttempts = (int)($loginSettings['login_max_attempts'] ?? 5);
+        $lockoutMinutes = (int)($loginSettings['login_lockout_minutes'] ?? 5);
+
+        $lockStatus = $loginAttemptModel->isLocked($username, $ipAddress, $maxAttempts, $lockoutMinutes);
+
+        if ($lockStatus['locked']) {
+            $remainingMinutes = ceil($lockStatus['remaining_seconds'] / 60);
+            $errorMessage = "로그인 시도 횟수({$maxAttempts}회)를 초과하여 {$remainingMinutes}분 동안 로그인이 제한됩니다.";
+
+            // AJAX 요청인 경우 JSON 응답 반환
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'error' => '로그인이 일시적으로 제한되었습니다.',
+                    'error_detail' => $errorMessage,
+                    'error_type' => 'login_locked',
+                    'remaining_seconds' => $lockStatus['remaining_seconds']
+                ]);
+            }
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', '로그인이 일시적으로 제한되었습니다.')
+                ->with('error_detail', $errorMessage);
+        }
+
         // 입력값 검증
         if (empty($username) || empty($password)) {
             // AJAX 요청인 경우 JSON 응답 반환
@@ -197,21 +230,27 @@ class Auth extends BaseController
                 
                 // 인성 API로 회원정보 조회 (신규 회원 추가 또는 기존 회원 정보 업데이트)
                 // 메인도메인에서 선택한 API 정보 또는 서브도메인 기본 API 정보 가져오기
-                $selectedApiIdx = $this->request->getPost('selectedApiIdx');
+                $selectedApiIdx = $this->request->getPost('selected_api_idx');
                 $mCode = null;
                 $ccCode = null;
                 $token = null;
                 $apiIdx = null;
                 
+                $apiName = null;  // 콜센터명 (로고 옆 표시용)
+                $ccCompName = null;  // 거래처명 (로고 옆 표시용)
+
                 if ($selectedApiIdx) {
                     // 메인도메인: 선택한 API 정보 사용
+                    // selected_api_idx는 tbl_api_list.cccode 값이므로 cccode로 조회
                     $apiListModel = new \App\Models\InsungApiListModel();
-                    $apiInfo = $apiListModel->find($selectedApiIdx);
+                    $apiInfo = $apiListModel->where('cccode', $selectedApiIdx)->first();
+                    log_message('info', "Auth::processLogin - apiInfo for cccode={$selectedApiIdx}: " . json_encode($apiInfo, JSON_UNESCAPED_UNICODE));
                     if ($apiInfo) {
                         $mCode = $apiInfo['mcode'];
                         $ccCode = $apiInfo['cccode'];
                         $token = $apiInfo['token'];
-                        $apiIdx = $selectedApiIdx;
+                        $apiIdx = $apiInfo['idx'];  // 실제 tbl_api_list.idx 저장
+                        $apiName = $apiInfo['api_name'] ?? null;  // 콜센터명
                     }
                 } else {
                     // 서브도메인: 서브도메인의 comp_code로 API 정보 조회
@@ -310,75 +349,97 @@ class Auth extends BaseController
                                 $encryptedFields = ['user_pass', 'user_name', 'user_tel1', 'user_tel2'];
                                 
                                 if (!$existingUser) {
-                                    // 신규 회원: DB에 추가
-                                    $newUserData = [
-                                        'user_id' => $username,
-                                        'user_pass' => $password, // 로그인 시 입력한 비밀번호 저장
-                                        'user_name' => $userName,
-                                        'user_dept' => $userDept,
-                                        'user_tel1' => $userTel1,
-                                        'user_company' => $compCode ?? $userCompany,
-                                        'user_ccode' => $userCcode,
-                                        'user_type' => '5', // 기본값: 일반 고객
-                                        'user_class' => '5', // 기본값: 일반
-                                        'user_addr' => $userAddr,
-                                        'user_addr_detail' => $ri,
-                                        'user_sido' => $sido,
-                                        'user_gungu' => $gugun,
-                                        'user_dong' => $dongName,
-                                        'user_lon' => $lon ?: null,
-                                        'user_lat' => $lat ?: null
-                                    ];
-                                    
-                                    if (!empty($userTel2)) {
-                                        $newUserData['user_tel2'] = $userTel2;
+                                    // 신규 회원: 인성 API login으로 비밀번호 검증 후 DB에 추가
+                                    // 비밀번호 검증 없이 DB에 저장하면 보안 취약점이 됨
+                                    $loginResult = $insungApiService->login($mCode, $ccCode, $token, $username, $password, $apiIdx);
+
+                                    // 인성 API 로그인 결과 확인
+                                    $loginSuccess = false;
+                                    if ($loginResult && (is_array($loginResult) || is_object($loginResult))) {
+                                        $loginCode = '';
+                                        if (is_array($loginResult) && isset($loginResult[0])) {
+                                            $loginCode = $loginResult[0]->code ?? $loginResult[0]['code'] ?? '';
+                                        } elseif (is_object($loginResult) && isset($loginResult->Result)) {
+                                            $loginCode = $loginResult->Result[0]->result_info[0]->code ?? '';
+                                        }
+                                        $loginSuccess = ($loginCode === '1000');
+                                        log_message('info', "Auth::processLogin - Insung API login result: code={$loginCode}, success=" . ($loginSuccess ? 'yes' : 'no'));
                                     }
-                                    
-                                    // 회원정보 변경과 동일하게 모델의 insert() 메서드 사용 (beforeInsert 콜백으로 자동 암호화)
-                                    // InsungUsersListModel의 insert() 메서드는 beforeInsert 콜백을 통해 자동으로 암호화 처리
-                                    $insertResult = $this->insungUsersListModel->insert($newUserData);
-                                    
-                                    if ($insertResult) {
-                                        // log_message('info', "Auth::processLogin - Auto-registered user from API: user_id={$username}");
-                                        // 다시 인증 시도
-                                        $user = $this->insungUsersListModel->authenticate($username, $password);
+
+                                    if ($loginSuccess) {
+                                        // 인성 API 로그인 성공: DB에 신규 회원 등록
+                                        $newUserData = [
+                                            'user_id' => $username,
+                                            'user_pass' => $password, // 인성 API에서 검증된 비밀번호 저장
+                                            'user_name' => $userName,
+                                            'user_dept' => $userDept,
+                                            'user_tel1' => $userTel1,
+                                            'user_company' => $compCode ?? $userCompany,
+                                            'user_ccode' => $userCcode,
+                                            'user_type' => '5', // 기본값: 일반 고객
+                                            'user_class' => '5', // 기본값: 일반
+                                            'user_addr' => $userAddr,
+                                            'user_addr_detail' => $ri,
+                                            'user_sido' => $sido,
+                                            'user_gungu' => $gugun,
+                                            'user_dong' => $dongName,
+                                            'user_lon' => $lon ?: null,
+                                            'user_lat' => $lat ?: null
+                                        ];
+
+                                        if (!empty($userTel2)) {
+                                            $newUserData['user_tel2'] = $userTel2;
+                                        }
+
+                                        // 회원정보 변경과 동일하게 모델의 insert() 메서드 사용 (beforeInsert 콜백으로 자동 암호화)
+                                        $insertResult = $this->insungUsersListModel->insert($newUserData);
+
+                                        if ($insertResult) {
+                                            log_message('info', "Auth::processLogin - Auto-registered user from API: user_id={$username}");
+                                            // 다시 인증 시도
+                                            $user = $this->insungUsersListModel->authenticate($username, $password);
+                                        }
+                                    } else {
+                                        log_message('warning', "Auth::processLogin - Insung API login failed for new user: user_id={$username}");
+                                        // 인성 API 로그인 실패: $user는 false 유지 (로그인 실패)
                                     }
                                 } else {
-                                    // 기존 회원: 변경된 데이터가 있으면 업데이트
+                                    // 기존 회원: 주소 정보 업데이트
                                     $updateData = [];
                                     $needsUpdate = false;
-                                    
-                                    // 기존 데이터 복호화 (비교용)
-                                    $decryptedExisting = $encryptionHelper->decryptFields($existingUser, $encryptedFields);
-                                    
-                                    // log_message('debug', "Auth::processLogin - Existing user found: user_id={$username}, existing_user_name=" . ($decryptedExisting['user_name'] ?? 'null'));
-                                    
-                                    // 기존 비밀번호가 평문인지 확인 (암호화된 데이터는 30자 이상, base64 형식)
-                                    $existingPassword = $existingUser['user_pass'] ?? '';
-                                    $isPlainTextPassword = false;
-                                    if (!empty($existingPassword)) {
-                                        // 암호화된 데이터는 최소 30자 이상이어야 함
-                                        if (strlen($existingPassword) < 30) {
-                                            $isPlainTextPassword = true;
-                                        } else {
-                                            // base64 디코딩 시도
-                                            $decoded = base64_decode($existingPassword, true);
-                                            if ($decoded === false) {
-                                                // base64 디코딩 실패 시 평문으로 간주
-                                                $isPlainTextPassword = true;
-                                            } else {
-                                                // 복호화 시도
-                                                $testDecrypted = $encryptionHelper->decrypt($existingPassword);
-                                                // 복호화 결과가 원본과 같으면 평문
-                                                if ($testDecrypted === $existingPassword) {
-                                                    $isPlainTextPassword = true;
-                                                }
+
+                                    // 로컬 DB 인증 실패 시 인성 API login으로 비밀번호 검증
+                                    if (!$user) {
+                                        log_message('info', "Auth::processLogin - Local auth failed for existing user, trying Insung API login: user_id={$username}");
+                                        $loginResult = $insungApiService->login($mCode, $ccCode, $token, $username, $password, $apiIdx);
+
+                                        // 인성 API 로그인 결과 확인
+                                        $loginSuccess = false;
+                                        if ($loginResult && (is_array($loginResult) || is_object($loginResult))) {
+                                            $loginCode = '';
+                                            if (is_array($loginResult) && isset($loginResult[0])) {
+                                                $loginCode = $loginResult[0]->code ?? $loginResult[0]['code'] ?? '';
+                                            } elseif (is_object($loginResult) && isset($loginResult->Result)) {
+                                                $loginCode = $loginResult->Result[0]->result_info[0]->code ?? '';
                                             }
+                                            $loginSuccess = ($loginCode === '1000');
+                                            log_message('info', "Auth::processLogin - Insung API login result for existing user: code={$loginCode}, success=" . ($loginSuccess ? 'yes' : 'no'));
+                                        }
+
+                                        if ($loginSuccess) {
+                                            // 인성 API 로그인 성공: 로컬 DB 비밀번호 업데이트 필요
+                                            $updateData['user_pass'] = $password;
+                                            $needsUpdate = true;
+                                            log_message('info', "Auth::processLogin - Insung API login success, will update local password: user_id={$username}");
+                                        } else {
+                                            // 인성 API 로그인도 실패: 로그인 실패 유지
+                                            log_message('warning', "Auth::processLogin - Both local and Insung API login failed: user_id={$username}");
                                         }
                                     }
-                                    
-                                    // log_message('debug', "Auth::processLogin - Existing password is plaintext: " . ($isPlainTextPassword ? 'yes' : 'no'));
-                                    
+
+                                    // 기존 데이터 복호화 (비교용)
+                                    $decryptedExisting = $encryptionHelper->decryptFields($existingUser, $encryptedFields);
+
                                     // 이름 변경 확인
                                     if (!empty($userName) && $decryptedExisting['user_name'] !== $userName) {
                                         $updateData['user_name'] = $userName;
@@ -429,19 +490,12 @@ class Auth extends BaseController
                                     $updateData['user_lon'] = !empty($lon) ? $lon : null;
                                     $updateData['user_lat'] = !empty($lat) ? $lat : null;
                                     $needsUpdate = true; // 주소 필드는 무조건 업데이트
-                                    
-                                    // 비밀번호 처리: 평문이면 암호화해서 저장, 이미 암호화되어 있으면 새 비밀번호로 업데이트
-                                    // 회원정보 변경 페이지와 동일하게 처리
-                                    if (!empty($password)) {
-                                        // 기존 비밀번호가 평문이면 암호화해서 저장
-                                        if ($isPlainTextPassword) {
-                                            // log_message('info', "Auth::processLogin - Encrypting plaintext password for user_id={$username}");
-                                        }
-                                        // 회원정보 변경 페이지와 동일하게 user_pass 추가 (모델의 beforeUpdate 콜백에서 자동 암호화)
-                                        $updateData['user_pass'] = $password;
-                                        $needsUpdate = true;
-                                    }
-                                    
+
+                                    // 주의: 비밀번호는 업데이트하지 않음!
+                                    // 기존 회원의 비밀번호를 입력된 값으로 변경하면 보안 취약점이 됨
+                                    // (잘못된 비밀번호로도 로그인 가능해짐)
+                                    // 비밀번호 변경은 회원정보 수정 페이지에서만 가능하도록 함
+
                                     // 변경사항이 있으면 업데이트
                                     if ($needsUpdate) {
                                         // 회원정보 변경 페이지와 동일하게 null 값 제거
@@ -467,8 +521,12 @@ class Auth extends BaseController
                                         
                                         if ($updateResult) {
                                             log_message('info', "Auth::processLogin - Updated user info from API: user_id={$username}, updated_rows={$updateResult}");
-                                            // 업데이트 후 다시 인증 시도
-                                            $user = $this->insungUsersListModel->authenticate($username, $password);
+                                            // 비밀번호가 업데이트된 경우 (인성 API 로그인 성공) 다시 인증 시도
+                                            if (isset($updateData['user_pass'])) {
+                                                $user = $this->insungUsersListModel->authenticate($username, $password);
+                                                log_message('info', "Auth::processLogin - Re-authenticated after password update: user_id={$username}, success=" . ($user ? 'yes' : 'no'));
+                                            }
+                                            // 비밀번호 업데이트 없이 주소만 업데이트한 경우 $user는 최초 authenticate() 결과 유지
                                         } else {
                                             log_message('warning', "Auth::processLogin - Update failed: user_id={$username}, updateResult={$updateResult}, SQL error: " . ($db->error()['message'] ?? 'none'));
                                         }
@@ -486,19 +544,30 @@ class Auth extends BaseController
             
             // API 호출 후에도 인증 실패한 경우
             if (!$user) {
+                // 로그인 실패 기록
+                $loginAttemptModel->recordAttempt($username, $ipAddress, $forwardedIp, false, '아이디/비밀번호 불일치', 'daumdata');
+
+                // 현재 실패 횟수 확인
+                $currentLockStatus = $loginAttemptModel->isLocked($username, $ipAddress, $maxAttempts, $lockoutMinutes);
+                $remainingAttempts = $maxAttempts - $currentLockStatus['failure_count'];
+
                 // 로그인 실패: 아이디/비밀번호 불일치
                 $errorMessage = '입력하신 아이디와 비밀번호를 확인해주세요. 대소문자와 특수문자를 정확히 입력했는지 확인하시기 바랍니다.';
-                
+                if ($remainingAttempts > 0) {
+                    $errorMessage .= " (남은 시도 횟수: {$remainingAttempts}회)";
+                }
+
                 // AJAX 요청인 경우 JSON 응답 반환
                 if ($this->request->isAJAX()) {
                     return $this->response->setJSON([
                         'success' => false,
                         'error' => '아이디 또는 비밀번호가 올바르지 않습니다.',
                         'error_detail' => $errorMessage,
-                        'error_type' => 'invalid_credentials'
+                        'error_type' => 'invalid_credentials',
+                        'remaining_attempts' => $remainingAttempts
                     ]);
                 }
-                
+
                 return redirect()->back()
                     ->withInput()
                     ->with('error', '아이디 또는 비밀번호가 올바르지 않습니다.')
@@ -570,6 +639,7 @@ class Auth extends BaseController
             // stnlogis와 동일하게 로그인 성공 후에도 주소 필드 업데이트 (sync_user_data와 동일한 동작)
             // user_type이 3 또는 5일 때 주소 정보 동기화
             $userType = $user['user_type'] ?? '5';
+            $memberCreditValue = null; // getMemberDetail에서 가져온 credit 값 저장용
             if (($userType == '3' || $userType == '5') && !empty($mCode) && !empty($ccCode) && !empty($token)) {
                 try {
                     // $db 변수 정의 (sync_user_data에서 사용)
@@ -603,6 +673,18 @@ class Auth extends BaseController
                         
                         // 주소 정보 업데이트 (stnlogis의 sync_user_data와 동일)
                         if ($code === '1000' && $memberDetail) {
+                            // credit 값 추출 (회원 상세 정보에서 가져옴)
+                            // 우선순위: credit_customer_code (회원별 지급구분) > credit (거래처 기본 지급구분)
+                            if (isset($memberDetail['credit_customer_code']) && $memberDetail['credit_customer_code'] !== '' && $memberDetail['credit_customer_code'] !== null) {
+                                $memberCreditValue = $memberDetail['credit_customer_code'];
+                                log_message('info', "Auth::processLogin - Credit from credit_customer_code: {$memberCreditValue}");
+                            } elseif (isset($memberDetail['credit']) && !empty($memberDetail['credit'])) {
+                                $memberCreditValue = $memberDetail['credit'];
+                                log_message('info', "Auth::processLogin - Credit from member_detail (default): {$memberCreditValue}");
+                            } else {
+                                log_message('info', "Auth::processLogin - Credit not in member_detail, keys: " . json_encode(array_keys($memberDetail)));
+                            }
+
                             $sido = $memberDetail['sido'] ?? '';
                             $gugun = $memberDetail['gugun'] ?? '';
                             $dongName = $memberDetail['dong_name'] ?? $memberDetail['basic_dong'] ?? '';
@@ -719,95 +801,57 @@ class Auth extends BaseController
             $ukey = $randomPrefix . $ckey; // 8글자 + ckey
             $akey = md5($ukey); // ukey를 MD5로 변환
             
-            // 거래처 credit 값 조회 (모든 사용자)
+            // 거래처 credit 값 조회 - getMemberDetailByCode API 사용 (/api/member_detail/find/)
+            // 회원별 지급구분(credit_customer_code) 우선, 없으면 거래처 기본 지급구분(credit) 사용
             $credit = null;
             $userType = $user['user_type'] ?? '5';
-            // log_message('info', "Auth::processLogin - Checking credit value: user_type={$userType}, user_company=" . ($user['user_company'] ?? 'NULL') . ", mCode=" . ($mCode ?? 'NULL') . ", ccCode=" . ($ccCode ?? 'NULL'));
-            
-            if (!empty($mCode) && !empty($ccCode) && !empty($token) && !empty($user['user_company'])) {
+            $userCcode = $user['user_ccode'] ?? null;
+
+            if (!empty($mCode) && !empty($ccCode) && !empty($token) && !empty($userCcode)) {
                 try {
                     $insungApiService = new \App\Libraries\InsungApiService();
-                    // 거래처 목록 조회 (comp_code로 필터링)
-                    // log_message('info', "Auth::processLogin - Calling getCompanyList API: comp_code={$user['user_company']}");
-                    $companyListResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, $user['user_company'], '', 1, 1, $apiIdx);
-                    
-                    // log_message('info', "Auth::processLogin - getCompanyList API response type: " . gettype($companyListResult));
-                    
-                    // API 응답 구조 안전하게 파싱 (Admin::companyEdit와 동일한 구조 사용)
-                    $item = null;
-                    if ($companyListResult !== false) {
-                        // 응답 코드 확인
-                        $code = '';
-                        if (is_object($companyListResult) && isset($companyListResult->Result)) {
-                            $resultArray = is_array($companyListResult->Result) ? $companyListResult->Result : [$companyListResult->Result];
-                            if (isset($resultArray[0]->result_info[0]->code)) {
-                                $code = $resultArray[0]->result_info[0]->code;
-                            } elseif (isset($resultArray[0]->code)) {
-                                $code = $resultArray[0]->code;
+                    // 회원 상세 조회 (c_code로 조회) - /api/member_detail/find/
+                    $memberDetailResult = $insungApiService->getMemberDetailByCode($mCode, $ccCode, $token, $userCcode, $apiIdx);
+
+                    // API 응답 구조 파싱
+                    $memberInfo = null;
+                    $code = '';
+                    if ($memberDetailResult && (is_array($memberDetailResult) || is_object($memberDetailResult))) {
+                        if (is_array($memberDetailResult) && isset($memberDetailResult[0])) {
+                            $code = $memberDetailResult[0]->code ?? $memberDetailResult[0]['code'] ?? '';
+                            if ($code === '1000' && isset($memberDetailResult[1])) {
+                                $memberInfo = is_object($memberDetailResult[1]) ? (array)$memberDetailResult[1] : $memberDetailResult[1];
                             }
-                            
-                            // log_message('info', "Auth::processLogin - API response code (object): {$code}");
-                            
-                            // 성공 코드이고 데이터가 있는 경우
-                            if ($code === '1000' && isset($resultArray[2])) {
-                                if (isset($resultArray[2]->items[0]->item)) {
-                                    $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
-                                    if (!empty($items) && isset($items[0])) {
-                                        $item = $items[0];
-                                    }
-                                }
-                            }
-                        } elseif (is_array($companyListResult)) {
-                            if (isset($companyListResult[0]->code)) {
-                                $code = $companyListResult[0]->code;
-                            } elseif (isset($companyListResult[0]['code'])) {
-                                $code = $companyListResult[0]['code'];
-                            }
-                            
-                            // log_message('info', "Auth::processLogin - API response code (array): {$code}");
-                            
-                            // 성공 코드이고 데이터가 있는 경우
-                            if ($code === '1000' && isset($companyListResult[2])) {
-                                if (isset($companyListResult[2]->items[0]->item)) {
-                                    $items = is_array($companyListResult[2]->items[0]->item) ? $companyListResult[2]->items[0]->item : [$companyListResult[2]->items[0]->item];
-                                    if (!empty($items) && isset($items[0])) {
-                                        $item = $items[0];
-                                    }
-                                }
+                        } elseif (is_object($memberDetailResult) && isset($memberDetailResult->Result)) {
+                            $code = $memberDetailResult->Result[0]->result_info[0]->code ?? '';
+                            if ($code === '1000' && isset($memberDetailResult->Result[1]->item[0])) {
+                                $memberInfo = (array)$memberDetailResult->Result[1]->item[0];
                             }
                         }
-                        
-                        // log_message('info', "Auth::processLogin - Item found: " . ($item ? 'yes' : 'no'));
-                        
-                        // credit 값 가져오기 (Admin::companyEdit와 동일한 로직)
-                        if ($item) {
-                            $itemArray = is_object($item) ? (array)$item : $item;
-                            // log_message('info', "Auth::processLogin - Item data: " . json_encode($itemArray, JSON_UNESCAPED_UNICODE));
-                            
-                            if (isset($item->credit) && !empty($item->credit)) {
-                                $credit = $item->credit;
-                                // log_message('info', "Auth::processLogin - Credit value found (object): {$credit}");
-                            } elseif (isset($itemArray['credit']) && !empty($itemArray['credit'])) {
-                                $credit = $itemArray['credit'];
-                                // log_message('info', "Auth::processLogin - Credit value found (array): {$credit}");
-                            } else {
-                                // log_message('info', "Auth::processLogin - Credit value not found in item, using default: 3");
-                                $credit = '3'; // 기본값 (Admin::companyEdit와 동일)
-                            }
+                    }
+
+                    if ($memberInfo) {
+                        // credit 값 추출 - credit_customer_code 우선 사용 (회원별 지급구분)
+                        if (isset($memberInfo['credit_customer_code']) && $memberInfo['credit_customer_code'] !== '') {
+                            $credit = $memberInfo['credit_customer_code'];
+                            // log_message('info', "Auth::processLogin - Credit from 'credit_customer_code': {$credit}");
+                        } elseif (isset($memberInfo['credit']) && $memberInfo['credit'] !== '') {
+                            $credit = $memberInfo['credit'];
+                            // log_message('info', "Auth::processLogin - Credit from 'credit': {$credit}");
                         } else {
-                            // log_message('info', "Auth::processLogin - No item in API response");
+                            $credit = '3'; // 기본값
                         }
-                    } else {
-                        // log_message('info', "Auth::processLogin - API call failed");
+
+                        // 거래처명 가져오기 (로고 옆 표시용)
+                        if (isset($memberInfo['cust_name']) && !empty($memberInfo['cust_name'])) {
+                            $ccCompName = $memberInfo['cust_name'];
+                        }
                     }
                 } catch (\Exception $e) {
-                    log_message('error', "Auth::processLogin - Failed to fetch company credit: " . $e->getMessage());
-                    log_message('error', "Auth::processLogin - Exception trace: " . $e->getTraceAsString());
+                    log_message('error', "Auth::processLogin - Failed to fetch member credit: " . $e->getMessage());
                 }
-            } else {
-                // log_message('info', "Auth::processLogin - Credit check skipped: user_type={$userType}, conditions not met");
             }
-            
+
             // log_message('info', "Auth::processLogin - Final credit value: " . ($credit ?? 'NULL'));
             
             // 세션에 사용자 정보 저장 (daumdata)
@@ -828,6 +872,7 @@ class Auth extends BaseController
                 'comp_tel' => $user['comp_tel'] ?? '',
                 'comp_code' => $user['comp_code'] ?? null, // customer_id로 사용
                 'user_company' => $user['user_company'] ?? null, // tbl_users_list.user_company (고객사 코드)
+                'user_ccode' => $user['user_ccode'] ?? null, // 인성 시스템 회원 코드 (API 조회용)
                 'user_cc_idx' => $user['cc_idx'] ?? null, // tbl_company_list.cc_idx (콜센터 관리자용)
                 'cc_code' => $ccCode, // 선택한 API의 cc_code 또는 기존 값
                 'm_code' => $mCode, // 선택한 API의 m_code 또는 기존 값
@@ -841,9 +886,15 @@ class Auth extends BaseController
                 'login_type' => 'daumdata',
                 'is_logged_in' => true,
                 'company_logo_path' => !empty($user['logo_path']) ? $user['logo_path'] : null, // 고객사 로고 경로
-                'credit' => $credit // 거래구분 값 (1:현금, 3:신용, 5:월결제, 7:카드)
+                'credit' => $memberCreditValue ?? $credit, // 거래구분 값 (회원 상세에서 우선, 없으면 거래처에서)
+                'api_name' => $apiName, // 콜센터명 (로고 옆 표시용)
+                'cc_comp_name' => $ccCompName // 거래처명 (로고 옆 표시용)
             ];
-            
+
+            log_message('info', "Auth::processLogin - Session data: api_name=" . ($apiName ?? 'NULL') . ", cc_comp_name=" . ($ccCompName ?? 'NULL') . ", selected_api_idx=" . ($selectedApiIdx ?? 'NULL'));
+
+            // 로그인 성공은 기록하지 않음 (실패만 기록)
+
             session()->set($userData);
             
             // 서브도메인 접근 권한 체크 (메인도메인은 제한 해제)
@@ -1033,9 +1084,11 @@ class Auth extends BaseController
                     'login_type' => 'stn',
                     'is_logged_in' => true
                 ];
-                
+
+                // 로그인 성공은 기록하지 않음 (실패만 기록)
+
                 session()->set($userData);
-                
+
                 // 마지막 로그인 시간 업데이트
                 $this->authModel->updateUserInfo($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
                 
@@ -1067,11 +1120,22 @@ class Auth extends BaseController
                 $redirectUrl = $currentProtocol . '://' . $currentHost . '/';
                 return redirect()->to($redirectUrl)->with('success', '로그인되었습니다.');
             } else {
-                // STN 로그인 실패: 아이디/비밀번호 불일치
+                // STN 로그인 실패 기록
+                $loginAttemptModel->recordAttempt($username, $ipAddress, $forwardedIp, false, '아이디/비밀번호 불일치', 'stn');
+
+                // 현재 실패 횟수 확인
+                $currentLockStatus = $loginAttemptModel->isLocked($username, $ipAddress, $maxAttempts, $lockoutMinutes);
+                $remainingAttempts = $maxAttempts - $currentLockStatus['failure_count'];
+
+                $errorDetail = '입력하신 아이디와 비밀번호를 확인해주세요. 대소문자와 특수문자를 정확히 입력했는지 확인하시기 바랍니다. 비밀번호를 잊으셨다면 시스템 관리자에게 문의하세요.';
+                if ($remainingAttempts > 0) {
+                    $errorDetail .= " (남은 시도 횟수: {$remainingAttempts}회)";
+                }
+
                 return redirect()->back()
                     ->withInput()
                     ->with('error', '아이디 또는 비밀번호가 올바르지 않습니다.')
-                    ->with('error_detail', '입력하신 아이디와 비밀번호를 확인해주세요. 대소문자와 특수문자를 정확히 입력했는지 확인하시기 바랍니다. 비밀번호를 잊으셨다면 시스템 관리자에게 문의하세요.');
+                    ->with('error_detail', $errorDetail);
             }
         }
     }
@@ -1142,6 +1206,36 @@ class Auth extends BaseController
         }
     }
     
+    /**
+     * X-Forwarded-For 헤더에서 외부 IP 추출
+     *
+     * @return string|null 외부 IP 또는 null
+     */
+    private function getForwardedIp()
+    {
+        // X-Forwarded-For 헤더 확인 (프록시를 통해 전달된 원본 IP)
+        $forwardedFor = $this->request->getServer('HTTP_X_FORWARDED_FOR');
+
+        if (!empty($forwardedFor)) {
+            // 여러 개의 IP가 쉼표로 구분되어 있을 수 있음 (첫 번째가 원본 클라이언트 IP)
+            $ips = array_map('trim', explode(',', $forwardedFor));
+            $forwardedIp = $ips[0] ?? null;
+
+            // IP 유효성 검사 (IPv4 또는 IPv6)
+            if ($forwardedIp && filter_var($forwardedIp, FILTER_VALIDATE_IP)) {
+                return $forwardedIp;
+            }
+        }
+
+        // X-Real-IP 헤더 확인 (일부 프록시에서 사용)
+        $realIp = $this->request->getServer('HTTP_X_REAL_IP');
+        if (!empty($realIp) && filter_var($realIp, FILTER_VALIDATE_IP)) {
+            return $realIp;
+        }
+
+        return null;
+    }
+
     /**
      * 직원 검색 큐 등록 및 CLI 명령어 실행
      */

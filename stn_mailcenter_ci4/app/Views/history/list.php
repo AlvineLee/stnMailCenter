@@ -131,21 +131,17 @@
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                 <?php foreach ($orders as $order): ?>
-                <tr class="hover:bg-gray-50">
+                <?php
+                // 삭제된 주문인지 확인
+                $isDeleted = ($order['is_del'] ?? '') === 'Y';
+                $deletedRowClass = $isDeleted ? 'deleted-order' : '';
+                $deletedRowStyle = $isDeleted ? 'background-color: #fef2f2 !important;' : '';
+                ?>
+                <tr class="hover:bg-gray-50 <?= $deletedRowClass ?>" style="<?= $deletedRowStyle ?>">
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="0"><?= esc($order['row_number'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="1"><?= esc($order['formatted_order_datetime'] ?? '-') ?></td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="2">
-                        <?php 
-                        // 완료된 주문인지 확인 (state='30' 또는 status_label='완료')
-                        $isCompleted = false;
-                        if (($order['order_system'] ?? '') === 'insung') {
-                            $isCompleted = ($order['state'] ?? '') === '30' || ($order['status_label'] ?? '') === '완료';
-                        } else {
-                            $isCompleted = ($order['status'] ?? '') === 'delivered' || ($order['status_label'] ?? '') === '배송완료';
-                        }
-                        
-                        if ($isCompleted && !empty($order['display_order_number']) && $order['display_order_number'] !== '-' && ($order['order_system'] ?? '') === 'insung'): 
-                        ?>
+                        <?php if ($order['show_sign_button'] ?? false): ?>
                             <span class="status-badge" style="cursor: pointer; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;" onclick="viewOrderSign('<?= esc($order['display_order_number']) ?>')">
                                 Sign
                             </span>
@@ -154,17 +150,29 @@
                         <?php endif; ?>
                     </td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="3">
-                        <?php if ($order['show_map_on_click'] ?? false): ?>
+                        <?php
+                        // 취소 상태 확인 (state='40' 또는 '취소' 또는 status='cancelled')
+                        $isCancelled = false;
+                        if (($order['order_system'] ?? '') === 'insung') {
+                            // DB에 state 값이 '40' 또는 '취소'로 저장될 수 있음
+                            $isCancelled = in_array(($order['state'] ?? ''), ['40', '취소']);
+                        } else {
+                            $isCancelled = ($order['status'] ?? '') === 'cancelled';
+                        }
+                        ?>
+                        <?php if ($isCancelled && !empty($order['id'])): ?>
+                            <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="viewCancelledOrderDetail('<?= esc($order['id']) ?>')"><?= esc($order['status_label'] ?? '-') ?></span>
+                        <?php elseif ($order['show_map_on_click'] ?? false): ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>" style="cursor: pointer;" onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php else: ?>
                             <span class="status-badge <?= esc($order['status_class'] ?? '') ?>"><?= esc($order['status_label'] ?? '-') ?></span>
                         <?php endif; ?>
                     </td>
                     <td class="px-4 py-2 text-base sm:text-sm" data-column-index="4">
-                        <?php if (!empty($order['display_order_number']) && $order['display_order_number'] !== '-' && ($order['order_system'] ?? '') === 'insung'): ?>
-                            <a href="javascript:void(0)" onclick="viewInsungOrderDetail('<?= esc($order['display_order_number']) ?>')" class="text-blue-600 hover:text-blue-800 no-underline cursor-pointer">
-                                <?= esc($order['display_order_number']) ?>
-                            </a>
+                        <?php if ($order['show_insung_order_click'] ?? false): ?>
+                            <a href="javascript:void(0)" onclick="viewInsungOrderDetail('<?= esc($order['display_order_number']) ?>')" class="text-blue-600 hover:text-blue-800 no-underline cursor-pointer"><?= esc($order['display_order_number']) ?></a>
+                        <?php elseif ($order['show_ilyang_order_click'] ?? false): ?>
+                            <a href="javascript:void(0)" onclick="viewIlyangOrderDetail('<?= esc($order['id']) ?>', '/history/getIlyangOrderDetail')" class="text-orange-600 hover:text-orange-800 no-underline cursor-pointer"><?= esc($order['display_order_number']) ?></a>
                         <?php else: ?>
                             <?= esc($order['display_order_number'] ?? '-') ?>
                         <?php endif; ?>
@@ -592,6 +600,24 @@
 </div>
 
 <style>
+/* 삭제된 주문 스타일 */
+tr.deleted-order td {
+    text-decoration: line-through !important;
+    color: #dc2626 !important;
+    opacity: 0.8;
+}
+tr.deleted-order td a {
+    text-decoration: line-through !important;
+    color: #dc2626 !important;
+}
+tr.deleted-order td .status-badge {
+    text-decoration: line-through !important;
+    opacity: 0.7;
+}
+tr.deleted-order:hover {
+    background-color: #fee2e2 !important;
+}
+
 /* 인성 주문 상세 팝업 모바일 반응형 */
 @media (max-width: 767px) {
     .insung-detail-grid-row {
@@ -1108,7 +1134,7 @@ function closeOrderSign() {
     document.getElementById('orderSignModal').classList.add('hidden');
     document.getElementById('orderSignModal').classList.remove('flex');
     document.body.style.overflow = 'auto';
-    
+
     // 레이어 팝업이 닫힐 때 사이드바 복원
     if (typeof window.showSidebarForModal === 'function') {
         window.showSidebarForModal();
@@ -1118,5 +1144,406 @@ function closeOrderSign() {
     }
 }
 </script>
+
+<!-- 취소 주문 상세 레이어 팝업 -->
+<div id="cancelledOrderModal" class="fixed inset-0 hidden flex items-center justify-center p-4 order-detail-modal" style="z-index: 9999; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col order-detail-modal-content" onclick="event.stopPropagation()">
+        <div class="sticky top-0 bg-red-50 border-b border-red-200 px-6 py-4 flex justify-between items-center flex-shrink-0 rounded-t-lg">
+            <h3 class="text-lg font-bold text-red-800">취소된 주문 상세</h3>
+            <button type="button" onclick="closeCancelledOrderModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0 ml-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="p-4 overflow-y-auto flex-1">
+            <div id="cancelledOrderContent" class="modal-content">
+                <!-- 내용은 populateCancelledOrder()에서 동적으로 생성됩니다 -->
+            </div>
+        </div>
+        <!-- 하단 액션 버튼 영역 -->
+        <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-center gap-4 flex-shrink-0 rounded-b-lg">
+            <button type="button" id="btnResubmitOrder" onclick="resubmitCancelledOrder()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors">
+                다시 접수하기
+            </button>
+            <button type="button" id="btnEditOrder" onclick="editCancelledOrder()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-sm transition-colors">
+                수정 후 접수
+            </button>
+            <button type="button" id="btnDeleteOrder" onclick="deleteCancelledOrder()" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg shadow-sm transition-colors">
+                삭제하기
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// 현재 선택된 취소 주문 ID 저장
+let currentCancelledOrderId = null;
+let currentCancelledOrderData = null;
+
+function viewCancelledOrderDetail(orderId) {
+    currentCancelledOrderId = orderId;
+
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+
+    // 로딩 상태 표시
+    showCancelledOrderLoading();
+
+    // AJAX로 취소 주문 정보 가져오기
+    fetch(`/history/getCancelledOrderDetail?order_id=${encodeURIComponent(orderId)}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            currentCancelledOrderData = data.data;
+            populateCancelledOrder(data.data);
+            // 모달 표시
+            document.getElementById('cancelledOrderModal').classList.remove('hidden');
+            document.getElementById('cancelledOrderModal').classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        } else {
+            showCancelledOrderError(data.message || '주문 정보를 가져올 수 없습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Fetch Error:', error);
+        showCancelledOrderError('주문 정보 조회 중 오류가 발생했습니다: ' + error.message);
+    });
+}
+
+function populateCancelledOrder(orderData) {
+    const content = document.getElementById('cancelledOrderContent');
+
+    function escapeHtml(text) {
+        if (!text) return '-';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        return dateStr;
+    }
+
+    function formatMoney(amount) {
+        if (!amount) return '-';
+        return Number(amount).toLocaleString() + '원';
+    }
+
+    // 서비스 타입명 (tbl_service_types에서 조인한 값)
+    const serviceTypeName = orderData.service_type_name || '-';
+
+    // 결제 타입 라벨 매핑 (ins_pay_gbn 값: 1=선불, 2=착불, 3=신용 등)
+    const paymentLabels = {
+        '1': '선불', '2': '착불', '3': '신용', '4': '송금', '5': '카드',
+        'cash_in_advance': '선불', 'credit_transaction': '신용', 'card_payment': '카드',
+        'cash_on_delivery': '착불', 'bank_transfer': '송금'
+    };
+
+    // 배송방법 라벨 매핑 (ins_doc 값: 1=편도, 3=왕복, 5=경유)
+    const docLabels = { '1': '편도', '3': '왕복', '5': '경유' };
+
+    // 배송선택 라벨 매핑 (ins_sfast 값: 1=일반, 3=급송)
+    const sfastLabels = { '1': '일반', '3': '급송' };
+
+    let html = '<div style="background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%); border-radius: 8px; padding: 16px;">';
+
+    // 주문 기본 정보
+    html += '<div style="background: white; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #991b1b; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #fecaca;">주문 정보</div>';
+    html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px;">';
+    html += `<div><span style="color: #6b7280;">주문번호:</span> <span style="font-weight: 500;">${escapeHtml(orderData.insung_order_number || orderData.order_number)}</span></div>`;
+    html += `<div><span style="color: #6b7280;">주문일시:</span> <span>${formatDateTime(orderData.order_date)} ${orderData.order_time || ''}</span></div>`;
+    html += `<div><span style="color: #6b7280;">서비스:</span> <span>${escapeHtml(serviceTypeName)}</span></div>`;
+    html += `<div><span style="color: #6b7280;">결제방식:</span> <span>${paymentLabels[orderData.ins_pay_gbn] || paymentLabels[orderData.payment_type] || '-'}</span></div>`;
+    html += `<div><span style="color: #6b7280;">배송방법:</span> <span>${docLabels[orderData.ins_doc] || '-'}</span></div>`;
+    html += `<div><span style="color: #6b7280;">배송선택:</span> <span>${sfastLabels[orderData.ins_sfast] || '-'}</span></div>`;
+    html += '</div>';
+    html += '</div>';
+
+    // 출발지/도착지 정보 (2열 그리드)
+    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">';
+
+    // 출발지 - tbl_orders_insung 필드 우선 사용
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #2563eb; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">📍 출발지</div>';
+    html += '<div style="font-size: 13px; line-height: 1.8;">';
+    html += `<div><span style="color: #6b7280;">상호:</span> ${escapeHtml(orderData.ins_s_start || orderData.departure_company_name)}</div>`;
+    html += `<div><span style="color: #6b7280;">담당자:</span> ${escapeHtml(orderData.ins_charge_name || orderData.departure_manager)}</div>`;
+    html += `<div><span style="color: #6b7280;">부서:</span> ${escapeHtml(orderData.ins_dept_name || orderData.departure_department)}</div>`;
+    html += `<div><span style="color: #6b7280;">연락처:</span> ${escapeHtml(orderData.ins_start_telno || orderData.departure_contact)}</div>`;
+    html += `<div><span style="color: #6b7280;">주소:</span> ${escapeHtml(orderData.ins_start_location || orderData.departure_address)}</div>`;
+    html += `<div><span style="color: #6b7280;">동:</span> ${escapeHtml(orderData.ins_start_dong || orderData.departure_dong)}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    // 도착지 - tbl_orders_insung 필드 우선 사용
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #dc2626; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">📍 도착지</div>';
+    html += '<div style="font-size: 13px; line-height: 1.8;">';
+    html += `<div><span style="color: #6b7280;">상호:</span> ${escapeHtml(orderData.ins_s_dest || orderData.destination_company_name)}</div>`;
+    html += `<div><span style="color: #6b7280;">담당자:</span> ${escapeHtml(orderData.ins_dest_charge || orderData.destination_manager)}</div>`;
+    html += `<div><span style="color: #6b7280;">부서:</span> ${escapeHtml(orderData.ins_dest_dept || orderData.destination_department)}</div>`;
+    html += `<div><span style="color: #6b7280;">연락처:</span> ${escapeHtml(orderData.ins_dest_telno || orderData.destination_contact)}</div>`;
+    html += `<div><span style="color: #6b7280;">주소:</span> ${escapeHtml(orderData.ins_dest_location || orderData.destination_address)}</div>`;
+    html += `<div><span style="color: #6b7280;">동:</span> ${escapeHtml(orderData.ins_dest_dong || orderData.destination_dong)}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div>';
+
+    // 주문자 정보 - tbl_orders_insung 필드 사용
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">👤 주문자 정보</div>';
+    html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px;">';
+    html += `<div><span style="color: #6b7280;">이름:</span> ${escapeHtml(orderData.ins_c_name || orderData.customer_name)}</div>`;
+    html += `<div><span style="color: #6b7280;">연락처:</span> ${escapeHtml(orderData.ins_c_mobile || orderData.customer_tel_number)}</div>`;
+    html += `<div><span style="color: #6b7280;">부서:</span> ${escapeHtml(orderData.ins_c_dept_name || orderData.customer_department)}</div>`;
+    html += `<div><span style="color: #6b7280;">담당:</span> ${escapeHtml(orderData.ins_c_charge_name || orderData.customer_duty)}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    // 물품 정보 - tbl_orders_insung 필드 사용
+    // 물품종류(ins_item_type) 레이블 매핑: 1=서류봉투, 2=소박스, 3=중박스, 4=대박스
+    const itemTypeLabels = { '1': '서류봉투', '2': '소박스', '3': '중박스', '4': '대박스' };
+    // 서비스종류(ins_kind) 레이블 매핑: 1=오토바이, 2=다마스, 3=트럭, 4=밴, 5=라보, 6=지하철, 7=플렉스
+    const kindLabels = { '1': '오토바이', '2': '다마스', '3': '트럭', '4': '밴', '5': '라보', '6': '지하철', '7': '플렉스' };
+
+    const itemTypeValue = orderData.ins_item_type || orderData.item_type || '';
+    const kindValue = orderData.ins_kind || '';
+    const itemTypeLabel = itemTypeLabels[itemTypeValue] || itemTypeValue || '-';
+    const kindLabel = kindLabels[kindValue] || orderData.ins_kind_etc || kindValue || '-';
+
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">📦 물품 정보</div>';
+    html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px;">';
+    html += `<div><span style="color: #6b7280;">물품종류:</span> ${escapeHtml(itemTypeLabel)}</div>`;
+    html += `<div><span style="color: #6b7280;">서비스종류:</span> ${escapeHtml(kindLabel)}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    // 금액 정보 - tbl_orders_insung 필드 사용
+    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+    html += '<div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">💰 금액 정보</div>';
+    html += '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 13px;">';
+    html += `<div><span style="color: #6b7280;">기본요금:</span> <span style="font-weight: 500;">${formatMoney(orderData.ins_price || orderData.total_fare)}</span></div>`;
+    html += `<div><span style="color: #6b7280;">추가요금:</span> ${formatMoney(orderData.ins_add_cost || orderData.add_cost)}</div>`;
+    html += `<div><span style="color: #6b7280;">할인:</span> ${formatMoney(orderData.ins_discount_cost || orderData.discount_cost)}</div>`;
+    html += `<div><span style="color: #6b7280;">탁송료:</span> ${formatMoney(orderData.ins_delivery_cost || orderData.delivery_cost)}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    // 비고 - tbl_orders_insung 필드 사용 (ins_memo, ins_reason_desc)
+    const memo = orderData.ins_memo || orderData.notes || '';
+    const reasonDesc = orderData.ins_reason_desc || orderData.delivery_content || '';
+    if (memo || reasonDesc) {
+        html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">';
+        html += '<div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">📝 비고</div>';
+        html += '<div style="font-size: 13px; line-height: 1.6;">';
+        if (memo) {
+            html += `<div style="margin-bottom: 4px;"><span style="color: #6b7280;">메모:</span> ${escapeHtml(memo)}</div>`;
+        }
+        if (reasonDesc) {
+            html += `<div><span style="color: #6b7280;">배송사유:</span> ${escapeHtml(reasonDesc)}</div>`;
+        }
+        html += '</div>';
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    content.innerHTML = html;
+}
+
+function showCancelledOrderLoading() {
+    const content = document.getElementById('cancelledOrderContent');
+    content.innerHTML = '<div style="text-align: center; padding: 60px; color: #6b7280;"><div style="margin-bottom: 16px;">⏳</div>주문 정보를 불러오는 중...</div>';
+
+    document.getElementById('cancelledOrderModal').classList.remove('hidden');
+    document.getElementById('cancelledOrderModal').classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
+
+function showCancelledOrderError(message) {
+    const content = document.getElementById('cancelledOrderContent');
+    content.innerHTML = `
+        <div style="text-align: center; padding: 60px;">
+            <div style="color: #ef4444; font-size: 32px; margin-bottom: 16px;">⚠️</div>
+            <div style="color: #ef4444; font-weight: 600; margin-bottom: 8px;">오류 발생</div>
+            <div style="color: #6b7280;">${message}</div>
+        </div>
+    `;
+
+    document.getElementById('cancelledOrderModal').classList.remove('hidden');
+    document.getElementById('cancelledOrderModal').classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeCancelledOrderModal() {
+    document.getElementById('cancelledOrderModal').classList.add('hidden');
+    document.getElementById('cancelledOrderModal').classList.remove('flex');
+    document.body.style.overflow = 'auto';
+    currentCancelledOrderId = null;
+    currentCancelledOrderData = null;
+
+    // 레이어 팝업이 닫힐 때 사이드바 복원
+    if (typeof window.showSidebarForModal === 'function') {
+        window.showSidebarForModal();
+    }
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 다시 접수하기
+function resubmitCancelledOrder() {
+    if (!currentCancelledOrderId) {
+        showErrorModal('오류', '주문 정보가 없습니다.');
+        return;
+    }
+
+    showConfirmModal('다시 접수', '이 주문을 다시 접수하시겠습니까?', function() {
+        // 버튼 비활성화
+        const btn = document.getElementById('btnResubmitOrder');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '처리 중...';
+
+        fetch('/history/resubmitOrder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: `order_id=${encodeURIComponent(currentCancelledOrderId)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccessModal('접수 완료', '주문이 다시 접수되었습니다.\n새 주문번호: ' + (data.data?.order_number || ''));
+                closeCancelledOrderModal();
+                // 성공 메시지 확인 후 페이지 새로고침
+                setTimeout(function() {
+                    location.reload();
+                }, 1500);
+            } else {
+                showErrorModal('접수 실패', data.message || '주문 접수에 실패했습니다.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showErrorModal('오류', '오류가 발생했습니다: ' + error.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        });
+    });
+}
+
+// 수정 후 접수 (주문 접수 페이지로 이동)
+function editCancelledOrder() {
+    if (!currentCancelledOrderData) {
+        showErrorModal('오류', '주문 정보가 없습니다.');
+        return;
+    }
+
+    // 주문 데이터를 세션 스토리지에 저장 후 주문 접수 페이지로 이동
+    sessionStorage.setItem('editOrderData', JSON.stringify(currentCancelledOrderData));
+    sessionStorage.setItem('editOrderMode', 'resubmit');
+
+    // service_code로 적절한 주문 페이지로 이동
+    // service_code는 라우트명과 동일 (예: quick-motorcycle, quick-vehicle, parcel-visit 등)
+    const serviceCode = currentCancelledOrderData.service_code || '';
+
+    let targetUrl = '/service/quick-motorcycle?edit=1'; // 기본값
+
+    if (serviceCode) {
+        // service_code가 있으면 해당 서비스 페이지로 이동
+        targetUrl = '/service/' + serviceCode + '?edit=1';
+    } else {
+        // service_code가 없는 경우 차량 종류 기반 fallback
+        const carKind = currentCancelledOrderData.ins_car_kind || currentCancelledOrderData.car_kind || '';
+
+        if (carKind === '1' || carKind === 1) {
+            targetUrl = '/service/quick-motorcycle?edit=1';
+        } else if (carKind === '2' || carKind === '3' || carKind === 2 || carKind === 3) {
+            targetUrl = '/service/quick-flex?edit=1';
+        } else if (carKind === '4' || carKind === '5' || carKind === 4 || carKind === 5) {
+            targetUrl = '/service/quick-vehicle?edit=1';
+        } else if (parseInt(carKind) >= 6) {
+            targetUrl = '/service/quick-moving?edit=1';
+        }
+    }
+
+    window.location.href = targetUrl;
+}
+
+// 삭제하기 (소프트 삭제)
+function deleteCancelledOrder() {
+    if (!currentCancelledOrderId) {
+        showErrorModal('오류', '주문 정보가 없습니다.');
+        return;
+    }
+
+    showConfirmModal('주문 삭제', '이 주문을 삭제하시겠습니까?\n삭제된 주문은 목록에서 더 이상 표시되지 않습니다.', function() {
+        // 버튼 비활성화
+        const btn = document.getElementById('btnDeleteOrder');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '처리 중...';
+
+        fetch('/history/softDeleteOrder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: `order_id=${encodeURIComponent(currentCancelledOrderId)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccessModal('삭제 완료', '주문이 삭제되었습니다.');
+                closeCancelledOrderModal();
+                // 성공 메시지 확인 후 페이지 새로고침
+                setTimeout(function() {
+                    location.reload();
+                }, 1500);
+            } else {
+                showErrorModal('삭제 실패', data.message || '주문 삭제에 실패했습니다.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showErrorModal('오류', '오류가 발생했습니다: ' + error.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        });
+    });
+}
+</script>
+
+<?= $this->include('forms/alert-modal') ?>
+<?= $this->include('forms/ilyang-order-detail-modal') ?>
 
 <?= $this->endSection() ?>

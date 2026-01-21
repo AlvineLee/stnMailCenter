@@ -63,7 +63,8 @@ class Member extends BaseController
                 'm_code' => $userInfo['m_code'] ?? null,
                 'cc_code' => $userInfo['cc_code'] ?? null,
                 'token' => $userInfo['token'] ?? null,
-                'api_idx' => $userInfo['api_idx'] ?? null
+                'api_idx' => $userInfo['api_idx'] ?? null,
+                'user_class' => $userInfo['user_class'] ?? null
             ];
         } else {
             // STN 로그인: UserModel 사용

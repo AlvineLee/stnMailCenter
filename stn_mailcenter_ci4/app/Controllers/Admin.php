@@ -99,7 +99,8 @@ class Admin extends BaseController
         // 슈퍼관리자인 경우 항상 tbl_api_list에서만 조회
         if ($loginType === 'daumdata' && $userType == '1') {
             // tbl_api_list에서 API 목록 조회 (tbl_cc_list가 아닌 tbl_api_list만 사용)
-            $apiList = $this->insungApiListModel->orderBy('idx', 'ASC')->findAll();
+            // api_gbn='M' (메인 API)만 조회
+            $apiList = $this->insungApiListModel->getMainApiList();
             
             // 뷰에서 사용하는 형식으로 변환 (cc_code, cc_name)
             // cc_code는 cccode 값, cc_name은 "cccode - api_name" 형식
@@ -116,60 +117,39 @@ class Admin extends BaseController
                 }
             }
             
-            // 선택된 콜센터가 있으면 해당 콜센터의 거래처 목록 조회
-            // tbl_api_list.cccode로 tbl_cc_list를 찾고, tbl_cc_list -> tbl_company_list 조인
+            // 선택된 콜센터가 있으면 해당 콜센터의 거래처 목록 조회 (DB에서만)
             if ($selectedCcCode) {
                 $db = \Config\Database::connect();
-                
-                // 먼저 tbl_api_list에서 cccode로 idx 찾기 (cc_apicode는 idx와 매칭)
-                $apiBuilder = $db->table('tbl_api_list');
-                $apiBuilder->select('idx');
-                $apiBuilder->where('cccode', $selectedCcCode);
-                $apiQuery = $apiBuilder->get();
-                
-                if ($apiQuery !== false) {
-                    $apiResult = $apiQuery->getRowArray();
-                    if ($apiResult && !empty($apiResult['idx'])) {
-                        $apiIdx = (int)$apiResult['idx']; // 명시적으로 정수로 변환
-                        
-                        // tbl_cc_list -> tbl_company_list 직접 조인
-                        $builder = $db->table('tbl_cc_list cc');
-                        
-                        $builder->select('
-                            c.comp_code,
-                            c.comp_name,
-                            c.cc_idx,
-                            cc.cc_code,
-                            cc.cc_name
-                        ');
-                        
-                        // tbl_cc_list -> tbl_company_list (cc_idx = idx)
-                        $builder->join('tbl_company_list c', 'c.cc_idx = cc.idx', 'inner');
-                        
-                        // tbl_cc_list.cc_apicode로 필터링 (tbl_api_list.idx와 매칭, 숫자로 비교)
-                        $builder->where('cc.cc_apicode', $apiIdx);
-                        
-                        // 거래처명 오름차순 정렬
-                        $builder->orderBy('c.comp_name', 'ASC');
-                        
-                        $query = $builder->get();
-                        if ($query !== false) {
-                            $companyList = $query->getResultArray();
-                            log_message('debug', "orderType - 거래처 목록 조회 성공: 개수=" . count($companyList));
-                        } else {
-                            $companyList = [];
-                            log_message('error', "orderType - 거래처 목록 조회 실패: ccCode={$selectedCcCode}, apiIdx={$apiIdx}");
-                        }
+
+                // tbl_api_list에서 cccode로 idx 찾기
+                $apiInfo = $this->insungApiListModel->where('cccode', $selectedCcCode)->first();
+
+                if ($apiInfo && !empty($apiInfo['idx'])) {
+                    $apiIdx = (int)$apiInfo['idx'];
+
+                    // tbl_cc_list -> tbl_company_list 직접 조인 (use_yn = 'Y'만)
+                    $builder = $db->table('tbl_cc_list cc');
+                    $builder->select('
+                        c.comp_code,
+                        c.comp_name,
+                        c.cc_idx,
+                        cc.cc_code,
+                        cc.cc_name
+                    ');
+                    $builder->join('tbl_company_list c', 'c.cc_idx = cc.idx', 'inner');
+                    $builder->where('cc.cc_apicode', $apiIdx);
+                    $builder->where('c.use_yn', 'Y');
+                    $builder->orderBy('c.comp_name', 'ASC');
+
+                    $query = $builder->get();
+                    if ($query !== false) {
+                        $companyList = $query->getResultArray();
                     } else {
                         $companyList = [];
-                        log_message('warning', "orderType - API idx를 찾을 수 없음: ccCode={$selectedCcCode}");
                     }
                 } else {
                     $companyList = [];
-                    log_message('error', "orderType - API 조회 실패: ccCode={$selectedCcCode}");
                 }
-            } else {
-                log_message('debug', "orderType - 콜센터가 선택되지 않음, 거래처 목록 없음");
             }
             
             // 권한 조회 우선순위: 거래처 > 콜센터 > 마스터
@@ -2744,7 +2724,7 @@ class Admin extends BaseController
         $userCcIdx = session()->get('user_cc_idx');
         
         if ($userClass == '1') {
-            // user_class = 1일 때는 comp_code로 cc_idx 조회 후 cc_code 조회
+            // user_class = 1일 때는 comp_code로 cc_idx ��회 후 cc_code 조회
             $compBuilder = $db->table('tbl_company_list');
             $compBuilder->select('cc_idx');
             $compBuilder->where('comp_code', $compCode);
@@ -3914,10 +3894,8 @@ class Admin extends BaseController
     }
 
     /**
-     * 주문 상세 정보 조회 (AJAX) - 인성 API 사용
-     */
-    /**
      * 콜센터별 거래처 목록 조회 (AJAX - 오더유형 설정용)
+     * API 건수와 DB 건수를 비교하여 반환 (동기화 필요 여부 판단용)
      */
     public function getCompaniesByCcForOrderType()
     {
@@ -3932,7 +3910,7 @@ class Admin extends BaseController
         // daumdata 로그인 및 user_type = 1 체크
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
-        
+
         if ($loginType !== 'daumdata' || $userType != '1') {
             return $this->response->setJSON([
                 'success' => false,
@@ -3948,78 +3926,409 @@ class Admin extends BaseController
             ])->setStatusCode(400);
         }
 
-        // tbl_api_list.cccode로 api_code 찾고, tbl_cc_list -> tbl_company_list 직접 조인
         $db = \Config\Database::connect();
-        
-        // 먼저 tbl_api_list에서 cccode로 idx 찾기 (cc_apicode는 idx와 매칭)
-        $apiBuilder = $db->table('tbl_api_list');
-        $apiBuilder->select('idx');
-        $apiBuilder->where('cccode', $ccCode);
-        $apiQuery = $apiBuilder->get();
-        
-        log_message('debug', "getCompaniesByCcForOrderType - cccode: {$ccCode}, SQL: " . $apiBuilder->getCompiledSelect(false));
-        
-        if ($apiQuery === false) {
-            log_message('error', "getCompaniesByCcForOrderType - API 정보 조회 실패: cccode={$ccCode}");
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'API 정보 조회 중 오류가 발생했습니다.'
-            ])->setStatusCode(500);
-        }
-        
-        $apiResult = $apiQuery->getRowArray();
-        log_message('debug', "getCompaniesByCcForOrderType - API 결과: " . json_encode($apiResult, JSON_UNESCAPED_UNICODE));
-        
-        if (!$apiResult || empty($apiResult['idx'])) {
-            log_message('warning', "getCompaniesByCcForOrderType - idx를 찾을 수 없음: cccode={$ccCode}");
+
+        // tbl_api_list에서 API 정보 전체 조회
+        $apiInfo = $this->insungApiListModel->where('cccode', $ccCode)->first();
+
+        if (!$apiInfo || empty($apiInfo['idx'])) {
             return $this->response->setJSON([
                 'success' => true,
-                'companies' => []
+                'companies' => [],
+                'db_count' => 0,
+                'api_count' => 0,
+                'need_sync' => false
             ]);
         }
-        
-        $apiIdx = (int)$apiResult['idx']; // 명시적으로 정수로 변환
-        log_message('debug', "getCompaniesByCcForOrderType - api_idx: {$apiIdx} (type: " . gettype($apiIdx) . ")");
-        
-        // tbl_cc_list -> tbl_company_list 직접 조인
-        $builder = $db->table('tbl_cc_list cc');
-        
-        $builder->select('
-            c.comp_code,
-            c.comp_name,
-            c.cc_idx,
-            cc.cc_code,
-            cc.cc_name
-        ');
-        
-        // tbl_cc_list -> tbl_company_list (cc_idx = idx)
-        $builder->join('tbl_company_list c', 'c.cc_idx = cc.idx', 'inner');
-        
-        // tbl_cc_list.cc_apicode로 필터링 (tbl_api_list.idx와 매칭, 숫자로 비교)
-        $builder->where('cc.cc_apicode', $apiIdx);
-        
-        // 거래처명 오름차순 정렬
-        $builder->orderBy('c.comp_name', 'ASC');
-        
-        log_message('debug', "getCompaniesByCcForOrderType - 거래처 조회 SQL: " . $builder->getCompiledSelect(false));
-        
-        $query = $builder->get();
-        
-        if ($query === false) {
-            log_message('error', "getCompaniesByCcForOrderType - 거래처 목록 조회 실패: api_code={$apiCode}");
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => '거래처 목록 조회 중 오류가 발생했습니다.'
-            ])->setStatusCode(500);
+
+        $apiIdx = (int)$apiInfo['idx'];
+        $mCode = $apiInfo['mcode'] ?? '';
+        $apiCcCode = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+
+        // cc_idx 조회 (tbl_cc_list.cc_apicode = tbl_api_list.idx)
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('idx');
+        $ccBuilder->where('cc_apicode', $apiIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccResult = $ccQuery ? $ccQuery->getRowArray() : null;
+        $ccIdx = $ccResult['idx'] ?? null;
+
+        // DB에서 거래처 목록 조회 (use_yn = 'Y'만)
+        $companyList = [];
+        $dbCount = 0;
+        if (!empty($ccIdx)) {
+            $builder = $db->table('tbl_company_list c');
+            $builder->select('c.comp_code, c.comp_name, c.cc_idx');
+            $builder->where('c.cc_idx', $ccIdx);
+            $builder->where('c.use_yn', 'Y');
+            $builder->orderBy('c.comp_name', 'ASC');
+            $query = $builder->get();
+            $companyList = $query ? $query->getResultArray() : [];
+            $dbCount = count($companyList);
         }
-        
-        $companyList = $query->getResultArray();
-        log_message('debug', "getCompaniesByCcForOrderType - 거래처 개수: " . count($companyList));
-        
+
+        // API에서 건수만 조회 (limit=1로 호출하여 total_record 확인)
+        $apiCount = 0;
+        $needSync = false;
+
+        if (!empty($mCode) && !empty($apiCcCode) && !empty($token)) {
+            try {
+                $insungApiService = new \App\Libraries\InsungApiService();
+                $apiResult = $insungApiService->getCompanyList($mCode, $apiCcCode, $token, '', '', 1, 1, $apiIdx);
+
+                if ($apiResult) {
+                    $apiCount = $this->extractTotalRecordFromApiResponse($apiResult);
+                }
+            } catch (\Exception $e) {
+                // API 오류 시 건수 비교 불가 - DB 데이터만 사용
+            }
+        }
+
+        // 건수가 다르면 동기화 필요
+        $needSync = ($apiCount > 0 && $apiCount !== $dbCount);
+
         return $this->response->setJSON([
             'success' => true,
-            'companies' => $companyList
+            'companies' => $companyList,
+            'db_count' => $dbCount,
+            'api_count' => $apiCount,
+            'need_sync' => $needSync
         ]);
+    }
+
+    /**
+     * API 응답에서 total_record 추출
+     */
+    private function extractTotalRecordFromApiResponse($apiResult)
+    {
+        $totalRecord = 0;
+
+        if (is_object($apiResult) && isset($apiResult->Result)) {
+            if (isset($apiResult->Result[1])) {
+                $pageInfoData = $apiResult->Result[1];
+                if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
+                    $totalRecord = (int)($pageInfoData->page_info[0]->total_record ?? 0);
+                } elseif (isset($pageInfoData->total_record)) {
+                    $totalRecord = (int)$pageInfoData->total_record;
+                }
+            }
+        } elseif (is_array($apiResult) && isset($apiResult[1])) {
+            $pageInfoData = is_object($apiResult[1]) ? $apiResult[1] : (object)$apiResult[1];
+            if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
+                $totalRecord = (int)($pageInfoData->page_info[0]->total_record ?? 0);
+            } elseif (isset($pageInfoData->total_record)) {
+                $totalRecord = (int)$pageInfoData->total_record;
+            }
+        }
+
+        return $totalRecord;
+    }
+
+    /**
+     * 거래처 수동 동기화 (AJAX)
+     */
+    public function syncCompaniesForOrderType()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // daumdata 로그인 및 user_type = 1 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        $ccCode = $this->request->getGet('cc_code') ?? $this->request->getPost('cc_code');
+        if (!$ccCode) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '콜센터 코드가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        $db = \Config\Database::connect();
+
+        // API 정보 조회
+        $apiInfo = $this->insungApiListModel->where('cccode', $ccCode)->first();
+
+        if (!$apiInfo || empty($apiInfo['idx'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보를 찾을 수 없습니다.'
+            ]);
+        }
+
+        $apiIdx = (int)$apiInfo['idx'];
+        $mCode = $apiInfo['mcode'] ?? '';
+        $apiCcCode = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+
+        // cc_idx 조회
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('idx');
+        $ccBuilder->where('cc_apicode', $apiIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccResult = $ccQuery ? $ccQuery->getRowArray() : null;
+        $ccIdx = $ccResult['idx'] ?? null;
+
+        if (empty($ccIdx)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '콜센터 정보를 찾을 수 없습니다.'
+            ]);
+        }
+
+        // 동기화 실행
+        $syncResult = $this->syncCompaniesFromInsungApi($mCode, $apiCcCode, $token, $apiIdx, $ccIdx, $db);
+
+        // 동기화 후 거래처 목록 다시 조회 (use_yn = 'Y'만)
+        $builder = $db->table('tbl_company_list c');
+        $builder->select('c.comp_code, c.comp_name, c.cc_idx');
+        $builder->where('c.cc_idx', $ccIdx);
+        $builder->where('c.use_yn', 'Y');
+        $builder->orderBy('c.comp_name', 'ASC');
+        $query = $builder->get();
+        $companyList = $query ? $query->getResultArray() : [];
+
+        return $this->response->setJSON([
+            'success' => $syncResult['status'] === 'success',
+            'message' => $syncResult['message'] ?? '',
+            'companies' => $companyList,
+            'stats' => $syncResult['stats'] ?? null
+        ]);
+    }
+
+    /**
+     * 인성 API에서 거래처 목록을 조회하여 DB에 동기화
+     */
+    private function syncCompaniesFromInsungApi($mCode, $ccCode, $token, $apiIdx, $ccIdx, $db)
+    {
+        // 토큰이 없으면 동기화 스킵
+        if (empty($mCode) || empty($ccCode) || empty($token)) {
+            // log_message('warning', "syncCompaniesFromInsungApi - API 정보 불완전: mcode={$mCode}, cccode={$ccCode}, token=" . (empty($token) ? 'empty' : 'exists'));
+            return [
+                'status' => 'skipped',
+                'message' => 'API 인증 정보가 불완전합니다.'
+            ];
+        }
+
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+
+            // 첫 번째 페이지 호출 (limit=1000)
+            $firstPageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', '', 1, 1000, $apiIdx);
+
+            if (!$firstPageResult) {
+                // log_message('error', "syncCompaniesFromInsungApi - API 호출 실패");
+                return [
+                    'status' => 'api_error',
+                    'message' => 'API 호출에 실패했습니다.'
+                ];
+            }
+
+            // 응답 파싱
+            $code = '';
+            $totalPage = 1;
+            $totalRecord = 0;
+
+            if (is_object($firstPageResult) && isset($firstPageResult->Result)) {
+                if (isset($firstPageResult->Result[0]->result_info[0]->code)) {
+                    $code = $firstPageResult->Result[0]->result_info[0]->code;
+                } elseif (isset($firstPageResult->Result[0]->code)) {
+                    $code = $firstPageResult->Result[0]->code;
+                }
+
+                if (isset($firstPageResult->Result[1])) {
+                    $pageInfoData = $firstPageResult->Result[1];
+                    if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
+                        $pageInfo = $pageInfoData->page_info[0];
+                        $totalPage = (int)($pageInfo->total_page ?? 1);
+                        $totalRecord = (int)($pageInfo->total_record ?? 0);
+                    } elseif (isset($pageInfoData->total_page)) {
+                        $totalPage = (int)$pageInfoData->total_page;
+                        $totalRecord = (int)($pageInfoData->total_record ?? 0);
+                    }
+                }
+            } elseif (is_array($firstPageResult)) {
+                if (isset($firstPageResult[0])) {
+                    if (is_object($firstPageResult[0])) {
+                        if (isset($firstPageResult[0]->result_info[0]->code)) {
+                            $code = $firstPageResult[0]->result_info[0]->code;
+                        } elseif (isset($firstPageResult[0]->code)) {
+                            $code = $firstPageResult[0]->code;
+                        }
+                    } elseif (is_array($firstPageResult[0])) {
+                        $code = $firstPageResult[0]['code'] ?? '';
+                    }
+                }
+
+                if (isset($firstPageResult[1])) {
+                    $pageInfoData = is_object($firstPageResult[1]) ? $firstPageResult[1] : (object)$firstPageResult[1];
+                    if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
+                        $pageInfo = $pageInfoData->page_info[0];
+                        $totalPage = (int)($pageInfo->total_page ?? 1);
+                        $totalRecord = (int)($pageInfo->total_record ?? 0);
+                    } elseif (isset($pageInfoData->total_page)) {
+                        $totalPage = (int)$pageInfoData->total_page;
+                        $totalRecord = (int)($pageInfoData->total_record ?? 0);
+                    }
+                }
+            }
+
+            if ($code !== '1000') {
+                // log_message('error', "syncCompaniesFromInsungApi - API 응답 오류: code={$code}");
+                return [
+                    'status' => 'api_response_error',
+                    'message' => "API 응답 오류 (code: {$code})"
+                ];
+            }
+
+            $syncedCount = 0;
+            $updatedCount = 0;
+            $insertedCount = 0;
+            $deactivatedCount = 0;
+            $apiCompCodes = []; // API에서 받은 모든 comp_code 수집
+
+            // 모든 페이지 순회
+            for ($page = 1; $page <= $totalPage; $page++) {
+                if ($page === 1) {
+                    $pageResult = $firstPageResult;
+                } else {
+                    $pageResult = $insungApiService->getCompanyList($mCode, $ccCode, $token, '', '', $page, 1000, $apiIdx);
+                }
+
+                if (!$pageResult) {
+                    continue;
+                }
+
+                // 아이템 추출
+                $items = $this->extractCompanyItems($pageResult);
+
+                foreach ($items as $item) {
+                    $compNo = $item->comp_no ?? '';
+                    $corpName = $item->corp_name ?? '';
+                    $owner = $item->owner ?? '';
+                    $telNo = $item->tel_no ?? '';
+                    $address = $item->adddress ?? ''; // API 오타 그대로 사용
+
+                    if (empty($compNo)) {
+                        continue;
+                    }
+
+                    // API에서 받은 comp_code 수집
+                    $apiCompCodes[] = $compNo;
+
+                    // 기존 거래처 확인
+                    $compBuilder = $db->table('tbl_company_list');
+                    $compBuilder->where('comp_code', $compNo);
+                    $compBuilder->where('cc_idx', $ccIdx);
+                    $compQuery = $compBuilder->get();
+                    $existingCompany = $compQuery ? $compQuery->getRowArray() : null;
+
+                    $now = date('Y-m-d H:i:s');
+
+                    if ($existingCompany) {
+                        // 업데이트 - use_yn을 Y로 (다시 활성화), updated_at 갱신
+                        $companyData = [
+                            'comp_name' => $corpName,
+                            'comp_owner' => $owner,
+                            'comp_tel' => $telNo,
+                            'comp_addr' => $address,
+                            'use_yn' => 'Y',
+                            'updated_at' => $now
+                        ];
+                        $db->table('tbl_company_list')
+                           ->where('comp_code', $compNo)
+                           ->where('cc_idx', $ccIdx)
+                           ->update($companyData);
+                        $updatedCount++;
+                    } else {
+                        // 신규 삽입 - use_yn Y, created_at 설정
+                        $companyData = [
+                            'cc_idx' => $ccIdx,
+                            'comp_code' => $compNo,
+                            'comp_name' => $corpName,
+                            'comp_owner' => $owner,
+                            'comp_tel' => $telNo,
+                            'comp_addr' => $address,
+                            'use_yn' => 'Y',
+                            'created_at' => $now
+                        ];
+                        $db->table('tbl_company_list')->insert($companyData);
+                        $insertedCount++;
+                    }
+                    $syncedCount++;
+                }
+            }
+
+            // API에 없고 DB에만 있는 거래처는 use_yn = 'N' 처리 (거래 종료)
+            if (!empty($apiCompCodes)) {
+                $deactivateBuilder = $db->table('tbl_company_list');
+                $deactivateBuilder->where('cc_idx', $ccIdx);
+                $deactivateBuilder->where('use_yn', 'Y');
+                $deactivateBuilder->whereNotIn('comp_code', $apiCompCodes);
+                $deactivatedCount = $deactivateBuilder->countAllResults(false);
+
+                // 비활성화 처리
+                $db->table('tbl_company_list')
+                   ->where('cc_idx', $ccIdx)
+                   ->where('use_yn', 'Y')
+                   ->whereNotIn('comp_code', $apiCompCodes)
+                   ->update([
+                       'use_yn' => 'N',
+                       'updated_at' => date('Y-m-d H:i:s')
+                   ]);
+            }
+
+            return [
+                'status' => 'success',
+                'message' => "동기화 완료: 총 {$syncedCount}건",
+                'stats' => [
+                    'total' => $syncedCount,
+                    'inserted' => $insertedCount,
+                    'updated' => $updatedCount,
+                    'deactivated' => $deactivatedCount
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'status' => 'exception',
+                'message' => '동기화 중 오류가 발생했습니다: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * API 응답에서 거래처 아이템 추출
+     */
+    private function extractCompanyItems($pageData)
+    {
+        $items = [];
+
+        if (is_object($pageData) && isset($pageData->Result)) {
+            $resultArray = is_array($pageData->Result) ? $pageData->Result : [$pageData->Result];
+            if (isset($resultArray[2]->items[0]->item)) {
+                $items = is_array($resultArray[2]->items[0]->item) ? $resultArray[2]->items[0]->item : [$resultArray[2]->items[0]->item];
+            }
+        } elseif (is_array($pageData) && isset($pageData[2])) {
+            if (isset($pageData[2]->items[0]->item)) {
+                $items = is_array($pageData[2]->items[0]->item) ? $pageData[2]->items[0]->item : [$pageData[2]->items[0]->item];
+            }
+        }
+
+        return $items;
     }
     
     public function getOrderDetail()
@@ -4371,12 +4680,578 @@ class Admin extends BaseController
 
         } catch (\Exception $e) {
             log_message('error', 'Admin::getSettlementDeptsByUserId - ' . $e->getMessage());
-            
+
             return $this->response->setJSON([
                 'success' => false,
                 'message' => '정산관리부서 조회 중 오류가 발생했습니다.'
             ])->setStatusCode(500);
         }
+    }
+
+    /**
+     * 시스템 설정 페이지 (로그인 제한 설정 등)
+     */
+    public function settings()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+
+        // user_type=1 체크 (최고 관리자만 접근 가능)
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+
+        $systemSettingModel = new \App\Models\SystemSettingModel();
+        $loginSettings = $systemSettingModel->getLoginSettings();
+
+        // 배송사유 목록 조회
+        $deliveryReasonModel = new \App\Models\DeliveryReasonModel();
+        $deliveryReasons = $deliveryReasonModel->getAllReasons();
+
+        $data = [
+            'title' => 'DaumData - 시스템 설정',
+            'content_header' => [
+                'title' => '시스템 설정',
+                'description' => '로그인 보안 및 시스템 설정을 관리합니다.'
+            ],
+            'settings' => $loginSettings,
+            'delivery_reasons' => $deliveryReasons
+        ];
+
+        return view('admin/settings', $data);
+    }
+
+    /**
+     * 시스템 설정 저장
+     */
+    public function saveSettings()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // user_type=1 체크
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        $systemSettingModel = new \App\Models\SystemSettingModel();
+        $userIdx = session()->get('user_idx');
+
+        try {
+            $maxAttempts = (int)$this->request->getPost('login_max_attempts');
+            $lockoutMinutes = (int)$this->request->getPost('login_lockout_minutes');
+            $attemptWindow = (int)$this->request->getPost('login_attempt_window');
+
+            // 유효성 검사
+            if ($maxAttempts < 1 || $maxAttempts > 20) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '최대 시도 횟수는 1~20 사이의 값이어야 합니다.'
+                ]);
+            }
+            if ($lockoutMinutes < 1 || $lockoutMinutes > 60) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '잠금 시간은 1~60분 사이의 값이어야 합니다.'
+                ]);
+            }
+            if ($attemptWindow < 5 || $attemptWindow > 120) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '시도 횟수 체크 시간은 5~120분 사이의 값이어야 합니다.'
+                ]);
+            }
+
+            // 설정 저장
+            $systemSettingModel->setSetting('login_max_attempts', $maxAttempts, 'int', '로그인 최대 시도 횟수', $userIdx);
+            $systemSettingModel->setSetting('login_lockout_minutes', $lockoutMinutes, 'int', '로그인 잠금 시간 (분)', $userIdx);
+            $systemSettingModel->setSetting('login_attempt_window', $attemptWindow, 'int', '로그인 시도 횟수 체크 시간 범위 (분)', $userIdx);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '설정이 저장되었습니다.'
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Admin::saveSettings - ' . $e->getMessage());
+
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '설정 저장 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 로그인 시도 내역 조회 페이지
+     */
+    public function loginAttempts()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+
+        // user_type=1 체크
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+
+        $loginAttemptModel = new \App\Models\LoginAttemptModel();
+
+        // 모바일 여부 확인
+        $userAgent = $this->request->getUserAgent();
+        $isMobile = $userAgent->isMobile();
+
+        // 필터
+        $filters = [
+            'user_id' => $this->request->getGet('user_id'),
+            'ip_address' => $this->request->getGet('ip_address'),
+            'is_success' => $this->request->getGet('is_success'),
+            'date_from' => $this->request->getGet('date_from'),
+            'date_to' => $this->request->getGet('date_to')
+        ];
+
+        $page = (int)($this->request->getGet('page') ?? 1);
+        $perPage = $isMobile ? 15 : 20;
+
+        $result = $loginAttemptModel->getAttemptHistory($filters, $page, $perPage);
+        $statistics = $loginAttemptModel->getStatistics(7);
+
+        $data = [
+            'title' => 'DaumData - 로그인 시도 내역',
+            'content_header' => [
+                'title' => '로그인 시도 내역',
+                'description' => '로그인 성공/실패 내역을 조회합니다.'
+            ],
+            'attempts' => $result['attempts'],
+            'total_count' => $result['total_count'],
+            'pagination' => $result['pagination'],
+            'statistics' => $statistics,
+            'filters' => $filters,
+            'current_page' => $page,
+            'per_page' => $perPage
+        ];
+
+        return view('admin/login-attempts', $data);
+    }
+
+    /**
+     * 배송사유 추가
+     */
+    public function addDeliveryReason()
+    {
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
+        }
+
+        $data = [
+            'reason_code' => $this->request->getPost('reason_code'),
+            'reason_name' => $this->request->getPost('reason_name'),
+            'sort_order' => (int)$this->request->getPost('sort_order') ?: 0,
+            'is_active' => $this->request->getPost('is_active') ?? 'Y'
+        ];
+
+        if (empty($data['reason_code']) || empty($data['reason_name'])) {
+            return $this->response->setJSON(['success' => false, 'message' => '배송사유 코드와 이름은 필수입니다.']);
+        }
+
+        $deliveryReasonModel = new \App\Models\DeliveryReasonModel();
+        $result = $deliveryReasonModel->addReason($data);
+
+        return $this->response->setJSON($result);
+    }
+
+    /**
+     * 배송사유 수정
+     */
+    public function updateDeliveryReason()
+    {
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
+        }
+
+        $id = $this->request->getPost('id');
+        if (empty($id)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ID가 필요합니다.']);
+        }
+
+        $data = [
+            'reason_code' => $this->request->getPost('reason_code'),
+            'reason_name' => $this->request->getPost('reason_name'),
+            'sort_order' => (int)$this->request->getPost('sort_order'),
+            'is_active' => $this->request->getPost('is_active')
+        ];
+
+        $deliveryReasonModel = new \App\Models\DeliveryReasonModel();
+        $result = $deliveryReasonModel->updateReason($id, $data);
+
+        return $this->response->setJSON($result);
+    }
+
+    /**
+     * 배송사유 삭제
+     */
+    public function deleteDeliveryReason()
+    {
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
+        }
+
+        $id = $this->request->getPost('id');
+        if (empty($id)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ID가 필요합니다.']);
+        }
+
+        $deliveryReasonModel = new \App\Models\DeliveryReasonModel();
+        $result = $deliveryReasonModel->deleteReason($id);
+
+        return $this->response->setJSON($result);
+    }
+
+    /**
+     * 배송사유 목록 조회 (AJAX)
+     */
+    public function getDeliveryReasons()
+    {
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        $deliveryReasonModel = new \App\Models\DeliveryReasonModel();
+        $reasons = $deliveryReasonModel->getAllReasons();
+
+        return $this->response->setJSON(['success' => true, 'data' => $reasons]);
+    }
+
+    /**
+     * 거래처별 배송사유 사용 설정 조회
+     */
+    public function getCompanyDeliveryReasonSetting()
+    {
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        $compCode = $this->request->getGet('comp_code');
+        if (empty($compCode)) {
+            return $this->response->setJSON(['success' => false, 'message' => '거래처 코드가 필요합니다.']);
+        }
+
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_company_list');
+        $company = $builder->where('comp_code', $compCode)->get()->getRowArray();
+
+        if (!$company) {
+            return $this->response->setJSON(['success' => false, 'message' => '거래처를 찾을 수 없습니다.']);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'use_delivery_reason' => $company['use_delivery_reason'] ?? 'N'
+        ]);
+    }
+
+    /**
+     * 거래처별 배송사유 사용 설정 업데이트
+     */
+    public function updateCompanyDeliveryReasonSetting()
+    {
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        $userType = session()->get('user_type');
+        if ($userType !== '1' && $userType !== 1) {
+            return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
+        }
+
+        $compCode = $this->request->getPost('comp_code');
+        $useDeliveryReason = $this->request->getPost('use_delivery_reason');
+
+        if (empty($compCode)) {
+            return $this->response->setJSON(['success' => false, 'message' => '거래처 코드가 필요합니다.']);
+        }
+
+        if (!in_array($useDeliveryReason, ['Y', 'N'])) {
+            return $this->response->setJSON(['success' => false, 'message' => '잘못된 설정 값입니다.']);
+        }
+
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_company_list');
+        $result = $builder->where('comp_code', $compCode)->update([
+            'use_delivery_reason' => $useDeliveryReason,
+            'updated_at' => date('Y-m-d H:i:s')
+        ]);
+
+        if ($result) {
+            return $this->response->setJSON(['success' => true, 'message' => '배송사유 사용 설정이 변경되었습니다.']);
+        }
+
+        return $this->response->setJSON(['success' => false, 'message' => '설정 변경에 실패했습니다.']);
+    }
+
+    /**
+     * 인성API연계센터 관리 페이지
+     */
+    public function apiList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+
+        // 권한 체크: daumdata 로그인 user_type=1
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+
+        // 모바일 여부 확인
+        $userAgent = $this->request->getUserAgent();
+        $isMobile = $userAgent->isMobile();
+
+        // 검색 필터
+        $filters = [
+            'api_gbn' => $this->request->getGet('api_gbn') ?? '',
+            'cccode' => $this->request->getGet('cccode') ?? '',
+            'api_name' => $this->request->getGet('api_name') ?? ''
+        ];
+        $page = (int)($this->request->getGet('page') ?? 1);
+        $perPage = $isMobile ? 15 : 20;
+
+        // API 목록 조회
+        $result = $this->insungApiListModel->getApiListWithPagination($filters, $page, $perPage);
+
+        // 토큰 암호화 처리
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        $apiList = $result['api_list'];
+        foreach ($apiList as &$api) {
+            if (!empty($api['token'])) {
+                $api['token_encrypted'] = $encryptionHelper->encrypt($api['token']);
+            } else {
+                $api['token_encrypted'] = '';
+            }
+        }
+        unset($api);
+
+        $data = [
+            'title' => '인성API연계센터 관리',
+            'content_header' => [
+                'title' => '인성API연계센터 관리',
+                'description' => 'API 연계센터 정보를 관리하고 토큰을 갱신합니다.'
+            ],
+            'api_list' => $apiList,
+            'filters' => $filters,
+            'pagination' => $result['pagination'],
+            'total_count' => $result['total_count']
+        ];
+
+        return view('admin/api_list', $data);
+    }
+
+    /**
+     * API 토큰 갱신 (AJAX)
+     */
+    public function refreshApiToken()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // 권한 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        $idx = $this->request->getPost('idx');
+        if (empty($idx)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보가 없습니다.'
+            ]);
+        }
+
+        // API 정보 조회
+        $apiInfo = $this->insungApiListModel->find($idx);
+        if (!$apiInfo) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보를 찾을 수 없습니다.'
+            ]);
+        }
+
+        try {
+            // 인성 API로 토큰 갱신 요청
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $tokenResult = $insungApiService->refreshToken($apiInfo['mcode'], $apiInfo['cccode'], $apiInfo['ckey']);
+
+            if ($tokenResult['success']) {
+                // 토큰 업데이트
+                $this->insungApiListModel->update($idx, [
+                    'token' => $tokenResult['token']
+                ]);
+
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => '토큰이 갱신되었습니다.',
+                    'token' => $tokenResult['token']
+                ]);
+            } else {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $tokenResult['message'] ?? '토큰 갱신에 실패했습니다.'
+                ]);
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Admin::refreshApiToken - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '토큰 갱신 중 오류가 발생했습니다.'
+            ]);
+        }
+    }
+
+    /**
+     * 전체 API 토큰 일괄 갱신 (AJAX)
+     */
+    public function refreshAllApiTokens()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // 권한 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        try {
+            // 메인 API 목록 조회
+            $apiList = $this->insungApiListModel->getMainApiList();
+
+            $successCount = 0;
+            $failCount = 0;
+            $insungApiService = new \App\Libraries\InsungApiService();
+
+            foreach ($apiList as $api) {
+                $tokenResult = $insungApiService->refreshToken($api['mcode'], $api['cccode'], $api['ckey']);
+
+                if ($tokenResult['success']) {
+                    $this->insungApiListModel->update($api['idx'], [
+                        'token' => $tokenResult['token']
+                    ]);
+                    $successCount++;
+                } else {
+                    $failCount++;
+                    log_message('error', "Token refresh failed for idx={$api['idx']}: " . ($tokenResult['message'] ?? 'Unknown error'));
+                }
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => "토큰 갱신 완료: 성공 {$successCount}건, 실패 {$failCount}건"
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Admin::refreshAllApiTokens - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '토큰 일괄 갱신 중 오류가 발생했습니다.'
+            ]);
+        }
+    }
+
+    /**
+     * API 정보 상세 조회 (AJAX)
+     */
+    public function getApiDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $idx = $this->request->getGet('idx');
+        if (empty($idx)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보가 없습니다.'
+            ]);
+        }
+
+        $apiInfo = $this->insungApiListModel->find($idx);
+        if (!$apiInfo) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'API 정보를 찾을 수 없습니다.'
+            ]);
+        }
+
+        // 토큰 암호화 처리
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        if (!empty($apiInfo['token'])) {
+            $apiInfo['token_encrypted'] = $encryptionHelper->encrypt($apiInfo['token']);
+        } else {
+            $apiInfo['token_encrypted'] = '';
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'api' => $apiInfo
+        ]);
     }
 
 }

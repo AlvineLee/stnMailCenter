@@ -146,26 +146,58 @@ class Dashboard extends BaseController
             $settlementDeptsParam = null;
         }
         
+        // 슈퍼관리자(user_type=1) + 메인도메인인 경우 슈퍼관리자 전용 대시보드
+        $isSuperAdminDashboard = ($loginType === 'daumdata' && $userType == '1' && $currentSubdomain === 'default');
+
+        if ($isSuperAdminDashboard) {
+            // 슈퍼관리자 전용 대시보드 데이터
+            $superAdminSummary = $this->dashboardModel->getSuperAdminSummary();
+            $companyCountByCallCenter = $this->dashboardModel->getCompanyCountByCallCenter();
+            $recentlyRegisteredCompanies = $this->dashboardModel->getRecentlyRegisteredCompanies(10);
+            $companiesByUserCount = $this->dashboardModel->getCompaniesByUserCount(10);
+
+            $data = [
+                'title' => 'DaumData - 슈퍼관리자 대시보드',
+                'content_header' => [
+                    'title' => '슈퍼관리자 대시보드',
+                    'description' => '전체 시스템 현황을 한눈에 확인하세요'
+                ],
+                'user' => [
+                    'username' => session()->get('username'),
+                    'real_name' => session()->get('real_name'),
+                    'customer_name' => session()->get('customer_name'),
+                    'user_role' => $userRole
+                ],
+                'summary' => $superAdminSummary,
+                'company_count_by_call_center' => $companyCountByCallCenter,
+                'recently_registered_companies' => $recentlyRegisteredCompanies,
+                'companies_by_user_count' => $companiesByUserCount,
+            ];
+
+            return view('dashboard/super_admin', $data);
+        }
+
+        // 일반 대시보드 (기존 로직)
         // 통계 데이터 조회
         $stats = $this->dashboardModel->getOrderStats($selectedCustomerId, $userRole, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam, $settlementDeptsParam);
-        
+
         // 최근 주문 조회
         $recent_orders = $this->dashboardModel->getRecentOrders($selectedCustomerId, $userRole, 10, $loginType, $userType, $compCode, $ccCode, $compCodeForEnv, $loginUserId, $userDeptParam, $settlementDeptsParam);
-        
+
         // 선택된 고객사 정보
         $selectedCustomer = null;
         if ($selectedCustomerId) {
             $selectedCustomer = $this->dashboardModel->getCustomerById($selectedCustomerId);
         }
-        
+
         // DB 연결 정보 가져오기
         $dbConfig = config('Database');
-        
+
         // 환경 변수에서 직접 읽기 (디버깅용)
         $envHostname = getenv('DB_HOSTNAME');
         $envDatabase = getenv('DB_DATABASE');
         $envUsername = getenv('DB_USERNAME');
-        
+
         $dbInfo = [
             'hostname' => $dbConfig->default['hostname'] ?? 'unknown',
             'database' => $dbConfig->default['database'] ?? 'unknown',
@@ -177,7 +209,7 @@ class Dashboard extends BaseController
                 'env_file_exists' => file_exists(ROOTPATH . 'env') ? 'yes (env)' : (file_exists(ROOTPATH . '.env') ? 'yes (.env)' : 'no')
             ]
         ];
-        
+
         $data = [
             'title' => 'DaumData - 대시보드',
             'content_header' => [
@@ -197,7 +229,7 @@ class Dashboard extends BaseController
             'selected_customer' => $selectedCustomer,
             'db_info' => $dbInfo
         ];
-        
+
         return view('dashboard/index', $data);
     }
     

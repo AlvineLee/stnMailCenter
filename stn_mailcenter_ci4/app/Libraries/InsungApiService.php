@@ -894,7 +894,13 @@ class InsungApiService
         }
         
         // kind 변환 (서비스 타입에 따라 숫자로 변환)
-        $kind = $this->convertKind($orderData['service_type'] ?? '', $orderData['delivery_method'] ?? '');
+        // orderData['kind']가 이미 숫자 값으로 설정되어 있으면 그대로 사용 (재접수 시)
+        if (!empty($orderData['kind']) && is_numeric($orderData['kind'])) {
+            $kind = (string)$orderData['kind'];
+            log_message('debug', "Insung::registerOrder - Using existing kind value: {$kind}");
+        } else {
+            $kind = $this->convertKind($orderData['service_type'] ?? '', $orderData['delivery_method'] ?? '');
+        }
         
         // kind_etc 변환 (플렉스일 때 배송수단 선택값)
         $kindEtc = '';
@@ -917,9 +923,8 @@ class InsungApiService
         $deliveryTypeForSfast = $orderData['deliveryType'] ?? $orderData['delivery_type'] ?? $orderData['sfast'] ?? '';
         $sfast = $this->convertSfast($deliveryTypeForSfast, $orderData['urgency_level'] ?? '', $orderData['is_overload'] ?? false);
         
-        // state 변환 (처리상태: 10:접수, 20:대기, 50:문의)
-        // PHP 버전에서는 state=& (빈 값)으로 보내지만, 주문 접수 시에는 10(접수)로 설정하는 것이 명확함
-        $state = $orderData['state'] ?? '10'; // 주문 접수 시 기본값 10(접수), 필요시 orderData에서 받아옴
+        // state는 빈 값으로 전송 (인성관제 시스템에서 자동 관리)
+        $state = '';
         
         // 금액 계산 (인성 API는 항상 거리 기반으로 계산)
         // 인성 API는 거리 기반 요금제이므로 좌표가 필수입니다
@@ -943,8 +948,12 @@ class InsungApiService
         // 인성 API 실패 시 tbl_pay_info 테이블에서 조회
         log_message('debug', "Insung::registerOrder - Calculating price by distance. startLon={$startLon}, startLat={$startLat}, destLon={$destLon}, destLat={$destLat}, kind={$kind}, car_kind=" . ($orderData['car_kind'] ?? ''));
         $calculatedPrice = $this->calculatePriceByDistance($mcode, $cccode, $token, $userId, $startLon, $startLat, $destLon, $destLat, $kind, $apiIdx, $orderDataForPrice);
-        
-        if ($calculatedPrice <= 0) {
+
+        // 출발지와 도착지가 동일한 경우 (-1 반환) price=0으로 설정
+        if ($calculatedPrice == -1) {
+            log_message('info', "Insung::registerOrder - Same origin and destination. Setting price=0");
+            $calculatedPrice = 0;
+        } elseif ($calculatedPrice <= 0) {
             log_message('error', "Insung::registerOrder - Price calculation returned 0 or failed. Both Insung API and tbl_pay_info table failed to provide pricing.");
             return [
                 'success' => false,
@@ -952,7 +961,7 @@ class InsungApiService
                 'message' => '거리 기반 요금 계산에 실패했습니다. 거리 또는 차종 정보를 확인해주세요.'
             ];
         }
-        
+
         $price = (string)$calculatedPrice;
         // log_message('info', "Insung::registerOrder - Price calculated: {$price}");
         
@@ -1159,18 +1168,40 @@ class InsungApiService
      */
     private function convertKind($serviceType, $deliveryMethod)
     {
-        // delivery_method 우선 확인
-        if ($deliveryMethod === 'motorcycle' || $serviceType === 'quick-motorcycle') {
-            return '1'; // 오토
-        } elseif ($serviceType === 'quick-flex') {
-            return '7'; // 플렉스
-        } elseif ($deliveryMethod === 'vehicle' || $serviceType === 'quick-vehicle') {
-            return '3'; // 트럭
-        } elseif ($serviceType === 'quick-moving') {
-            return '3'; // 트럭
+        // 인성 API kind 값: 1=오토바이, 2=다마스, 3=트럭, 4=밴, 5=라보, 6=지하철, 7=플렉스
+        log_message('debug', "convertKind called - serviceType: {$serviceType}, deliveryMethod: {$deliveryMethod}");
+
+        // delivery_method 우선 확인 (폼에서 선택한 배송수단)
+        switch ($deliveryMethod) {
+            case 'motorcycle':
+                return '1'; // 오토바이
+            case 'damas':
+                return '2'; // 다마스
+            case 'truck':
+                return '3'; // 트럭
+            case 'van':
+                return '4'; // 밴
+            case 'labo':
+                return '5'; // 라보
+            case 'subway':
+                return '6'; // 지하철
+            case 'flex':
+                return '7'; // 플렉스
         }
-        
-        // 기본값: 오토
+
+        // delivery_method가 없거나 매칭되지 않으면 service_type으로 기본값 결정
+        switch ($serviceType) {
+            case 'quick-motorcycle':
+                return '1'; // 오토바이
+            case 'quick-vehicle':
+                return '3'; // 트럭 (차량 서비스 기본값)
+            case 'quick-moving':
+                return '2'; // 다마스 (이사짐 서비스 기본값 - 가장 많이 사용)
+            case 'quick-flex':
+                return '7'; // 플렉스
+        }
+
+        // 기본값: 오토바이
         return '1';
     }
 
@@ -2149,6 +2180,13 @@ class InsungApiService
      */
     private function calculatePriceByDistance($mcode, $cccode, $token, $userId, $startLon, $startLat, $destLon, $destLat, $kind, $apiIdx = null, $orderData = [])
     {
+        // 출발지와 도착지가 동일한 경우 거리 0, 금액 0으로 처리
+        // -1을 반환하여 registerOrder에서 출도착지 동일임을 인식
+        if ($startLon == $destLon && $startLat == $destLat) {
+            log_message('info', "Insung::calculatePriceByDistance - Same origin and destination detected. Returning -1 (same location marker)");
+            return -1; // 출도착지 동일 마커 (-1)
+        }
+
         // 1. 거리 조회 (/api/axis/navigation/)
         $navUrl = $this->baseUrl . "/api/axis/navigation/";
         $navParams = [

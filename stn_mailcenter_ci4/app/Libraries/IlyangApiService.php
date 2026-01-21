@@ -186,14 +186,14 @@ class IlyangApiService
             'ilyGodPrice' => $orderData['item_price'] ?? '0',
             'ilyDlvRmks' => $orderData['delivery_notes'] ?? '',
             'ilySndName' => $orderData['departure_company_name'] ?? '',
-            'ilySndManName' => $orderData['departure_manager'] ?? '',
+            'ilySndManName' => $this->sanitizeManagerName($orderData['departure_manager'] ?? ''),
             'ilySndTel1' => $orderData['departure_contact'] ?? '',
             'ilySndTel2' => $orderData['departure_phone2'] ?? '',
             'ilySndZip' => $this->extractZipCode($orderData['departure_address'] ?? ''),
             'ilySndAddr' => $orderData['departure_address'] ?? '',
             'ilySndCenter' => $this->getCenterCode($orderData['departure_address'] ?? ''),
             'ilyRcvName' => $orderData['destination_company_name'] ?? '',
-            'ilyRcvManName' => $orderData['destination_manager'] ?? '',
+            'ilyRcvManName' => $this->sanitizeManagerName($orderData['destination_manager'] ?? ''),
             'ilyRcvTel1' => $orderData['destination_contact'] ?? '',
             'ilyRcvTel2' => $orderData['destination_phone2'] ?? '',
             'ilyRcvZip' => $this->extractZipCode($orderData['destination_address'] ?? ''),
@@ -603,5 +603,67 @@ class IlyangApiService
         ];
 
         return $waybillData;
+    }
+
+    /**
+     * 일양 API 담당자명 필드 정제
+     * - 언더스코어(_) 등 특수문자를 공백으로 대체
+     * - 최대 20바이트로 제한 (일양 API 스펙: String 20)
+     * - 한글은 2바이트, 영문/숫자/공백은 1바이트로 계산
+     *
+     * @param string $name 담당자명
+     * @return string 정제된 담당자명
+     */
+    protected function sanitizeManagerName($name)
+    {
+        if (empty($name)) {
+            return '';
+        }
+
+        // 언더스코어를 공백으로 대체
+        $name = str_replace('_', ' ', $name);
+
+        // 기타 특수문자 제거 (한글, 영문, 숫자, 공백만 허용)
+        $name = preg_replace('/[^\p{L}\p{N}\s]/u', '', $name);
+
+        // 연속된 공백을 하나로
+        $name = preg_replace('/\s+/', ' ', $name);
+
+        // 앞뒤 공백 제거
+        $name = trim($name);
+
+        // 최대 20바이트로 제한 (한글 2바이트, 영문/숫자/공백 1바이트)
+        $name = $this->truncateToBytes($name, 20);
+
+        return $name;
+    }
+
+    /**
+     * 문자열을 바이트 수 기준으로 자르기 (EUC-KR 기준: 한글 2바이트)
+     *
+     * @param string $str 원본 문자열 (UTF-8)
+     * @param int $maxBytes 최대 바이트 수
+     * @return string 잘린 문자열
+     */
+    protected function truncateToBytes($str, $maxBytes)
+    {
+        $result = '';
+        $byteCount = 0;
+        $len = mb_strlen($str, 'UTF-8');
+
+        for ($i = 0; $i < $len; $i++) {
+            $char = mb_substr($str, $i, 1, 'UTF-8');
+            // 한글 및 한자 등 동아시아 문자는 2바이트, 그 외 1바이트
+            $charBytes = (preg_match('/[\x{AC00}-\x{D7AF}\x{4E00}-\x{9FFF}\x{3400}-\x{4DBF}]/u', $char)) ? 2 : 1;
+
+            if ($byteCount + $charBytes > $maxBytes) {
+                break;
+            }
+
+            $result .= $char;
+            $byteCount += $charBytes;
+        }
+
+        return $result;
     }
 }

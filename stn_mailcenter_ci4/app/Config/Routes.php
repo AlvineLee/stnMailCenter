@@ -92,6 +92,7 @@ $routes->group('api-test', function($routes) {
 $routes->group('delivery', function($routes) {
     $routes->get('list', 'Delivery::list');
     $routes->get('getOrderDetail', 'Delivery::getOrderDetail');
+    $routes->get('getIlyangOrderDetail', 'Delivery::getIlyangOrderDetail');
     $routes->post('updateStatus', 'Delivery::updateStatus');
     $routes->get('printWaybill', 'Delivery::printWaybill');
     $routes->post('syncInsungOrders', 'Delivery::syncInsungOrders');
@@ -104,7 +105,11 @@ $routes->group('history', function($routes) {
     $routes->get('list', 'History::list');
     $routes->post('saveColumnOrder', 'History::saveColumnOrder');
     $routes->get('getOrderDetail', 'History::getOrderDetail');
+    $routes->get('getIlyangOrderDetail', 'History::getIlyangOrderDetail');
     $routes->get('getOrderSign', 'History::getOrderSign');
+    $routes->get('getCancelledOrderDetail', 'History::getCancelledOrderDetail');
+    $routes->post('resubmitOrder', 'History::resubmitOrder');
+    $routes->post('softDeleteOrder', 'History::softDeleteOrder');
 });
 
 // 즐겨찾기 관련 라우트
@@ -196,6 +201,18 @@ $routes->group('admin', function($routes) {
     $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');
     $routes->post('deactivateAllServices', 'Admin::deactivateAllServices');
     $routes->post('updateServiceSortOrder', 'Admin::updateServiceSortOrder');
+    // 시스템 설정 관련
+    $routes->get('settings', 'Admin::settings');
+    $routes->post('save-settings', 'Admin::saveSettings');
+    $routes->get('login-attempts', 'Admin::loginAttempts');
+    // 배송사유 관리
+    $routes->post('addDeliveryReason', 'Admin::addDeliveryReason');
+    $routes->post('updateDeliveryReason', 'Admin::updateDeliveryReason');
+    $routes->post('deleteDeliveryReason', 'Admin::deleteDeliveryReason');
+    $routes->get('getDeliveryReasons', 'Admin::getDeliveryReasons');
+    // 거래처별 배송사유 설정
+    $routes->get('getCompanyDeliveryReasonSetting', 'Admin::getCompanyDeliveryReasonSetting');
+    $routes->post('updateCompanyDeliveryReasonSetting', 'Admin::updateCompanyDeliveryReasonSetting');
 });
 
 // 운송사 관리 관련 라우트
@@ -271,12 +288,18 @@ $routes->group('insung', function($routes) {
     $routes->post('getInsungMemberList', 'Insung::getInsungMemberList');
     $routes->post('useInsungMember', 'Insung::useInsungMember');
     $routes->post('batchUseInsungMembers', 'Insung::batchUseInsungMembers');
+    // 콜센터 관리 API
+    $routes->post('addCcList', 'Insung::addCcList');
+    $routes->post('updateCcList', 'Insung::updateCcList');
+    $routes->get('getCcDetail', 'Insung::getCcDetail');
+    $routes->get('getApiListForSelect', 'Insung::getApiListForSelect');
 });
 
 // 관리자 관련 라우트
 $routes->group('admin', function($routes) {
     $routes->get('order-type', 'Admin::orderType');
     $routes->get('getCompaniesByCcForOrderType', 'Admin::getCompaniesByCcForOrderType');
+    $routes->get('syncCompaniesForOrderType', 'Admin::syncCompaniesForOrderType');
     $routes->get('pricing', 'Admin::pricing');
     $routes->get('notification', 'Admin::notification');
     $routes->get('order-list', 'Admin::orderList');
@@ -299,6 +322,11 @@ $routes->group('admin', function($routes) {
     $routes->post('savePricing', 'Admin::savePricing');
     $routes->post('updateServicePermission', 'Admin::updateServicePermission');
     $routes->post('createServicePermission', 'Admin::createServicePermission');
+    // 인성API연계센터 관리
+    $routes->get('api-list', 'Admin::apiList');
+    $routes->get('getApiDetail', 'Admin::getApiDetail');
+    $routes->post('refreshApiToken', 'Admin::refreshApiToken');
+    $routes->post('refreshAllApiTokens', 'Admin::refreshAllApiTokens');
 });
 
 // 테스트 라우트

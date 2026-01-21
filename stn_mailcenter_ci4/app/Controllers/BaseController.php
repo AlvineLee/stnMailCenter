@@ -283,4 +283,106 @@ abstract class BaseController extends Controller
         
         return $filters;
     }
+
+    /**
+     * 사이드바에 필요한 데이터를 준비하여 반환
+     * 모든 컨트롤러에서 뷰 렌더링 전에 호출하여 사용
+     *
+     * @return array 사이드바 데이터
+     */
+    protected function prepareSidebarData()
+    {
+        $sidebarData = [
+            'logoPath' => null,
+            'logoAlt' => 'DaumData',
+            'logoText' => null,
+            'logoThemeColor' => '#667eea',
+            'isSubdomain' => false,
+            'currentSubdomain' => 'default',
+            'loginType' => session()->get('login_type'),
+            'userRole' => session()->get('user_role'),
+            'userType' => session()->get('user_type'),
+            'userClass' => session()->get('user_class'),
+            'isLoggedIn' => session()->get('is_logged_in'),
+            'apiName' => session()->get('api_name'),
+            'ccCompName' => session()->get('cc_comp_name'),
+            'realName' => session()->get('real_name') ?? session()->get('user_name') ?? session()->get('username') ?? 'Guest',
+        ];
+
+        // 서브도메인 설정 가져오기
+        $subdomainConfig = config('Subdomain');
+        $subdomainInfo = $subdomainConfig->getCurrentConfig();
+        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+        $isSubdomain = ($currentSubdomain !== 'default');
+
+        $sidebarData['isSubdomain'] = $isSubdomain;
+        $sidebarData['currentSubdomain'] = $currentSubdomain;
+
+        // 로고 경로 결정
+        if ($isSubdomain && !empty($subdomainInfo['logo_path'])) {
+            $sidebarData['logoPath'] = base_url($subdomainInfo['logo_path']);
+            $sidebarData['logoAlt'] = $subdomainInfo['name'];
+        } elseif ($isSubdomain) {
+            $sidebarData['logoText'] = $subdomainInfo['logo_text'];
+            $sidebarData['logoAlt'] = $subdomainInfo['name'];
+            $sidebarData['logoThemeColor'] = $subdomainInfo['theme_color'];
+        } else {
+            // 기본 도메인인 경우: 고객사 로고 조회
+            $loginType = session()->get('login_type');
+
+            if ($loginType === 'daumdata') {
+                $companyLogoPathFromSession = session()->get('company_logo_path');
+                if ($companyLogoPathFromSession) {
+                    $sidebarData['logoPath'] = base_url($companyLogoPathFromSession);
+                }
+            } else {
+                // STN 로그인: 본점 로고 조회
+                $customerId = session()->get('customer_id');
+                if ($customerId) {
+                    $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
+                    $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
+                    if ($headOfficeId) {
+                        $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
+                        if ($headOffice && !empty($headOffice['logo_path'])) {
+                            $sidebarData['logoPath'] = base_url($headOffice['logo_path']);
+                        }
+                    }
+                }
+            }
+        }
+
+        // user_class가 세션에 없으면 DB에서 조회 (daumdata 로그인인 경우)
+        if (empty($sidebarData['userClass']) && $sidebarData['loginType'] === 'daumdata') {
+            $userId = session()->get('user_id');
+            if ($userId) {
+                $db = \Config\Database::connect();
+                $userBuilder = $db->table('tbl_users_list');
+                $userBuilder->select('user_class');
+                $userBuilder->where('user_id', $userId);
+                $userQuery = $userBuilder->get();
+                if ($userQuery !== false) {
+                    $userResult = $userQuery->getRowArray();
+                    if ($userResult && isset($userResult['user_class'])) {
+                        $sidebarData['userClass'] = $userResult['user_class'];
+                    }
+                }
+            }
+        }
+
+        // 슈퍼어드민 여부 판단
+        $isSuperAdmin = false;
+        if ($sidebarData['loginType'] === 'daumdata' && $sidebarData['userType'] == '1') {
+            $isSuperAdmin = true;
+        } elseif (!$sidebarData['loginType'] || $sidebarData['loginType'] === 'stn') {
+            if ($sidebarData['userRole'] === 'super_admin') {
+                $isSuperAdmin = true;
+            }
+        }
+        $sidebarData['isSuperAdmin'] = $isSuperAdmin;
+
+        // 슈퍼어드민이 메인도메인 접근 시 주문접수/배송조회/이용내역상세조회 숨김
+        $sidebarData['showOrderMenus'] = !($isSuperAdmin && $currentSubdomain === 'default');
+
+        return $sidebarData;
+    }
 }

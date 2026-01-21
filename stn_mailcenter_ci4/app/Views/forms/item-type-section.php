@@ -310,11 +310,12 @@ function updateDeliveryInstructionsWithItemTypes() {
     
     // 기존 전달사항에서 물품종류 관련 텍스트 제거
     let currentValue = deliveryContentField.value || '';
-    // 물품종류 관련 패턴 제거 (박스, 행낭, 쇼핑백)
-    currentValue = currentValue.replace(/박스\s+[^/]*\s*\d+개\s*(\(과적\))?/g, '').trim();
-    currentValue = currentValue.replace(/행낭\s+[^/]*\s*\d+개\s*(\(과적\))?/g, '').trim();
-    currentValue = currentValue.replace(/쇼핑백\s+[^/]*\s*\d+개/g, '').trim();
-    currentValue = currentValue.replace(/\s*\/\s*\/\s*/g, ' / ').trim();
+    // 물품종류 관련 패턴 제거 (소/중/대 + 박스/행낭/쇼핑백/쇼핑팩)
+    currentValue = currentValue.replace(/[소중대]박스\s*\d+개\s*(\(과적\))?/g, '').trim();
+    currentValue = currentValue.replace(/[소중대]행낭\s*\d+개\s*(\(과적\))?/g, '').trim();
+    currentValue = currentValue.replace(/[소중대]쇼핑[백팩]\s*\d+개/g, '').trim();
+    // 연속된 슬래시와 공백 정리
+    currentValue = currentValue.replace(/(\s*\/\s*)+/g, ' / ').trim();
     currentValue = currentValue.replace(/^\s*\/\s*|\s*\/\s*$/g, '').trim();
     
     // 새로운 물품종류 정보 추가

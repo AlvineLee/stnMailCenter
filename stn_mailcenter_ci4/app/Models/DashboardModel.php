@@ -419,6 +419,7 @@ class DashboardModel extends Model
                 o.departure_company_name,
                 o.destination_company_name,
                 o.customer_duty,
+                o.is_del,
                 st.service_name as service,
                 COALESCE(ch.customer_name, cl_ch.comp_name) as customer,
                 COALESCE(u.real_name, u_list.user_name) as user_name,
@@ -445,12 +446,13 @@ class DashboardModel extends Model
                 o.created_at,
                 o.total_amount,
                 o.customer_duty,
+                o.is_del,
                 st.service_name as service,
                 ch.customer_name as customer,
                 u.real_name as user_name,
                 DATE_FORMAT(o.created_at, "%Y-%m-%d %H:%i") as date
             ');
-            
+
             $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
             $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
             $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
@@ -647,6 +649,212 @@ class DashboardModel extends Model
         return $builder->get()->getResultArray();
     }
     
+    /**
+     * 슈퍼관리자용: 전체 현황 요약 통계 (통계 테이블에서 조회)
+     * - 총 콜센터(퀵사) 수
+     * - 총 거래처 수 (활성/비활성)
+     * - 총 사용자 수
+     *
+     * @param string|null $statDate 조회할 날짜 (기본: 오늘)
+     */
+    public function getSuperAdminSummary($statDate = null)
+    {
+        $statDate = $statDate ?? date('Y-m-d');
+
+        // 통계 테이블에서 조회
+        $result = $this->db->table('tbl_dashboard_stats_summary')
+            ->where('stat_date', $statDate)
+            ->get()
+            ->getRowArray();
+
+        // 통계가 없으면 실시간 집계 (폴백)
+        if (!$result) {
+            return $this->getSuperAdminSummaryRealtime();
+        }
+
+        return [
+            'total_call_centers' => $result['total_call_centers'] ?? 0,
+            'total_companies' => $result['total_companies'] ?? 0,
+            'active_companies' => $result['active_companies'] ?? 0,
+            'inactive_companies' => $result['inactive_companies'] ?? 0,
+            'total_users' => $result['total_users'] ?? 0,
+            'stat_date' => $result['stat_date'] ?? $statDate,
+        ];
+    }
+
+    /**
+     * 슈퍼관리자용: 전체 현황 요약 통계 (실시간 집계 - 폴백용)
+     */
+    public function getSuperAdminSummaryRealtime()
+    {
+        $totalCallCenters = $this->db->table('tbl_cc_list')->countAllResults();
+        $activeCompanies = $this->db->table('tbl_company_list')->where('use_yn', 'Y')->countAllResults();
+        $inactiveCompanies = $this->db->table('tbl_company_list')->where('use_yn !=', 'Y')->countAllResults();
+        $totalCompanies = $this->db->table('tbl_company_list')->countAllResults();
+        $totalUsers = $this->db->table('tbl_users_list')->countAllResults();
+
+        return [
+            'total_call_centers' => $totalCallCenters,
+            'total_companies' => $totalCompanies,
+            'active_companies' => $activeCompanies,
+            'inactive_companies' => $inactiveCompanies,
+            'total_users' => $totalUsers,
+            'stat_date' => date('Y-m-d'),
+            'is_realtime' => true,
+        ];
+    }
+
+    /**
+     * 슈퍼관리자용: 콜센터별 거래처 수 현황 (통계 테이블에서 조회)
+     *
+     * @param string|null $statDate 조회할 날짜 (기본: 오늘)
+     */
+    public function getCompanyCountByCallCenter($statDate = null)
+    {
+        $statDate = $statDate ?? date('Y-m-d');
+
+        // 통계 테이블에서 조회
+        $results = $this->db->table('tbl_dashboard_stats_by_cc')
+            ->where('stat_date', $statDate)
+            ->orderBy('company_count', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        // 통계가 없으면 실시간 집계 (폴백)
+        if (empty($results)) {
+            return $this->getCompanyCountByCallCenterRealtime();
+        }
+
+        return $results;
+    }
+
+    /**
+     * 슈퍼관리자용: 콜센터별 거래처 수 현황 (실시간 집계 - 폴백용)
+     */
+    public function getCompanyCountByCallCenterRealtime()
+    {
+        $builder = $this->db->table('tbl_cc_list cc');
+        $builder->select('
+            cc.idx,
+            cc.cc_code,
+            cc.cc_name,
+            COUNT(c.comp_idx) as company_count,
+            SUM(CASE WHEN c.use_yn = "Y" THEN 1 ELSE 0 END) as active_count,
+            SUM(CASE WHEN c.use_yn != "Y" OR c.use_yn IS NULL THEN 1 ELSE 0 END) as inactive_count
+        ');
+        $builder->join('tbl_company_list c', 'c.cc_idx = cc.idx', 'left');
+        $builder->groupBy('cc.idx, cc.cc_code, cc.cc_name');
+        $builder->orderBy('company_count', 'DESC');
+
+        return $builder->get()->getResultArray();
+    }
+
+    /**
+     * 슈퍼관리자용: 신규 등록 거래처 TOP N (통계 테이블에서 조회)
+     *
+     * @param int $limit 조회할 개수
+     * @param string|null $statDate 조회할 날짜 (기본: 오늘)
+     */
+    public function getRecentlyRegisteredCompanies($limit = 10, $statDate = null)
+    {
+        $statDate = $statDate ?? date('Y-m-d');
+
+        // 통계 테이블에서 조회
+        $results = $this->db->table('tbl_dashboard_stats_recent_companies')
+            ->where('stat_date', $statDate)
+            ->orderBy('rank_order', 'ASC')
+            ->limit($limit)
+            ->get()
+            ->getResultArray();
+
+        // 통계가 없으면 실시간 집계 (폴백)
+        if (empty($results)) {
+            return $this->getRecentlyRegisteredCompaniesRealtime($limit);
+        }
+
+        // 컬럼명 매핑 (company_created_at -> created_at)
+        foreach ($results as &$row) {
+            $row['created_at'] = $row['company_created_at'] ?? null;
+        }
+
+        return $results;
+    }
+
+    /**
+     * 슈퍼관리자용: 신규 등록 거래처 TOP N (실시간 집계 - 폴백용)
+     */
+    public function getRecentlyRegisteredCompaniesRealtime($limit = 10)
+    {
+        $builder = $this->db->table('tbl_company_list c');
+        $builder->select('
+            c.comp_idx,
+            c.comp_code,
+            c.comp_name,
+            c.comp_owner,
+            c.use_yn,
+            c.created_at,
+            cc.cc_code,
+            cc.cc_name
+        ');
+        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
+        $builder->where('c.created_at IS NOT NULL');
+        $builder->orderBy('c.created_at', 'DESC');
+        $builder->limit($limit);
+
+        return $builder->get()->getResultArray();
+    }
+
+    /**
+     * 슈퍼관리자용: 사용자 수 많은 거래처 TOP N (통계 테이블에서 조회)
+     *
+     * @param int $limit 조회할 개수
+     * @param string|null $statDate 조회할 날짜 (기본: 오늘)
+     */
+    public function getCompaniesByUserCount($limit = 10, $statDate = null)
+    {
+        $statDate = $statDate ?? date('Y-m-d');
+
+        // 통계 테이블에서 조회
+        $results = $this->db->table('tbl_dashboard_stats_top_companies')
+            ->where('stat_date', $statDate)
+            ->orderBy('rank_order', 'ASC')
+            ->limit($limit)
+            ->get()
+            ->getResultArray();
+
+        // 통계가 없으면 실시간 집계 (폴백)
+        if (empty($results)) {
+            return $this->getCompaniesByUserCountRealtime($limit);
+        }
+
+        return $results;
+    }
+
+    /**
+     * 슈퍼관리자용: 사용자 수 많은 거래처 TOP N (실시간 집계 - 폴백용)
+     */
+    public function getCompaniesByUserCountRealtime($limit = 10)
+    {
+        $builder = $this->db->table('tbl_company_list c');
+        $builder->select('
+            c.comp_idx,
+            c.comp_code,
+            c.comp_name,
+            c.use_yn,
+            cc.cc_code,
+            cc.cc_name,
+            COUNT(u.idx) as user_count
+        ');
+        $builder->join('tbl_cc_list cc', 'c.cc_idx = cc.idx', 'left');
+        $builder->join('tbl_users_list u', 'u.user_company = c.comp_code', 'left');
+        $builder->groupBy('c.comp_idx, c.comp_code, c.comp_name, c.use_yn, cc.cc_code, cc.cc_name');
+        $builder->having('user_count >', 0);
+        $builder->orderBy('user_count', 'DESC');
+        $builder->limit($limit);
+
+        return $builder->get()->getResultArray();
+    }
+
     /**
      * 통계 조회 시 필터링 적용 (공통 메서드)
      */

@@ -325,8 +325,9 @@ class History extends BaseController
                     $insungOrderNumberForMap = $order['order_number'];
                 }
                 
-                // 주문번호가 있으면 맵 표시
-                if (!empty($insungOrderNumberForMap)) {
+                // 주문번호가 있고 취소 상태가 아니면 맵 표시
+                // 취소 상태(state='40' 또는 '취소')는 취소 주문 팝업을 띄워야 함
+                if (!empty($insungOrderNumberForMap) && !in_array($stateCode, ['40', '취소'])) {
                     $showMapOnClick = true;
                 }
             } else {
@@ -365,13 +366,38 @@ class History extends BaseController
             $formattedOrder['is_riding'] = $isRiding;
             $formattedOrder['insung_order_number_for_map'] = $insungOrderNumberForMap;
             
-            // 주문번호 표시용 (인성 API 주문의 경우 insung_order_number 우선)
-            if (($order['order_system'] ?? '') === 'insung' && !empty($order['insung_order_number'])) {
+            // 주문번호 표시용
+            $orderSystem = $order['order_system'] ?? '';
+            $orderNumber = $order['order_number'] ?? '';
+
+            // order_system이 명시되지 않았지만 order_number가 ILYANG-으로 시작하면 일양 주문
+            $isIlyangByOrderNumber = str_starts_with($orderNumber, 'ILYANG-');
+            $isIlyang = $orderSystem === 'ilyang' || $isIlyangByOrderNumber;
+            $isInsung = $orderSystem === 'insung' && !$isIlyangByOrderNumber;
+
+            if ($isInsung && !empty($order['insung_order_number'])) {
+                // 인성 주문: insung_order_number 우선
                 $formattedOrder['display_order_number'] = $order['insung_order_number'];
+            } elseif ($isIlyang) {
+                // 일양 주문: ily_awb_no(운송장번호) 또는 order_number 사용
+                $formattedOrder['display_order_number'] = $order['ily_awb_no'] ?? $order['ily_cus_ordno'] ?? $orderNumber ?: '-';
             } else {
-                $formattedOrder['display_order_number'] = $order['order_number'] ?? '-';
+                $formattedOrder['display_order_number'] = $orderNumber ?: '-';
             }
-            
+
+            // 주문번호 클릭 시 상세 팝업 표시 플래그
+            $displayOrderNumber = $formattedOrder['display_order_number'];
+            $hasDisplayOrderNumber = !empty($displayOrderNumber) && $displayOrderNumber !== '-';
+            $formattedOrder['show_insung_order_click'] = $hasDisplayOrderNumber && $isInsung;
+            $formattedOrder['show_ilyang_order_click'] = $hasDisplayOrderNumber && $isIlyang;
+
+            // Sign 버튼 표시 플래그 (인성 완료 주문만)
+            $isCompleted = false;
+            if ($isInsung) {
+                $isCompleted = ($order['state'] ?? '') === '30' || ($formattedOrder['status_label'] ?? '') === '완료';
+            }
+            $formattedOrder['show_sign_button'] = $isCompleted && $hasDisplayOrderNumber && $isInsung;
+
             // 왕복/편도 변환
             $deliveryRoute = $order['quick_delivery_route'] ?? '';
             $formattedOrder['delivery_route_label'] = ($deliveryRoute === 'round_trip' ? '왕복' : ($deliveryRoute === 'one_way' ? '편도' : '-'));
@@ -1305,6 +1331,445 @@ class History extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => '주문 사인 정보 조회 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 취소된 주문 상세 조회 (tbl_orders + tbl_orders_insung)
+     */
+    public function getCancelledOrderDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $orderId = $this->request->getGet('order_id');
+
+        if (empty($orderId)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+
+            // tbl_orders 조회 (service_type 정보 포함)
+            $orderBuilder = $db->table('tbl_orders o');
+            $orderBuilder->select('o.*, oi.*, st.service_code, st.service_name as service_type_name');
+            $orderBuilder->join('tbl_orders_insung oi', 'o.id = oi.order_id', 'left');
+            $orderBuilder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+            $orderBuilder->where('o.id', $orderId);
+            $orderQuery = $orderBuilder->get();
+
+            if ($orderQuery === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+            $orderData = $orderQuery->getRowArray();
+
+            if (!$orderData) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 전화번호 복호화
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['contact', 'departure_contact', 'destination_contact',
+                           'ins_departure_tel_number', 'ins_destination_tel_number',
+                           'ins_customer_tel_number', 'ins_rider_tel_number'];
+            $orderData = $encryptionHelper->decryptFields($orderData, $phoneFields);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $orderData
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', "History::getCancelledOrderDetail - Error: " . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 정보 조회 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 취소된 주문 다시 접수 (인성 API)
+     */
+    public function resubmitOrder()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $orderId = $this->request->getPost('order_id');
+
+        if (empty($orderId)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+
+            // 주문 정보 조회 (tbl_orders + tbl_orders_insung)
+            $orderBuilder = $db->table('tbl_orders o');
+            $orderBuilder->select('o.*, oi.*');
+            $orderBuilder->join('tbl_orders_insung oi', 'o.id = oi.order_id', 'left');
+            $orderBuilder->where('o.id', $orderId);
+            $orderQuery = $orderBuilder->get();
+
+            if ($orderQuery === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+            $orderData = $orderQuery->getRowArray();
+
+            if (!$orderData) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 취소된 주문인지 확인 (state='40' 또는 '취소' 모두 지원)
+            $state = $orderData['state'] ?? '';
+            $isCancelled = ($state === '40' || $state === '취소');
+            if (!$isCancelled) {
+                log_message('debug', "History::resubmitOrder - state check failed. state='{$state}', isCancelled=" . ($isCancelled ? 'true' : 'false'));
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '취소된 주문만 다시 접수할 수 있습니다. (현재 상태: ' . $state . ')'
+                ])->setStatusCode(400);
+            }
+
+            // API 정보 조회
+            $mCode = session()->get('m_code');
+            $ccCode = session()->get('cc_code');
+            $token = session()->get('token');
+            $apiIdx = session()->get('api_idx');
+            $userId = session()->get('user_id') ?? '';
+
+            if (!$mCode || !$ccCode || !$token) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보가 설정되지 않았습니다.'
+                ])->setStatusCode(500);
+            }
+
+            // 전화번호 복호화
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['ins_departure_tel_number', 'ins_destination_tel_number',
+                           'ins_customer_tel_number'];
+            $orderData = $encryptionHelper->decryptFields($orderData, $phoneFields);
+
+            // 인성 API 주문 접수 데이터 구성
+            $insungApiService = new \App\Libraries\InsungApiService();
+
+            // DB에서 가져온 ins_kind, ins_car_kind 값 로깅
+            log_message('debug', "History::resubmitOrder - DB values: ins_kind=" . ($orderData['ins_kind'] ?? 'null') .
+                ", ins_car_kind=" . ($orderData['ins_car_kind'] ?? 'null') .
+                ", ins_doc=" . ($orderData['ins_doc'] ?? 'null') .
+                ", ins_sfast=" . ($orderData['ins_sfast'] ?? 'null') .
+                ", service_type_id=" . ($orderData['service_type_id'] ?? 'null'));
+
+            // registerOrder에 전달할 orderData 배열 구성
+            // InsungApiService::registerOrder는 $mcode, $cccode, $token, $userId, $orderData, $apiIdx 파라미터를 받음
+            $orderParams = [
+                // 주문자 정보
+                'company_name' => $orderData['ins_c_name'] ?? $orderData['company_name'] ?? '',
+                'contact' => $orderData['ins_c_mobile'] ?? $orderData['contact'] ?? '',
+                // 출발지 정보
+                'departure_company_name' => $orderData['ins_s_start'] ?? $orderData['departure_company_name'] ?? '',
+                'departure_contact' => $orderData['ins_start_telno'] ?? $orderData['departure_contact'] ?? '',
+                'departure_department' => $orderData['ins_dept_name'] ?? $orderData['departure_department'] ?? '',
+                'departure_manager' => $orderData['ins_charge_name'] ?? $orderData['departure_manager'] ?? '',
+                'departure_address' => $orderData['ins_start_location'] ?? $orderData['departure_address'] ?? '',
+                'departure_detail' => $orderData['departure_detail'] ?? '',
+                'departure_dong' => $orderData['ins_start_dong'] ?? $orderData['departure_dong'] ?? '',
+                'departure_lon' => $orderData['ins_start_lon'] ?? '',
+                'departure_lat' => $orderData['ins_start_lat'] ?? '',
+                // 도착지 정보
+                'destination_company_name' => $orderData['ins_s_dest'] ?? $orderData['destination_company_name'] ?? '',
+                'destination_contact' => $orderData['ins_dest_telno'] ?? $orderData['destination_contact'] ?? '',
+                'destination_department' => $orderData['ins_dest_dept'] ?? $orderData['destination_department'] ?? '',
+                'destination_manager' => $orderData['ins_dest_charge'] ?? $orderData['destination_manager'] ?? '',
+                'destination_address' => $orderData['ins_dest_location'] ?? $orderData['destination_address'] ?? '',
+                'detail_address' => $orderData['destination_detail'] ?? $orderData['detail_address'] ?? '',
+                'destination_dong' => $orderData['ins_dest_dong'] ?? $orderData['destination_dong'] ?? '',
+                'destination_lon' => $orderData['ins_dest_lon'] ?? '',
+                'destination_lat' => $orderData['ins_dest_lat'] ?? '',
+                // 배송 정보 - ins_kind, ins_car_kind 등 인성 API 필드 직접 사용
+                'kind' => $orderData['ins_kind'] ?? '', // 인성 API kind 값 (1=오토, 2=다마스, 3=트럭 등)
+                'car_kind' => $orderData['ins_car_kind'] ?? '', // 인성 API 차종구분 코드
+                'doc' => $orderData['ins_doc'] ?? '1', // 배송방법 (1=편도, 3=왕복, 5=경유)
+                'sfast' => $orderData['ins_sfast'] ?? '1', // 배송선택 (1=일반, 3=급송 등)
+                'item_type' => $orderData['ins_item_type'] ?? $orderData['item_type'] ?? '',
+                'payment_type' => $orderData['ins_pay_gbn'] ?? $orderData['payment_type'] ?? '',
+                'delivery_content' => $orderData['ins_memo'] ?? $orderData['delivery_content'] ?? '',
+                'notes' => $orderData['ins_memo'] ?? $orderData['notes'] ?? '',
+                'sms_telno' => $orderData['ins_sms_telno'] ?? $orderData['sms_telno'] ?? '',
+            ];
+
+            log_message('debug', "History::resubmitOrder - orderParams: kind=" . ($orderParams['kind'] ?? 'null') .
+                ", car_kind=" . ($orderParams['car_kind'] ?? 'null'));
+
+            // 인성 API 주문 접수
+            $result = $insungApiService->registerOrder($mCode, $ccCode, $token, $userId, $orderParams, $apiIdx);
+
+            if (!$result || !isset($result['success']) || !$result['success']) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $result['message'] ?? '인성 API 주문 접수에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+            // 새 주문번호
+            $newOrderNumber = $result['serial_number'] ?? $result['data']['serial_number'] ?? $result['data']['order_number'] ?? '';
+
+            // 재접수는 신규 주문 - tbl_orders에 새 레코드 INSERT
+            $newOrderData = [
+                'insung_user_id' => $orderData['insung_user_id'] ?? $userId,
+                'user_id' => $orderData['user_id'] ?? null,
+                'customer_id' => $orderData['customer_id'] ?? null,
+                'service_type_id' => $orderData['service_type_id'] ?? 1,
+                'order_system' => 'insung',
+                'insung_order_number' => $newOrderNumber,
+                'order_number' => $newOrderNumber,
+                'status' => 'processing',
+                'state' => '10', // 접수 상태
+                'order_date' => date('Y-m-d'),
+                'order_time' => date('H:i:s'),
+                'company_name' => $orderData['company_name'] ?? '',
+                'contact' => $orderData['contact'] ?? '',
+                'departure_address' => $orderData['departure_address'] ?? '',
+                'departure_detail' => $orderData['departure_detail'] ?? '',
+                'departure_dong' => $orderData['departure_dong'] ?? '',
+                'departure_manager' => $orderData['departure_manager'] ?? '',
+                'departure_department' => $orderData['departure_department'] ?? '',
+                'departure_contact' => $orderData['departure_contact'] ?? '',
+                'destination_address' => $orderData['destination_address'] ?? '',
+                'destination_detail' => $orderData['destination_detail'] ?? '',
+                'destination_dong' => $orderData['destination_dong'] ?? '',
+                'destination_manager' => $orderData['destination_manager'] ?? '',
+                'destination_department' => $orderData['destination_department'] ?? '',
+                'destination_contact' => $orderData['destination_contact'] ?? '',
+                'item_type' => $orderData['item_type'] ?? '',
+                'delivery_content' => $orderData['delivery_content'] ?? '',
+                'notes' => $orderData['notes'] ?? '',
+                'total_fare' => $orderData['total_fare'] ?? 0,
+                'total_amount' => $orderData['total_amount'] ?? 0,
+                'order_regist_type' => 'I', // 인터넷 접수
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+
+            $insertBuilder = $db->table('tbl_orders');
+            $insertBuilder->insert($newOrderData);
+            $newOrderId = $db->insertID();
+
+            log_message('debug', "History::resubmitOrder - New tbl_orders record created: id={$newOrderId}, insung_order_number={$newOrderNumber}");
+
+            // tbl_orders_insung에 새 레코드 INSERT (registerOrder가 반환한 request_params 사용)
+            if (isset($result['request_params']) && !empty($result['request_params'])) {
+                $insungOrderModel = new \App\Models\InsungOrderModel();
+                $insungOrderModel->saveInsungOrderData($newOrderId, $result['request_params'], $newOrderNumber);
+                log_message('debug', "History::resubmitOrder - New tbl_orders_insung record created for order_id={$newOrderId}");
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '주문이 다시 접수되었습니다.',
+                'data' => [
+                    'order_id' => $newOrderId,
+                    'order_number' => $newOrderNumber
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', "History::resubmitOrder - Error: " . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 다시 접수 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 취소된 주문 소프트 삭제 (is_del='Y')
+     */
+    public function softDeleteOrder()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $orderId = $this->request->getPost('order_id');
+
+        if (empty($orderId)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+
+            // 주문 정보 조회
+            $orderBuilder = $db->table('tbl_orders');
+            $orderBuilder->select('id, state, is_del');
+            $orderBuilder->where('id', $orderId);
+            $orderQuery = $orderBuilder->get();
+
+            if ($orderQuery === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+            $orderData = $orderQuery->getRowArray();
+
+            if (!$orderData) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 취소된 주문인지 확인 (state='40' 또는 '취소' 모두 지원)
+            $state = $orderData['state'] ?? '';
+            $isCancelled = ($state === '40' || $state === '취소');
+            if (!$isCancelled) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '취소된 주문만 삭제할 수 있습니다. (현재 상태: ' . $state . ')'
+                ])->setStatusCode(400);
+            }
+
+            // 소프트 삭제 (is_del='Y')
+            $updateBuilder = $db->table('tbl_orders');
+            $updateBuilder->where('id', $orderId);
+            $updateBuilder->update([
+                'is_del' => 'Y',
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '주문이 삭제되었습니다.'
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', "History::softDeleteOrder - Error: " . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 삭제 중 오류가 발생했습니다.'
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 일양 주문 상세 조회 (tbl_orders + tbl_orders_ilyang)
+     */
+    public function getIlyangOrderDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $orderId = $this->request->getGet('order_id');
+
+        if (empty($orderId)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+
+            // tbl_orders와 tbl_orders_ilyang 조인 조회
+            $orderBuilder = $db->table('tbl_orders o');
+            $orderBuilder->select('o.*, oil.*, st.service_code, st.service_name as service_type_name');
+            $orderBuilder->join('tbl_orders_ilyang oil', 'o.id = oil.order_id', 'left');
+            $orderBuilder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+            $orderBuilder->where('o.id', $orderId);
+            $orderQuery = $orderBuilder->get();
+
+            if ($orderQuery === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보 조회에 실패했습니다.'
+                ])->setStatusCode(500);
+            }
+
+            $orderData = $orderQuery->getRowArray();
+
+            if (!$orderData) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주문 정보를 찾을 수 없습니다.'
+                ])->setStatusCode(404);
+            }
+
+            // 전화번호 복호화
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $phoneFields = ['contact', 'departure_contact', 'destination_contact',
+                           'ily_snd_tel1', 'ily_snd_tel2', 'ily_rcv_tel1', 'ily_rcv_tel2'];
+            $orderData = $encryptionHelper->decryptFields($orderData, $phoneFields);
+
+            // 결제타입 라벨 변환
+            $payTypeLabels = [
+                '11' => '신용',
+                '21' => '선불',
+                '22' => '착불'
+            ];
+            if (!empty($orderData['ily_pay_type'])) {
+                $orderData['ily_pay_type_label'] = $payTypeLabels[$orderData['ily_pay_type']] ?? $orderData['ily_pay_type'];
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data' => $orderData
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', "History::getIlyangOrderDetail - Error: " . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 정보 조회 중 오류가 발생했습니다.'
             ])->setStatusCode(500);
         }
     }

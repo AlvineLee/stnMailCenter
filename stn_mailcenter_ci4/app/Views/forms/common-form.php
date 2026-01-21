@@ -662,9 +662,232 @@ function addRequiredStars() {
 // 페이지 로드 시 초기 실행
 document.addEventListener('DOMContentLoaded', function() {
     toggleWaypointSection();
-    
+
     // required 필드에 별표 추가
     addRequiredStars();
+
+    // 취소 주문 수정 모드 체크 - sessionStorage에서 editOrderData 불러와 폼 채우기
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('edit') === '1') {
+        const editOrderData = sessionStorage.getItem('editOrderData');
+        const editOrderMode = sessionStorage.getItem('editOrderMode');
+
+        if (editOrderData && editOrderMode === 'resubmit') {
+            try {
+                const orderData = JSON.parse(editOrderData);
+                console.log('수정 모드 - 주문 데이터 로드:', orderData);
+
+                // 폼 필드 채우기 (tbl_orders_insung 필드 우선 사용)
+                // 주문자 정보
+                setFieldValue('company_name', orderData.ins_c_name || orderData.customer_name || orderData.company_name);
+                setFieldValue('contact', orderData.ins_c_mobile || orderData.customer_tel_number || orderData.contact);
+                setFieldValue('dept', orderData.ins_c_dept_name || orderData.customer_department || orderData.dept);
+                setFieldValue('charge', orderData.ins_c_charge_name || orderData.customer_duty || orderData.charge);
+
+                // STN_LOGIS 호환 필드도 업데이트
+                setFieldValue('c_name', orderData.ins_c_name || orderData.customer_name || orderData.company_name);
+                setFieldValue('c_telno', orderData.ins_c_mobile || orderData.customer_tel_number || orderData.contact);
+                setFieldValue('c_dept', orderData.ins_c_dept_name || orderData.customer_department || orderData.dept);
+                setFieldValue('c_charge', orderData.ins_c_charge_name || orderData.customer_duty || orderData.charge);
+
+                // 출발지 정보
+                setFieldValue('departure_company_name', orderData.ins_s_start || orderData.departure_company_name);
+                setFieldValue('departure_contact', orderData.ins_start_telno || orderData.departure_contact);
+                setFieldValue('departure_department', orderData.ins_dept_name || orderData.departure_department);
+                setFieldValue('departure_manager', orderData.ins_charge_name || orderData.departure_manager);
+                setFieldValue('departure_dong', orderData.ins_start_dong || orderData.departure_dong);
+                setFieldValue('departure_address', orderData.ins_start_location || orderData.departure_address);
+                setFieldValue('departure_detail', orderData.departure_detail || '');
+
+                // 도착지 정보
+                setFieldValue('destination_company_name', orderData.ins_s_dest || orderData.destination_company_name);
+                setFieldValue('destination_contact', orderData.ins_dest_telno || orderData.destination_contact);
+                setFieldValue('destination_department', orderData.ins_dest_dept || orderData.destination_department);
+                setFieldValue('destination_manager', orderData.ins_dest_charge || orderData.destination_manager);
+                setFieldValue('destination_dong', orderData.ins_dest_dong || orderData.destination_dong);
+                setFieldValue('destination_address', orderData.ins_dest_location || orderData.destination_address);
+                setFieldValue('destination_detail', orderData.detail_address || orderData.destination_detail || '');
+                setFieldValue('detail_address', orderData.detail_address || orderData.destination_detail || '');
+
+                // 배송 옵션 (배송방법, 배송선택)
+                const docValue = orderData.ins_doc || orderData.doc || '1';
+                const deliveryRouteRadio = document.querySelector(`input[name="delivery_route"][value="${docValue}"]`);
+                if (deliveryRouteRadio) {
+                    deliveryRouteRadio.checked = true;
+                    deliveryRouteRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                const sfastValue = orderData.ins_sfast || orderData.sfast || '1';
+                const deliverySpeedRadio = document.querySelector(`input[name="delivery_speed"][value="${sfastValue}"]`);
+                if (deliverySpeedRadio) {
+                    deliverySpeedRadio.checked = true;
+                }
+
+                // 결제 방식
+                const payGbn = orderData.ins_pay_gbn || orderData.payment_type || '';
+                if (payGbn) {
+                    const paymentRadio = document.querySelector(`input[name="pay_gbn"][value="${payGbn}"]`);
+                    if (paymentRadio) {
+                        paymentRadio.checked = true;
+                    }
+                }
+
+                // 전달사항/메모
+                const memo = orderData.ins_memo || orderData.notes || orderData.delivery_content || '';
+                setFieldValue('special_instructions', memo);
+                setFieldValue('delivery_content', memo);
+
+                // 배송사유
+                const reasonDesc = orderData.ins_reason_desc || '';
+                if (reasonDesc) {
+                    setFieldValue('reason_desc', reasonDesc);
+                }
+
+                // 사용 후 sessionStorage 정리
+                sessionStorage.removeItem('editOrderData');
+                sessionStorage.removeItem('editOrderMode');
+
+                // 고급 레이어 팝업으로 알림 표시
+                setTimeout(function() {
+                    showEditOrderLoadedModal();
+                }, 500);
+
+            } catch (e) {
+                console.error('주문 데이터 파싱 오류:', e);
+            }
+        }
+    }
+
+    // 취소 주문 데이터 로드 완료 레이어 팝업 표시
+    function showEditOrderLoadedModal() {
+        // 기존 모달이 있으면 제거
+        const existingModal = document.getElementById('editOrderLoadedModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // 모달 HTML 생성
+        const modalHtml = `
+            <div id="editOrderLoadedModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: 9999 !important;">
+                <div class="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300" style="animation: editModalFadeIn 0.3s ease-out;">
+                    <!-- 헤더 -->
+                    <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-lg">
+                        <div class="flex items-center space-x-3">
+                            <div class="bg-white bg-opacity-20 p-2 rounded-full">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-semibold text-white">데이터 로드 완료</h3>
+                        </div>
+                        <button type="button" id="closeEditOrderLoadedModal" class="text-white hover:text-gray-200 transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- 본문 -->
+                    <div class="p-6">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-gray-800 font-medium mb-2">취소된 주문 데이터가 로드되었습니다.</p>
+                                <p class="text-sm text-gray-600">내용을 확인하신 후 필요시 수정하여 접수해주세요.</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <p class="text-sm text-yellow-800">주소 정보는 다시 검색하여 입력해주세요.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 푸터 -->
+                    <div class="flex justify-end p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+                        <button type="button" id="confirmEditOrderLoaded" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm hover:shadow-md">
+                            확인
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <style>
+                @keyframes editModalFadeIn {
+                    from {
+                        opacity: 0;
+                        transform: scale(0.95) translateY(-10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: scale(1) translateY(0);
+                    }
+                }
+            </style>
+        `;
+
+        // 모달을 body에 추가
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.body.style.overflow = 'hidden';
+
+        // 사이드바 z-index 낮추기
+        if (typeof window.lowerSidebarZIndex === 'function') {
+            window.lowerSidebarZIndex();
+        }
+
+        // 모달 닫기 함수
+        function closeEditOrderModal() {
+            const modal = document.getElementById('editOrderLoadedModal');
+            if (modal) {
+                modal.style.opacity = '0';
+                setTimeout(function() {
+                    modal.remove();
+                    document.body.style.overflow = '';
+                    // 사이드바 z-index 복원
+                    if (typeof window.restoreSidebarZIndex === 'function') {
+                        window.restoreSidebarZIndex();
+                    }
+                }, 200);
+            }
+        }
+
+        // 이벤트 리스너 등록
+        document.getElementById('closeEditOrderLoadedModal').addEventListener('click', closeEditOrderModal);
+        document.getElementById('confirmEditOrderLoaded').addEventListener('click', closeEditOrderModal);
+        document.getElementById('editOrderLoadedModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditOrderModal();
+            }
+        });
+
+        // ESC 키로 닫기
+        const escHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeEditOrderModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+
+    // setFieldValue 헬퍼 함수 (전역에서 접근 가능하도록)
+    function setFieldValue(fieldId, value) {
+        if (value) {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.value = value;
+            }
+        }
+    }
     
     // 폼 요소 가져오기 (한 번만 선언)
     const orderForm = document.getElementById('orderForm');

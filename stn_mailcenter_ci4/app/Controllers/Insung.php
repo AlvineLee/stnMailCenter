@@ -34,13 +34,30 @@ class Insung extends BaseController
         // daumdata 로그인 및 user_type = 1 체크
         $loginType = session()->get('login_type');
         $userType = session()->get('user_type');
-        
+
         if ($loginType !== 'daumdata' || $userType != '1') {
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
 
-        // 콜센터 목록 조회 (소속 고객사 수 포함)
-        $ccList = $this->ccListModel->getAllCcListWithCompanyCount();
+        // 모바일 여부 확인
+        $userAgent = $this->request->getUserAgent();
+        $isMobile = $userAgent->isMobile();
+
+        // 검색 필터
+        $filters = [
+            'cc_code' => $this->request->getGet('cc_code') ?? '',
+            'cc_name' => $this->request->getGet('cc_name') ?? '',
+            'api_cccode' => $this->request->getGet('api_cccode') ?? ''
+        ];
+        $page = (int)($this->request->getGet('page') ?? 1);
+        $perPage = $isMobile ? 15 : 20;
+
+        // 콜센터 목록 조회 (API 정보 조인, 페이징)
+        $result = $this->ccListModel->getCcListWithApiInfo($filters, $page, $perPage);
+
+        // API 연계센타 목록 조회 (select box용)
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        $apiList = $insungApiListModel->getMainApiList();
 
         $data = [
             'title' => '콜센터 관리',
@@ -48,7 +65,11 @@ class Insung extends BaseController
                 'title' => '콜센터 관리',
                 'description' => '콜센터 정보를 관리합니다.'
             ],
-            'cc_list' => $ccList
+            'cc_list' => $result['cc_list'],
+            'api_list' => $apiList,
+            'filters' => $filters,
+            'pagination' => $result['pagination'],
+            'total_count' => $result['total_count']
         ];
 
         return view('insung/cc_list', $data);
@@ -72,11 +93,15 @@ class Insung extends BaseController
             return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
         }
 
+        // 모바일 여부 확인
+        $userAgent = $this->request->getUserAgent();
+        $isMobile = $userAgent->isMobile();
+
         // 콜센터 필터 파라미터
         $ccCodeFilter = $this->request->getGet('cc_code') ?? 'all';
         $searchName = $this->request->getGet('search_name') ?? '';
         $page = (int)($this->request->getGet('page') ?? 1);
-        $perPage = 20;
+        $perPage = $isMobile ? 15 : 20;
 
         // 콜센터 목록 조회 (select option용)
         $ccList = $this->ccListModel->getAllCcList();
@@ -188,6 +213,10 @@ class Insung extends BaseController
             $subdomainApiCodes = $subdomainConfig->getCurrentApiCodes();
         }
 
+        // 모바일 여부 확인
+        $userAgent = $this->request->getUserAgent();
+        $isMobile = $userAgent->isMobile();
+
         // 필터 파라미터 (검색 필드 변경: 고객사, 회사명, 아이디, 회원명)
         // 서브도메인으로 접근한 경우 comp_code를 서브도메인 값으로 고정
         $compCodeFilter = $isSubdomainAccess && $subdomainCompCode ? $subdomainCompCode : ($this->request->getGet('comp_code') ?? 'all');
@@ -195,7 +224,7 @@ class Insung extends BaseController
         $userId = $this->request->getGet('user_id') ?? '';
         $userName = $this->request->getGet('user_name') ?? '';
         $page = (int)($this->request->getGet('page') ?? 1);
-        $perPage = 20;
+        $perPage = $isMobile ? 15 : 20;
 
         // 전체 고객사 갯수 조회
         $db = \Config\Database::connect();
@@ -1609,10 +1638,303 @@ class Insung extends BaseController
             
             log_message('error', "Insung::updateMemberDetailFromApi - Invalid API response format for user_id: {$userId}");
             return false;
-            
+
         } catch (\Exception $e) {
             log_message('error', "Insung::updateMemberDetailFromApi - Exception: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * 콜센터 추가 (AJAX)
+     */
+    public function addCcList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // daumdata 로그인 및 user_type = 1 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        try {
+            $ccCode = trim($this->request->getPost('cc_code') ?? '');
+            $ccName = trim($this->request->getPost('cc_name') ?? '');
+            $ccApicode = $this->request->getPost('cc_apicode') ?? '';
+            $ccQuickid = trim($this->request->getPost('cc_quickid') ?? '');
+            $ccTelno = trim($this->request->getPost('cc_telno') ?? '');
+            $ccMemo = trim($this->request->getPost('cc_memo') ?? '');
+            $ccDongname = trim($this->request->getPost('cc_dongname') ?? '');
+            $ccAddr = trim($this->request->getPost('cc_addr') ?? '');
+            $ccAddrDetail = trim($this->request->getPost('cc_addr_detail') ?? '');
+
+            // 필수 필드 검증
+            if (empty($ccCode)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '회사코드를 입력해주세요.'
+                ]);
+            }
+            if (empty($ccName)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '회사명을 입력해주세요.'
+                ]);
+            }
+            if (empty($ccApicode)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API연계센타를 선택해주세요.'
+                ]);
+            }
+            if (empty($ccQuickid)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '퀵아이디를 입력해주세요.'
+                ]);
+            }
+            if (empty($ccDongname)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '주소검색 후 입력해주세요.'
+                ]);
+            }
+
+            // 회사코드 중복 체크
+            if ($this->ccListModel->isCodeExists($ccCode)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "입력하신 {$ccCode} 회사코드는 이미 사용중입니다."
+                ]);
+            }
+
+            // 퀵아이디 중복 체크
+            if ($this->ccListModel->isQuickIdExists($ccQuickid)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "입력하신 {$ccQuickid} 아이디는 이미 사용중입니다."
+                ]);
+            }
+
+            // API 정보 조회
+            $insungApiListModel = new \App\Models\InsungApiListModel();
+            $apiInfo = $insungApiListModel->find($ccApicode);
+
+            if (!$apiInfo) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 정보를 찾을 수 없습니다.'
+                ]);
+            }
+
+            // DB에 콜센터 추가
+            $insertData = [
+                'cc_code' => $ccCode,
+                'cc_name' => $ccName,
+                'cc_apicode' => $ccApicode,
+                'cc_quickid' => $ccQuickid,
+                'cc_telno' => $ccTelno,
+                'cc_memo' => $ccMemo,
+                'cc_dongname' => $ccDongname,
+                'cc_addr' => $ccAddr,
+                'cc_addr_detail' => $ccAddrDetail
+            ];
+
+            $result = $this->ccListModel->insert($insertData);
+
+            if ($result) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => '콜센터가 등록되었습니다.',
+                    'idx' => $result
+                ]);
+            } else {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '콜센터 등록에 실패했습니다.'
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            log_message('error', 'Insung::addCcList - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '서버 오류: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 콜센터 수정 (AJAX)
+     */
+    public function updateCcList()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        // daumdata 로그인 및 user_type = 1 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        try {
+            $idx = $this->request->getPost('idx');
+            $ccCode = trim($this->request->getPost('cc_code') ?? '');
+            $ccName = trim($this->request->getPost('cc_name') ?? '');
+            $ccApicode = $this->request->getPost('cc_apicode') ?? '';
+            $ccQuickid = trim($this->request->getPost('cc_quickid') ?? '');
+            $ccTelno = trim($this->request->getPost('cc_telno') ?? '');
+            $ccMemo = trim($this->request->getPost('cc_memo') ?? '');
+            $ccDongname = trim($this->request->getPost('cc_dongname') ?? '');
+            $ccAddr = trim($this->request->getPost('cc_addr') ?? '');
+            $ccAddrDetail = trim($this->request->getPost('cc_addr_detail') ?? '');
+
+            if (empty($idx)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '수정할 콜센터 정보가 없습니다.'
+                ]);
+            }
+
+            // 기존 데이터 확인
+            $existing = $this->ccListModel->find($idx);
+            if (!$existing) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '콜센터 정보를 찾을 수 없습니다.'
+                ]);
+            }
+
+            // 회사코드 중복 체크 (자신 제외)
+            if ($this->ccListModel->isCodeExists($ccCode, $idx)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "입력하신 {$ccCode} 회사코드는 이미 사용중입니다."
+                ]);
+            }
+
+            // 퀵아이디 중복 체크 (자신 제외)
+            if ($this->ccListModel->isQuickIdExists($ccQuickid, $idx)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "입력하신 {$ccQuickid} 아이디는 이미 사용중입니다."
+                ]);
+            }
+
+            // DB 업데이트
+            $updateData = [
+                'cc_code' => $ccCode,
+                'cc_name' => $ccName,
+                'cc_apicode' => $ccApicode,
+                'cc_quickid' => $ccQuickid,
+                'cc_telno' => $ccTelno,
+                'cc_memo' => $ccMemo,
+                'cc_dongname' => $ccDongname,
+                'cc_addr' => $ccAddr,
+                'cc_addr_detail' => $ccAddrDetail
+            ];
+
+            $result = $this->ccListModel->update($idx, $updateData);
+
+            if ($result) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => '콜센터 정보가 수정되었습니다.'
+                ]);
+            } else {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => '콜센터 수정에 실패했습니다.'
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            log_message('error', 'Insung::updateCcList - ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '서버 오류: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 콜센터 상세 조회 (AJAX)
+     */
+    public function getCcDetail()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $idx = $this->request->getGet('idx');
+        if (empty($idx)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '콜센터 정보가 없습니다.'
+            ]);
+        }
+
+        $ccInfo = $this->ccListModel->find($idx);
+        if (!$ccInfo) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '콜센터 정보를 찾을 수 없습니다.'
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'cc' => $ccInfo
+        ]);
+    }
+
+    /**
+     * API 연계센타 목록 조회 (select box용)
+     */
+    public function getApiListForSelect()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $insungApiListModel = new \App\Models\InsungApiListModel();
+        // api_gbn = 'M'인 것만 조회 (메인 API 센타)
+        $apiList = $insungApiListModel->getMainApiList();
+
+        return $this->response->setJSON([
+            'success' => true,
+            'api_list' => $apiList
+        ]);
     }
 }

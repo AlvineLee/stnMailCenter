@@ -773,13 +773,19 @@ class SearchCompany extends BaseController
                     'user_name' => $item->charge_name ?? '',  // 담당자명
                     'user_dept' => $item->dept_name ?? '',    // 부서명
                     'user_tel1' => $item->tel_no1 ?? '',      // 전화번호1
-                    'user_tel2' => $item->tel_no2 ?? ''       // 전화번호2
+                    'user_tel2' => $item->tel_no2 ?? '',      // 전화번호2
+                    'comp_no' => $item->comp_no ?? ''         // 거래처코드번호 (인성 API)
                 ];
             }
             
-            // 서브도메인에서 comp_code 가져오기
+            // 서브도메인에서 comp_code 가져오기, 없으면 인성 API의 comp_no 사용
             $subdomainConfig = config('Subdomain');
             $compCode = $subdomainConfig->getCurrentCompCode();
+
+            // 메인도메인일 경우 (서브도메인 comp_code가 없는 경우) 인성 API의 comp_no 사용
+            if (empty($compCode) && !empty($memberData['comp_no'])) {
+                $compCode = $memberData['comp_no'];
+            }
             
             // api_code를 사용하여 올바른 cc_list 찾기 (cc_apicode와 cc_code로 필터링)
             $ccIdx = null;
@@ -843,7 +849,8 @@ class SearchCompany extends BaseController
                     'user_tel1' => $memberData['user_tel1'] ?? '',
                     'user_tel2' => $memberData['user_tel2'] ?? '',
                     'user_company' => $compCode ?? '',
-                    'user_type' => '5'  // 기본값: 개인 사용자
+                    'user_type' => '5',  // 기본값: 개인 사용자
+                    'user_class' => '5'  // 기본값: 일반
                 ];
                 
                 // user_code가 있으면 추가

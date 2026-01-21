@@ -5,6 +5,11 @@
 <script>
 // 페이지 로드 후 해시에 따라 포커스 복원 및 거래처 목록 유지
 document.addEventListener('DOMContentLoaded', function() {
+    // URL 파라미터에서 코드 가져오기
+    const urlParams = new URLSearchParams(window.location.search);
+    const ccCode = urlParams.get('cc_code');
+    const compCode = urlParams.get('comp_code');
+
     // 해시가 있으면 포커스 복원
     if (window.location.hash === '#comp_code_select') {
         const compSelect = document.getElementById('comp_code_select');
@@ -17,41 +22,37 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 100);
         }
     }
-    
-    // URL 파라미터에서 거래처 코드가 있으면 거래처 선택 박스 표시
-    const urlParams = new URLSearchParams(window.location.search);
-    const ccCode = urlParams.get('cc_code');
-    const compCode = urlParams.get('comp_code');
-    
+
     if (ccCode) {
         // 거래처 선택 영역 표시
         const companyContainer = document.getElementById('company_select_container');
         if (companyContainer) {
             companyContainer.style.display = 'flex';
         }
-        
+
         // 거래처 선택 박스 확인 및 선택된 값 설정
         const compSelect = document.getElementById('comp_code_select');
         if (compSelect) {
             // 서버에서 이미 거래처 목록이 렌더링되었는지 확인
             // 옵션이 2개 이상이면 서버에서 이미 로드된 것 (기본 옵션 + 거래처 목록)
             const hasServerRenderedOptions = compSelect.options.length > 1;
-            
-            if (hasServerRenderedOptions) {
-                // 서버에서 이미 로드됨 - AJAX 호출 안 함, 선택된 값만 설정
-                if (compCode) {
-                    // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 설정
-                    setTimeout(function() {
-                        compSelect.value = compCode;
-                        // 값이 제대로 설정되었는지 확인
-                        if (compSelect.value !== compCode) {
-                            console.warn('거래처 선택 값 설정 실패:', compCode, '현재 값:', compSelect.value);
-                        }
-                    }, 100);
-                }
-            } else {
+
+            if (hasServerRenderedOptions && compCode) {
+                // 서버에서 이미 로드됨 - 선택된 값 강제 설정
+                compSelect.value = compCode;
+                // 배송사유 설정 영역 표시 및 불러오기 (URL 파라미터의 compCode 사용)
+                showDeliveryReasonSetting(compCode);
+            } else if (!hasServerRenderedOptions) {
                 // 서버에서 로드되지 않음 - AJAX로 로드
                 loadCompaniesByCc(ccCode, compCode);
+            }
+        }
+
+        // compCode가 있으면 배송사유 설정 영역 표시 (selectbox 값과 무관하게)
+        if (compCode) {
+            const deliveryContainer = document.getElementById('delivery_reason_setting_container');
+            if (deliveryContainer) {
+                deliveryContainer.style.display = 'flex';
             }
         }
     }
@@ -62,7 +63,7 @@ function loadCompaniesByCc(ccCode, selectedCompCode = null) {
     if (!ccCode) {
         return;
     }
-    
+
     fetch(`<?= base_url('admin/getCompaniesByCcForOrderType') ?>?cc_code=${encodeURIComponent(ccCode)}`, {
         method: 'GET',
         headers: {
@@ -71,43 +72,103 @@ function loadCompaniesByCc(ccCode, selectedCompCode = null) {
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success && data.companies) {
-            const compSelect = document.getElementById('comp_code_select');
-            if (!compSelect) return;
-            
-            // 거래처 목록 초기화
-            compSelect.innerHTML = '<option value="">전체 (콜센터 설정)</option>';
-            
-            // 거래처 목록 추가
-            data.companies.forEach(company => {
-                const option = document.createElement('option');
-                option.value = company.comp_code;
-                option.textContent = company.comp_name || company.comp_code;
-                compSelect.appendChild(option);
-            });
-            
-            // 거래처 선택 영역 표시
-            const companyContainer = document.getElementById('company_select_container');
-            if (companyContainer) {
-                companyContainer.style.display = 'flex';
+        if (data.success) {
+            // 건수가 다르면 동기화 확인
+            if (data.need_sync) {
+                const confirmSync = confirm(`거래처 리스트를 동기화하시겠습니까?\n\nAPI: ${data.api_count}건 / DB: ${data.db_count}건`);
+                if (confirmSync) {
+                    // 동기화 실행
+                    syncCompanies(ccCode, selectedCompCode);
+                    return;
+                }
             }
-            
-            // 선택된 거래처 코드 설정 (URL 파라미터 우선)
-            if (selectedCompCode) {
-                // 약간의 지연을 두어 DOM이 완전히 업데이트된 후 설정
-                setTimeout(function() {
-                    compSelect.value = selectedCompCode;
-                    // 값이 제대로 설정되었는지 확인
-                    if (compSelect.value !== selectedCompCode) {
-                        console.warn('거래처 선택 값 설정 실패:', selectedCompCode, '현재 값:', compSelect.value);
-                    }
-                }, 100);
-            }
+
+            // 동기화 안 함 - DB 데이터로 표시
+            updateCompanySelect(data.companies, selectedCompCode);
         }
     })
     .catch(error => {
         console.error('Error loading companies:', error);
     });
+}
+
+// 거래처 동기화 실행
+function syncCompanies(ccCode, selectedCompCode = null) {
+    // 로딩 표시
+    const compSelect = document.getElementById('comp_code_select');
+    if (compSelect) {
+        compSelect.innerHTML = '<option value="">동기화 중...</option>';
+        compSelect.disabled = true;
+    }
+
+    fetch(`<?= base_url('admin/syncCompaniesForOrderType') ?>?cc_code=${encodeURIComponent(ccCode)}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (compSelect) {
+            compSelect.disabled = false;
+        }
+
+        if (data.success) {
+            // 동기화 결과 표시
+            if (data.stats) {
+                let msg = `동기화 완료!\n\n총 ${data.stats.total}건 (신규: ${data.stats.inserted}건, 업데이트: ${data.stats.updated}건)`;
+                if (data.stats.deactivated > 0) {
+                    msg += `\n거래종료: ${data.stats.deactivated}건`;
+                }
+                alert(msg);
+            }
+            // 동기화된 거래처 목록 표시
+            updateCompanySelect(data.companies, selectedCompCode);
+        } else {
+            alert('동기화 실패: ' + (data.message || '알 수 없는 오류'));
+            // 실패 시 기존 목록 유지를 위해 다시 로드
+            loadCompaniesByCc(ccCode, selectedCompCode);
+        }
+    })
+    .catch(error => {
+        console.error('Error syncing companies:', error);
+        if (compSelect) {
+            compSelect.disabled = false;
+        }
+        alert('동기화 중 오류가 발생했습니다.');
+    });
+}
+
+// 거래처 select 업데이트
+function updateCompanySelect(companies, selectedCompCode = null) {
+    const compSelect = document.getElementById('comp_code_select');
+    if (!compSelect) return;
+
+    // 거래처 목록 초기화
+    compSelect.innerHTML = '<option value="">전체 (콜센터 설정)</option>';
+
+    // 거래처 목록 추가
+    if (companies && companies.length > 0) {
+        companies.forEach(company => {
+            const option = document.createElement('option');
+            option.value = company.comp_code;
+            option.textContent = company.comp_name || company.comp_code;
+            compSelect.appendChild(option);
+        });
+    }
+
+    // 거래처 선택 영역 표시
+    const companyContainer = document.getElementById('company_select_container');
+    if (companyContainer) {
+        companyContainer.style.display = 'flex';
+    }
+
+    // 선택된 거래처 코드 설정
+    if (selectedCompCode) {
+        setTimeout(function() {
+            compSelect.value = selectedCompCode;
+        }, 100);
+    }
 }
 </script>
 
@@ -139,9 +200,18 @@ function loadCompaniesByCc(ccCode, selectedCompCode = null) {
                     <?php endif; ?>
                 </select>
             </div>
+            <!-- 배송사유 사용 설정 (거래처 선택 시에만 표시) -->
+            <div class="flex items-center gap-2" id="delivery_reason_setting_container" style="display: <?= !empty($selected_comp_code) ? 'flex' : 'none' ?>;">
+                <label class="text-sm font-medium text-gray-700">배송사유 사용:</label>
+                <select id="use_delivery_reason_select" class="search-filter-select" onchange="updateDeliveryReasonSetting()">
+                    <option value="N">미사용</option>
+                    <option value="Y">사용</option>
+                </select>
+                <span id="delivery_reason_save_status" class="text-xs text-green-600 hidden">저장됨</span>
+            </div>
             <?php if (isset($selected_cc_code) && $selected_cc_code): ?>
             <span class="text-sm text-gray-600">
-                현재 선택: 
+                현재 선택:
                 <?php if (isset($selected_comp_code) && $selected_comp_code): ?>
                     거래처 (<?= htmlspecialchars($selected_comp_code) ?>)
                 <?php else: ?>
@@ -703,6 +773,83 @@ function changeCompCode() {
     window.location.href = url.toString();
 }
 
+// 배송사유 설정 영역 표시 및 현재 설정 불러오기
+function showDeliveryReasonSetting(compCode) {
+    const container = document.getElementById('delivery_reason_setting_container');
+    if (container) {
+        container.style.display = 'flex';
+    }
+
+    // 현재 설정 불러오기
+    fetch(`<?= base_url('admin/getCompanyDeliveryReasonSetting') ?>?comp_code=${encodeURIComponent(compCode)}`, {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const select = document.getElementById('use_delivery_reason_select');
+            if (select) {
+                select.value = data.use_delivery_reason || 'N';
+            }
+        }
+    })
+    .catch(error => console.error('Error loading delivery reason setting:', error));
+}
+
+// 배송사유 설정 영역 숨기기
+function hideDeliveryReasonSetting() {
+    const container = document.getElementById('delivery_reason_setting_container');
+    if (container) {
+        container.style.display = 'none';
+    }
+}
+
+// 배송사유 사용 설정 업데이트
+function updateDeliveryReasonSetting() {
+    // URL 파라미터에서 comp_code 가져오기 (selectbox보다 우선)
+    const urlParams = new URLSearchParams(window.location.search);
+    let compCode = urlParams.get('comp_code');
+
+    // URL에 없으면 selectbox에서 가져오기
+    if (!compCode) {
+        compCode = document.getElementById('comp_code_select').value;
+    }
+
+    const useDeliveryReason = document.getElementById('use_delivery_reason_select').value;
+
+    if (!compCode) {
+        alert('거래처를 먼저 선택해주세요.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('comp_code', compCode);
+    formData.append('use_delivery_reason', useDeliveryReason);
+
+    fetch('<?= base_url("admin/updateCompanyDeliveryReasonSetting") ?>', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const statusEl = document.getElementById('delivery_reason_save_status');
+        if (data.success) {
+            if (statusEl) {
+                statusEl.classList.remove('hidden');
+                setTimeout(() => statusEl.classList.add('hidden'), 2000);
+            }
+        } else {
+            alert(data.message || '설정 저장에 실패했습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('설정 저장 중 오류가 발생했습니다.');
+    });
+}
+
 // 콜센터별 거래처 목록 로드 (AJAX)
 
 // 설정 저장 (일괄 상태 업데이트)
@@ -811,20 +958,12 @@ function initSortable() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
         initSortable();
-        // 콜센터가 선택되어 있으면 거래처 목록 로드
-        const ccCodeSelect = document.getElementById('cc_code_select');
-        if (ccCodeSelect && ccCodeSelect.value) {
-            loadCompaniesByCc(ccCodeSelect.value);
-        }
+        // 참고: 거래처 목록 로드는 상단 DOMContentLoaded 이벤트에서 처리됨
     });
 } else {
     // 이미 로드 완료된 경우 즉시 실행
     initSortable();
-    // 콜센터가 선택되어 있으면 거래처 목록 로드
-    const ccCodeSelect = document.getElementById('cc_code_select');
-    if (ccCodeSelect && ccCodeSelect.value) {
-        loadCompaniesByCc(ccCodeSelect.value);
-    }
+    // 참고: 거래처 목록 로드는 상단 DOMContentLoaded 이벤트에서 처리됨
 }
 
 // 서비스 순서 업데이트

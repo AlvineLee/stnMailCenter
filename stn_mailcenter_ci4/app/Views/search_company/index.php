@@ -173,11 +173,11 @@
                             }
                             telDisplay = telNumbers.join(', ');
                             
-                            // use_state가 'Y'가 아닌 경우 또는 이미 등록된 사용자인 경우 버튼 비활성화
+                            // use_state가 'Y'가 아닌 경우 버튼 비활성화 (사용중인 경우는 수정 가능)
                             const isRegistered = member.is_registered === true || member.is_registered === 'true';
-                            const isDisabled = member.use_state !== 'Y' || isRegistered;
-                            const buttonClass = isDisabled ? 'action-buttons disabled' : 'action-buttons';
-                            const buttonStyle = isDisabled ? 'opacity: 0.5; cursor: not-allowed;' : '';
+                            const isDisabled = member.use_state !== 'Y';
+                            const buttonClass = isDisabled ? 'action-buttons disabled' : (isRegistered ? 'action-buttons registered' : 'action-buttons');
+                            const buttonStyle = isDisabled ? 'opacity: 0.5; cursor: not-allowed;' : (isRegistered ? 'background: #e0f2fe; border-color: #7dd3fc;' : '');
                             const buttonOnClick = isDisabled ? '' : `onclick="useMember('${member.c_code}', ${currentSearchParams.api_idx})"`;
                             const buttonText = isRegistered ? '사용중' : '사용하기';
                             

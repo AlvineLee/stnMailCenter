@@ -169,20 +169,20 @@
 
     <!-- 구간 목록 테이블 -->
     <div class="mb-4 bg-white rounded-lg border border-gray-200">
-        <div class="p-4 border-b border-gray-200">
+        <div class="p-2 border-b border-gray-200">
             <h3 class="text-sm font-semibold">전체 구간 목록</h3>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
+        <div class="list-table-container">
+            <table class="list-table-compact">
+                <thead>
                     <tr>
-                        <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700">번호</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700">거리 범위</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700">트럭 기본</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700">오토바이</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700">다마스</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700">라보</th>
-                        <th class="px-4 py-2 text-center text-xs font-semibold text-gray-700">작업</th>
+                        <th style="width:40px;">번호</th>
+                        <th style="width:100px;">거리 범위</th>
+                        <th>트럭 기본</th>
+                        <th>오토바이</th>
+                        <th>다마스</th>
+                        <th>라보</th>
+                        <th style="width:60px;">작업</th>
                     </tr>
                 </thead>
                 <tbody id="segment-table-body">
@@ -771,7 +771,7 @@ function renderSegmentTable() {
     tbody.innerHTML = '';
     
     if (distanceSegments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">구간을 추가해주세요.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">구간을 추가해주세요.</td></tr>';
         return;
     }
     
@@ -804,12 +804,12 @@ function renderSegmentTable() {
         const laboUnit = pricing.labo_calc_type === 'percent' ? '%' : '원';
         
         row.innerHTML = `
-            <td class="px-4 py-2">${index + 1}</td>
-            <td class="px-4 py-2 font-medium">${segment.start} ~ ${segment.dest} km</td>
-            <td class="px-4 py-2">
+            <td class="text-center">${index + 1}</td>
+            <td>${segment.start} ~ ${segment.dest} km</td>
+            <td>
                 <div class="flex items-center gap-1">
-                    <input type="text" 
-                           class="form-input currency-input w-full text-xs" 
+                    <input type="text"
+                           class="form-input currency-input w-full text-xs"
                            value="${truckBasePrice}"
                            placeholder="0"
                            oninput="formatNumberInput(this)"
@@ -820,10 +820,10 @@ function renderSegmentTable() {
                     <span class="text-xs text-gray-700 whitespace-nowrap">원</span>
                 </div>
             </td>
-            <td class="px-4 py-2">
+            <td>
                 <div class="flex items-center gap-1">
-                    <input type="text" 
-                           class="form-input currency-input w-full text-xs" 
+                    <input type="text"
+                           class="form-input currency-input w-full text-xs"
                            value="${bikeValue}"
                            placeholder="0"
                            oninput="formatBikeDamasLaboInput(this)"
@@ -835,10 +835,10 @@ function renderSegmentTable() {
                     <span class="text-xs text-gray-700 whitespace-nowrap">${bikeUnit}</span>
                 </div>
             </td>
-            <td class="px-4 py-2">
+            <td>
                 <div class="flex items-center gap-1">
-                    <input type="text" 
-                           class="form-input currency-input w-full text-xs" 
+                    <input type="text"
+                           class="form-input currency-input w-full text-xs"
                            value="${damasValue}"
                            placeholder="0"
                            oninput="formatBikeDamasLaboInput(this)"
@@ -850,10 +850,10 @@ function renderSegmentTable() {
                     <span class="text-xs text-gray-700 whitespace-nowrap">${damasUnit}</span>
                 </div>
             </td>
-            <td class="px-4 py-2">
+            <td>
                 <div class="flex items-center gap-1">
-                    <input type="text" 
-                           class="form-input currency-input w-full text-xs" 
+                    <input type="text"
+                           class="form-input currency-input w-full text-xs"
                            value="${laboValue}"
                            placeholder="0"
                            oninput="formatBikeDamasLaboInput(this)"
@@ -865,10 +865,10 @@ function renderSegmentTable() {
                     <span class="text-xs text-gray-700 whitespace-nowrap">${laboUnit}</span>
                 </div>
             </td>
-            <td class="px-4 py-2 text-center">
-                <button type="button" 
-                        onclick="event.stopPropagation(); applySegmentPricing(${index})" 
-                        class="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">
+            <td class="text-center">
+                <button type="button"
+                        onclick="event.stopPropagation(); applySegmentPricing(${index})"
+                        class="px-1.5 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">
                     적용
                 </button>
             </td>

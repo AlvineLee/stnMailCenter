@@ -1,53 +1,115 @@
 <aside class="sidebar">
     <div class="sidebar-header">
         <?php
-        // 서브도메인 설정 가져오기 (우선순위 1)
-        $subdomainConfig = config('Subdomain');
-        $subdomainInfo = $subdomainConfig->getCurrentConfig();
-        $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
-        $isSubdomain = ($currentSubdomain !== 'default');
-        
-        $logoPath = null;
-        $logoAlt = 'DaumData';
-        $logoText = null;
-        $logoThemeColor = '#667eea';
-        
-        // 서브도메인으로 접근한 경우: 서브도메인 로고 우선 사용
-        if ($isSubdomain && !empty($subdomainInfo['logo_path'])) {
-            $logoPath = base_url($subdomainInfo['logo_path']);
-            $logoAlt = $subdomainInfo['name'];
-        } elseif ($isSubdomain) {
-            // 서브도메인인데 로고 이미지가 없으면 텍스트 로고 사용
-            $logoText = $subdomainInfo['logo_text'];
-            $logoAlt = $subdomainInfo['name'];
-            $logoThemeColor = $subdomainInfo['theme_color'];
-        } else {
-            // 기본 도메인인 경우: 고객사 로고 조회
-            $loginType = session()->get('login_type');
-            
-            if ($loginType === 'daumdata') {
-                // daumdata 로그인: 세션에서 로고 경로 확인
-                $companyLogoPathFromSession = session()->get('company_logo_path');
-                if ($companyLogoPathFromSession) {
-                    $logoPath = base_url($companyLogoPathFromSession);
-                }
+        // 사이드바 데이터가 컨트롤러에서 전달되지 않은 경우 기본값 설정
+        // (점진적 마이그레이션을 위한 폴백)
+        if (!isset($sidebar)) {
+            $sidebar = [
+                'logoPath' => null,
+                'logoAlt' => 'DaumData',
+                'logoText' => null,
+                'logoThemeColor' => '#667eea',
+                'isSubdomain' => false,
+                'currentSubdomain' => 'default',
+                'loginType' => session()->get('login_type'),
+                'userRole' => session()->get('user_role'),
+                'userType' => session()->get('user_type'),
+                'userClass' => session()->get('user_class'),
+                'isLoggedIn' => session()->get('is_logged_in'),
+                'apiName' => session()->get('api_name'),
+                'ccCompName' => session()->get('cc_comp_name'),
+                'realName' => session()->get('real_name') ?? session()->get('user_name') ?? session()->get('username') ?? 'Guest',
+                'isSuperAdmin' => false,
+                'showOrderMenus' => true,
+            ];
+
+            // 폴백: 서브도메인 설정 가져오기
+            $subdomainConfig = config('Subdomain');
+            $subdomainInfo = $subdomainConfig->getCurrentConfig();
+            $currentSubdomain = $subdomainConfig->getCurrentSubdomain();
+            $isSubdomain = ($currentSubdomain !== 'default');
+
+            $sidebar['isSubdomain'] = $isSubdomain;
+            $sidebar['currentSubdomain'] = $currentSubdomain;
+
+            // 폴백: 로고 경로 결정
+            if ($isSubdomain && !empty($subdomainInfo['logo_path'])) {
+                $sidebar['logoPath'] = base_url($subdomainInfo['logo_path']);
+                $sidebar['logoAlt'] = $subdomainInfo['name'];
+            } elseif ($isSubdomain) {
+                $sidebar['logoText'] = $subdomainInfo['logo_text'];
+                $sidebar['logoAlt'] = $subdomainInfo['name'];
+                $sidebar['logoThemeColor'] = $subdomainInfo['theme_color'];
             } else {
-                // STN 로그인: 본점 로고 조회
-                $customerId = session()->get('customer_id');
-                if ($customerId) {
-                    $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
-                    
-                    // 사용자가 속한 본점 ID 찾기
-                    $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
-                    if ($headOfficeId) {
-                        $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
-                        if ($headOffice && !empty($headOffice['logo_path'])) {
-                            $logoPath = base_url($headOffice['logo_path']);
+                $loginType = session()->get('login_type');
+                if ($loginType === 'daumdata') {
+                    $companyLogoPathFromSession = session()->get('company_logo_path');
+                    if ($companyLogoPathFromSession) {
+                        $sidebar['logoPath'] = base_url($companyLogoPathFromSession);
+                    }
+                } else {
+                    $customerId = session()->get('customer_id');
+                    if ($customerId) {
+                        $customerHierarchyModel = new \App\Models\CustomerHierarchyModel();
+                        $headOfficeId = $customerHierarchyModel->getHeadOfficeId($customerId);
+                        if ($headOfficeId) {
+                            $headOffice = $customerHierarchyModel->getCustomerById($headOfficeId);
+                            if ($headOffice && !empty($headOffice['logo_path'])) {
+                                $sidebar['logoPath'] = base_url($headOffice['logo_path']);
+                            }
                         }
                     }
                 }
             }
+
+            // 폴백: user_class가 세션에 없으면 DB에서 조회
+            if (empty($sidebar['userClass']) && $sidebar['loginType'] === 'daumdata') {
+                $userId = session()->get('user_id');
+                if ($userId) {
+                    $db = \Config\Database::connect();
+                    $userBuilder = $db->table('tbl_users_list');
+                    $userBuilder->select('user_class');
+                    $userBuilder->where('user_id', $userId);
+                    $userQuery = $userBuilder->get();
+                    if ($userQuery !== false) {
+                        $userResult = $userQuery->getRowArray();
+                        if ($userResult && isset($userResult['user_class'])) {
+                            $sidebar['userClass'] = $userResult['user_class'];
+                        }
+                    }
+                }
+            }
+
+            // 폴백: 슈퍼어드민 여부 판단
+            $isSuperAdmin = false;
+            if ($sidebar['loginType'] === 'daumdata' && $sidebar['userType'] == '1') {
+                $isSuperAdmin = true;
+            } elseif (!$sidebar['loginType'] || $sidebar['loginType'] === 'stn') {
+                if ($sidebar['userRole'] === 'super_admin') {
+                    $isSuperAdmin = true;
+                }
+            }
+            $sidebar['isSuperAdmin'] = $isSuperAdmin;
+            $sidebar['showOrderMenus'] = !($isSuperAdmin && $currentSubdomain === 'default');
         }
+
+        // 변수 추출 (가독성을 위해)
+        $logoPath = $sidebar['logoPath'] ?? null;
+        $logoAlt = $sidebar['logoAlt'] ?? 'DaumData';
+        $logoText = $sidebar['logoText'] ?? null;
+        $logoThemeColor = $sidebar['logoThemeColor'] ?? '#667eea';
+        $isSubdomain = $sidebar['isSubdomain'] ?? false;
+        $currentSubdomain = $sidebar['currentSubdomain'] ?? 'default';
+        $loginType = $sidebar['loginType'] ?? null;
+        $userRole = $sidebar['userRole'] ?? null;
+        $userType = $sidebar['userType'] ?? null;
+        $userClass = $sidebar['userClass'] ?? null;
+        $isLoggedIn = $sidebar['isLoggedIn'] ?? false;
+        $apiName = $sidebar['apiName'] ?? null;
+        $ccCompName = $sidebar['ccCompName'] ?? null;
+        $realName = $sidebar['realName'] ?? 'Guest';
+        $isSuperAdmin = $sidebar['isSuperAdmin'] ?? false;
+        $showOrderMenus = $sidebar['showOrderMenus'] ?? true;
         ?>
         <?php if ($logoPath): ?>
             <!-- 로고 이미지가 있을 경우: 로고만 풀로 차지 -->
@@ -62,69 +124,50 @@
                 </div>
             </a>
         <?php else: ?>
-            <!-- 로고가 없을 경우: 기본 DaumData 로고 이미지가 풀로 차지 -->
-            <a href="<?= base_url('/') ?>" class="logo-full">
-                <img src="<?= base_url('assets/images/logo/daumdata_logo_1.png') ?>" alt="DaumData" class="logo-full-image">
-            </a>
+            <?php if (!$isSubdomain && $isLoggedIn && ($apiName || $ccCompName)): ?>
+                <!-- 메인도메인 로그인: D 로고 + 콜센터명 -->
+                <a href="<?= base_url('/') ?>" class="logo-full" style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 45px; height: 50px; overflow: hidden; flex-shrink: 0; border-radius: 8px; background: #f3f4f6;">
+                        <img src="<?= base_url('assets/images/logo/daumdata_logo_1.png') ?>" alt="D" style="height: 50px; width: auto; object-fit: cover; object-position: left center;">
+                    </div>
+                    <div style="flex: 1; min-width: 0; line-height: 1.3; color: #374151;">
+                        <?php if ($apiName): ?>
+                            <div style="font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?= esc($apiName) ?></div>
+                        <?php endif; ?>
+                        <?php if ($ccCompName): ?>
+                            <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">(<?= esc($ccCompName) ?>)</div>
+                        <?php endif; ?>
+                    </div>
+                </a>
+            <?php else: ?>
+                <!-- 로고가 없을 경우: 기본 DaumData 로고 이미지가 풀로 차지 -->
+                <a href="<?= base_url('/') ?>" class="logo-full">
+                    <img src="<?= base_url('assets/images/logo/daumdata_logo_1.png') ?>" alt="DaumData" class="logo-full-image">
+                </a>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
-    
+
     <div class="user-info">
         <div class="user-details">
-            <span class="user-name"><?= session()->get('real_name') ?? session()->get('user_name') ?? session()->get('username') ?? 'Guest' ?></span>
+            <span class="user-name"><?= esc($realName) ?></span>
         </div>
-        <a href="<?= base_url('auth/logout') ?>" class="logout-link">🚪 로그아웃</a>
+        <a href="<?= base_url('auth/logout') ?>" class="logout-link">로그아웃</a>
     </div>
-    
+
     <nav class="sidebar-nav">
         <ul class="nav-list">
-            <?php 
+            <?php
             // 헬퍼 로드
             helper('menu');
-            
-            // 슈퍼어드민 체크
-            $loginType = session()->get('login_type');
-            $userRole = session()->get('user_role');
-            $userType = session()->get('user_type');
-            $userClass = session()->get('user_class');
-            
-            // user_class가 세션에 없으면 DB에서 조회
-            if (empty($userClass) && $loginType === 'daumdata') {
-                $userId = session()->get('user_id');
-                if ($userId) {
-                    $db = \Config\Database::connect();
-                    $userBuilder = $db->table('tbl_users_list');
-                    $userBuilder->select('user_class');
-                    $userBuilder->where('user_id', $userId);
-                    $userQuery = $userBuilder->get();
-                    if ($userQuery !== false) {
-                        $userResult = $userQuery->getRowArray();
-                        if ($userResult && isset($userResult['user_class'])) {
-                            $userClass = $userResult['user_class'];
-                        }
-                    }
-                }
-            }
-            
-            $isSuperAdmin = false;
-            if ($loginType === 'daumdata' && $userType == '1') {
-                $isSuperAdmin = true;
-            } elseif (!$loginType || $loginType === 'stn') {
-                if ($userRole === 'super_admin') {
-                    $isSuperAdmin = true;
-                }
-            }
-            
-            // 슈퍼어드민이 메인도메인 접근 시 주문접수/배송조회/이용내역상세조회 숨김
-            $showOrderMenus = !($isSuperAdmin && $currentSubdomain === 'default');
-            
+
             if ($showOrderMenus):
                 // 사용자의 서비스 권한 조회
                 $userPermissions = getUserServicePermissions();
-                
+
                 // DB에서 서비스 타입을 가져와서 동적으로 메뉴 구조 생성
                 $menuItems = buildDynamicServiceMenu($userPermissions);
-                
+
                 // 권한이 있는 서비스가 하나라도 있으면 주문접수 메뉴 표시
                 if (!empty($menuItems)):
                 ?>
@@ -137,7 +180,7 @@
                     <ul class="submenu">
                         <?php foreach ($menuItems as $item): ?>
                             <?php if ($item['type'] === 'single'): ?>
-                                <?php 
+                                <?php
                                 $isExternal = !empty($item['menu']['is_external_link']);
                                 $menuUrl = $isExternal ? $item['menu']['url'] : base_url($item['menu']['url']);
                                 $target = $isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
@@ -148,7 +191,7 @@
                                     <a href="#" data-toggle="submenu"><img src="<?= base_url($item['menu']['icon']) ?>" class="menu-icon" alt=""> <?= $item['menu']['name'] ?> <span class="nav-arrow">v</span></a>
                                     <ul class="submenu">
                                         <?php foreach ($item['children'] as $childKey => $childMenu): ?>
-                                        <?php 
+                                        <?php
                                         $isExternal = !empty($childMenu['is_external_link']);
                                         $childUrl = $isExternal ? $childMenu['url'] : base_url($childMenu['url']);
                                         $target = $isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
@@ -178,29 +221,28 @@
             <li class="nav-item">
                 <a href="<?= base_url('member/list') ?>" class="nav-link">
                     <span class="nav-icon">👤</span>
-                    <span class="nav-text">회원정보</span>
+                    <span class="nav-text">내정보수정</span>
                 </a>
             </li>
             <?php
             // daumdata 로그인 메뉴
             if ($loginType === 'daumdata'):
-                // 고객 관리 메뉴 (user_type = 1만)
+                // 거래처관리 메뉴 (user_type = 1만)
                 if ($userType == '1'):
             ?>
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
                     <span class="nav-icon">👥</span>
-                    <span class="nav-text">고객 관리</span>
+                    <span class="nav-text">거래처관리</span>
                     <span class="nav-arrow">v</span>
                 </a>
                 <ul class="submenu">
-                    <li><a href="<?= base_url('insung/company-list') ?>">고객사 관리</a></li>
-                    <li><a href="<?= base_url('insung/user-list') ?>">고객사 회원정보</a></li>
+                    <li><a href="<?= base_url('insung/company-list') ?>">거래처 관리</a></li>
                 </ul>
             </li>
             <?php
                 endif;
-                
+
                 // 콜센터 관리 메뉴 (user_type = 1)
                 if ($userType == '1'):
             ?>
@@ -216,8 +258,8 @@
             </li>
             <?php
                 endif;
-                
-                // 관리자 설정 메뉴 (user_type = 1) - 통합된 관리자 설정 메뉴
+
+                // 관리자 설정 메뉴 (user_type = 1)
                 if ($userType == '1'):
             ?>
             <li class="nav-item has-submenu">
@@ -229,14 +271,15 @@
                 <ul class="submenu">
                     <li><a href="<?= base_url('admin/order-type') ?>">오더유형 설정</a></li>
                     <li><a href="<?= base_url('admin/pricing') ?>">요금설정</a></li>
-                    <li><a href="<?= base_url('admin/order-list') ?>">전체내역조회</a></li>
-                    <li><a href="<?= base_url('admin/company-list') ?>">거래처관리</a></li>
+                    <li><a href="<?= base_url('admin/settings') ?>">설정</a></li>
+                    <li><a href="<?= base_url('admin/login-attempts') ?>">로그인 기록</a></li>
+                    <li><a href="<?= base_url('admin/api-list') ?>">인성API연계센터 관리</a></li>
                 </ul>
             </li>
             <?php
                 endif;
-                
-                // 콜센터 관리자 메뉴 (user_type = 3) 또는 거래처 관리자 메뉴 (user_class = 1) - 거래처관리만
+
+                // 콜센터 관리자 메뉴 (user_type = 3) 또는 거래처 관리자 메뉴 (user_class = 1)
                 if ($userType == '3' || $userClass == '1'):
             ?>
             <li class="nav-item has-submenu">
@@ -289,7 +332,6 @@
                 </ul>
             </li>
             <?php if ($userRole === 'super_admin'): ?>
-            
             <!-- 콜센터 관리 -->
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
@@ -299,26 +341,12 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('call-center/building') ?>">🏢 빌딩 콜센터 관리</a></li>
-                    <!--
-                    <li><a href="<?= base_url('call-center/driver') ?>">👥 기사관리</a></li>
-                    <li><a href="<?= base_url('call-center/settlement') ?>">🧮 정산관리</a></li>
-                    <li><a href="<?= base_url('call-center/billing') ?>">📋 청구관리</a></li>
-                    <li><a href="<?= base_url('call-center/receivables') ?>">💰 미수관리</a></li>
-                    <li><a href="<?= base_url('call-center/fee') ?>">💵 요금관리</a></li>
-                    <li><a href="<?= base_url('call-center/permission') ?>">🔐 권한 설정 관리</a></li>
-                    <li><a href="<?= base_url('call-center/tax') ?>">📊 세무 관리</a></li>
-                    <li><a href="<?= base_url('call-center/management-info') ?>">📈 경영정보관리</a></li>
-                    <li><a href="<?= base_url('call-center/auto-dispatch') ?>">🚗 자동배차관리</a></li>
-                    <li><a href="<?= base_url('hub-center') ?>">🏗️ 허브센타관리</a></li>
-                    //-->
                     <li><a href="<?= base_url('group-company') ?>">🏢 그룹사 관리</a></li>
                     <li><a href="<?= base_url('logistics-representative') ?>">👑 나도 물류 대표</a></li>
                 </ul>
             </li>
-            
-            
-            
-            <!-- 관리자 설정 - 통합된 관리자 설정 메뉴 -->
+
+            <!-- 관리자 설정 -->
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
                     <span class="nav-icon">⚙️</span>
@@ -330,8 +358,9 @@
                     <li><a href="<?= base_url('admin/pricing') ?>">요금설정</a></li>
                     <li><a href="<?= base_url('shipping-company') ?>">운송사 관리</a></li>
                     <li><a href="<?= base_url('admin/notification') ?>">알림설정</a></li>
-                    <li><a href="<?= base_url('admin/order-list') ?>">전체내역조회</a></li>
-                    <li><a href="<?= base_url('admin/company-list') ?>">거래처관리</a></li>
+                    <li><a href="<?= base_url('admin/settings') ?>">설정</a></li>
+                    <li><a href="<?= base_url('admin/login-attempts') ?>">로그인 기록</a></li>
+                    <li><a href="<?= base_url('admin/api-list') ?>">인성API연계센터 관리</a></li>
                 </ul>
             </li>
             <?php endif; ?>

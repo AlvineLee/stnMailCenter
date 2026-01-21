@@ -78,7 +78,7 @@
                            class="bg-white text-gray-700 border border-gray-300 px-3 py-2 rounded text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors flex-1" 
                            placeholder="회사 코드 입력">
                     <button type="button" id="customerSearchButtonMain" onclick="openCustomerSearchPopupMain()" class="bg-gray-100 text-gray-700 border border-gray-300 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors whitespace-nowrap">
-                        고객검색
+                        고객확인
                     </button>
                 </div>
                 <?php endif; ?>
@@ -91,7 +91,7 @@
                            placeholder="회사 코드 입력" 
                            value="<?= esc(isset($api_idx) ? $api_idx : '') ?>">
                     <button type="button" id="customerSearchButton" onclick="openCustomerSearchPopupMain()" class="bg-gray-100 text-gray-700 border border-gray-300 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors whitespace-nowrap">
-                        고객검색
+                        고객확인
                     </button>
                 </div>
                 <?php endif; ?>
