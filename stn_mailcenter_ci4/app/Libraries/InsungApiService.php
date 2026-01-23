@@ -19,10 +19,18 @@ class InsungApiService
     public function __construct()
     {
         $this->apiListModel = new InsungApiListModel();
-        
+
         // key_str은 설정 파일이나 환경 변수에서 가져올 수 있음
         // 임시로 빈 문자열로 설정 (실제 사용 시 설정 필요)
         $this->keyStr = getenv('INSUNG_KEY_STR') ?: '';
+    }
+
+    /**
+     * API 기본 URL 반환
+     */
+    public function getBaseUrl(): string
+    {
+        return $this->baseUrl;
     }
 
     /**

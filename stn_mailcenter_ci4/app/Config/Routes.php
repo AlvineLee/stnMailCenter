@@ -13,6 +13,7 @@ $routes->group('auth', function($routes) {
     $routes->get('login', 'Auth::login');
     $routes->post('processLogin', 'Auth::processLogin');
     $routes->get('logout', 'Auth::logout');
+    $routes->post('checkRecaptcha', 'Auth::checkRecaptcha');
 });
 
 // 고객검색 관련 라우트
@@ -279,6 +280,9 @@ $routes->group('insung', function($routes) {
     $routes->get('cc-list', 'Insung::ccList');
     $routes->get('company-list', 'Insung::companyList');
     $routes->get('user-list', 'Insung::userList');
+    // 퀵사별 통계
+    $routes->get('stats', 'Insung::stats');
+    $routes->get('getStatsData', 'Insung::getStatsData');
     $routes->get('getCompaniesByCc', 'Insung::getCompaniesByCc');
     $routes->get('getCompaniesByCcForSelect', 'Insung::getCompaniesByCcForSelect');
     $routes->post('uploadCcLogo', 'Insung::uploadCcLogo');
@@ -327,6 +331,14 @@ $routes->group('admin', function($routes) {
     $routes->get('getApiDetail', 'Admin::getApiDetail');
     $routes->post('refreshApiToken', 'Admin::refreshApiToken');
     $routes->post('refreshAllApiTokens', 'Admin::refreshAllApiTokens');
+});
+
+// 인성주문 관련 라우트 (거래처 코드 2338395 전용)
+$routes->group('insung-order', function($routes) {
+    $routes->get('list', 'InsungOrder::list');
+    $routes->post('fetchOrders', 'InsungOrder::fetchOrders');
+    $routes->get('getRedisStats', 'InsungOrder::getRedisStats');
+    $routes->get('getCachedOrders', 'InsungOrder::getCachedOrders');
 });
 
 // 테스트 라우트

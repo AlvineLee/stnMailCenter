@@ -162,6 +162,25 @@ class Auth extends BaseController
         $ipAddress = $this->request->getIPAddress(); // 내부망 IP (REMOTE_ADDR)
         $forwardedIp = $this->getForwardedIp(); // 외부 IP (X-Forwarded-For)
 
+        // reCAPTCHA v3 검증
+        $recaptchaResult = $this->verifyRecaptcha();
+        if ($recaptchaResult !== true) {
+            // AJAX 요청인 경우 JSON 응답 반환
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'error' => '보안 검증 실패',
+                    'error_detail' => $recaptchaResult,
+                    'error_type' => 'recaptcha_failed'
+                ]);
+            }
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', '보안 검증 실패')
+                ->with('error_detail', $recaptchaResult);
+        }
+
         // 로그인 잠금 체크
         $loginAttemptModel = new \App\Models\LoginAttemptModel();
         $systemSettingModel = new \App\Models\SystemSettingModel();
@@ -550,6 +569,10 @@ class Auth extends BaseController
                 // 현재 실패 횟수 확인
                 $currentLockStatus = $loginAttemptModel->isLocked($username, $ipAddress, $maxAttempts, $lockoutMinutes);
                 $remainingAttempts = $maxAttempts - $currentLockStatus['failure_count'];
+                $failCount = $currentLockStatus['failure_count'] ?? 0;
+
+                // 5회 이상 실패 시 v2 챌린지 필요
+                $needsV2Challenge = ($failCount >= 5);
 
                 // 로그인 실패: 아이디/비밀번호 불일치
                 $errorMessage = '입력하신 아이디와 비밀번호를 확인해주세요. 대소문자와 특수문자를 정확히 입력했는지 확인하시기 바랍니다.';
@@ -564,7 +587,8 @@ class Auth extends BaseController
                         'error' => '아이디 또는 비밀번호가 올바르지 않습니다.',
                         'error_detail' => $errorMessage,
                         'error_type' => 'invalid_credentials',
-                        'remaining_attempts' => $remainingAttempts
+                        'remaining_attempts' => $remainingAttempts,
+                        'needs_v2_challenge' => $needsV2Challenge
                     ]);
                 }
 
@@ -1018,6 +1042,17 @@ class Auth extends BaseController
                 // 주문 목록 동기화 실패해도 로그인은 진행
                 log_message('error', "Failed to trigger Insung orders sync on login: " . $e->getMessage());
             }
+
+            // 거래처 2338395인 경우: 전체 콜센터 주문 동기화 (인성주문 페이지용)
+            try {
+                $userCompanyCode = $user['user_company'] ?? null;
+                if ($userCompanyCode == '2338395') {
+                    $this->syncInsungAllOrdersViaCLI();
+                    log_message('info', "Auth::processLogin - Triggered insung:sync-all-orders for company 2338395");
+                }
+            } catch (\Exception $e) {
+                log_message('error', "Failed to trigger Insung all orders sync on login: " . $e->getMessage());
+            }
             
             // 로그인 시 직원 검색 큐 등록 (CLI 명령어로 백그라운드 실행)
             try {
@@ -1292,10 +1327,261 @@ class Auth extends BaseController
             exec($command);
             
             // log_message('info', "Insung employees search queue created on login: queue_idx={$queueIdx}, comp_code={$compCode}");
-            
+
         } catch (\Exception $e) {
             log_message('error', "Exception in syncInsungEmployeesViaCLI: " . $e->getMessage());
         }
     }
-    
+
+    /**
+     * 전체 콜센터 주문 동기화 CLI 실행 (인성주문 페이지용)
+     * 거래처 코드 2338395 전용
+     */
+    private function syncInsungAllOrdersViaCLI()
+    {
+        try {
+            // 프로젝트 루트 경로 찾기
+            $projectRoot = ROOTPATH;
+            $sparkPath = $projectRoot . 'spark';
+
+            // spark 파일이 존재하는지 확인
+            if (!file_exists($sparkPath)) {
+                log_message('warning', "Spark file not found at: {$sparkPath}");
+                return;
+            }
+
+            // 오늘 날짜 (YYYYMMDD 형식)
+            $today = date('Ymd');
+
+            // CLI 명령어 구성 (백그라운드 실행)
+            $command = sprintf(
+                'php %s insung:sync-all-orders %s %s > /dev/null 2>&1 &',
+                escapeshellarg($sparkPath),
+                escapeshellarg($today),
+                escapeshellarg($today)
+            );
+
+            // 명령어 실행
+            exec($command);
+
+            log_message('info', "Insung all orders sync CLI command triggered: {$command}");
+
+        } catch (\Exception $e) {
+            log_message('error', "Exception in syncInsungAllOrdersViaCLI: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * reCAPTCHA v2 챌린지 필요 여부 체크 (AJAX 엔드포인트)
+     * 5회 이상 로그인 실패 시 v2 챌린지 필요
+     */
+    public function checkRecaptcha()
+    {
+        // JSON 요청 파싱
+        $json = $this->request->getJSON(true);
+        $username = $json['username'] ?? '';
+
+        if (empty($username)) {
+            return $this->response->setJSON([
+                'needs_v2' => false,
+                'fail_count' => 0
+            ]);
+        }
+
+        $ipAddress = $this->request->getIPAddress();
+        $loginAttemptModel = new \App\Models\LoginAttemptModel();
+        $systemSettingModel = new \App\Models\SystemSettingModel();
+
+        $loginSettings = $systemSettingModel->getLoginSettings();
+        $maxAttempts = (int)($loginSettings['login_max_attempts'] ?? 5);
+        $lockoutMinutes = (int)($loginSettings['login_lockout_minutes'] ?? 5);
+
+        // 현재 실패 횟수 조회
+        $lockStatus = $loginAttemptModel->isLocked($username, $ipAddress, $maxAttempts, $lockoutMinutes);
+        $failCount = $lockStatus['failure_count'] ?? 0;
+
+        // 5회 이상 실패 시 v2 챌린지 필요
+        $needsV2 = ($failCount >= 5);
+
+        return $this->response->setJSON([
+            'needs_v2' => $needsV2,
+            'fail_count' => $failCount
+        ]);
+    }
+
+    /**
+     * reCAPTCHA v3 + v2 하이브리드 검증
+     *
+     * @return true|string 성공 시 true, 실패 시 에러 메시지
+     */
+    private function verifyRecaptcha()
+    {
+        $v3SecretKey = getenv('RECAPTCHA_V3_SECRET_KEY');
+        $v2SecretKey = getenv('RECAPTCHA_V2_SECRET_KEY');
+        $threshold = (float)(getenv('RECAPTCHA_V3_THRESHOLD') ?: 0.5);
+
+        // reCAPTCHA 설정이 없으면 검증 건너뛰기
+        if (empty($v3SecretKey) && empty($v2SecretKey)) {
+            log_message('debug', 'Auth::verifyRecaptcha - reCAPTCHA not configured, skipping verification');
+            return true;
+        }
+
+        $recaptchaV3Token = $this->request->getPost('recaptcha_token');
+        $recaptchaV2Token = $this->request->getPost('recaptcha_v2_token');
+
+        // v2 토큰이 있으면 v2 검증 (5회 이상 실패 시)
+        if (!empty($recaptchaV2Token) && !empty($v2SecretKey)) {
+            return $this->verifyRecaptchaV2($recaptchaV2Token, $v2SecretKey);
+        }
+
+        // v3 토큰이 없으면 검증 건너뛰기 (클라이언트 측 reCAPTCHA 오류 시 graceful degradation)
+        if (empty($recaptchaV3Token)) {
+            log_message('warning', 'Auth::verifyRecaptcha - reCAPTCHA token is empty, skipping verification');
+            return true;
+        }
+
+        // v3 Secret Key가 없으면 검증 건너뛰기
+        if (empty($v3SecretKey)) {
+            log_message('debug', 'Auth::verifyRecaptcha - v3 secret key not configured, skipping verification');
+            return true;
+        }
+
+        try {
+            // Google reCAPTCHA API 호출
+            $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+            $postData = [
+                'secret' => $v3SecretKey,
+                'response' => $recaptchaV3Token,
+                'remoteip' => $this->request->getIPAddress()
+            ];
+
+            // cURL 요청
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $verifyUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                log_message('error', "Auth::verifyRecaptcha - cURL error: {$curlError}");
+                // cURL 오류 시 로그인 허용 (reCAPTCHA 서버 문제일 수 있음)
+                return true;
+            }
+
+            if ($httpCode !== 200) {
+                log_message('error', "Auth::verifyRecaptcha - HTTP error: {$httpCode}");
+                // HTTP 오류 시 로그인 허용
+                return true;
+            }
+
+            $result = json_decode($response, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                log_message('error', "Auth::verifyRecaptcha - JSON decode error: " . json_last_error_msg());
+                // JSON 파싱 오류 시 로그인 허용
+                return true;
+            }
+
+            // 검증 결과 확인
+            if (!isset($result['success']) || $result['success'] !== true) {
+                $errorCodes = $result['error-codes'] ?? [];
+                log_message('warning', "Auth::verifyRecaptcha - Verification failed: " . json_encode($errorCodes));
+                return '보안 검증에 실패했습니다. 다시 시도해주세요.';
+            }
+
+            // 액션 확인 (login 액션인지)
+            if (isset($result['action']) && $result['action'] !== 'login') {
+                log_message('warning', "Auth::verifyRecaptcha - Invalid action: {$result['action']}");
+                return '잘못된 보안 검증 요청입니다.';
+            }
+
+            // 점수 확인 (봇 여부 판단)
+            $score = $result['score'] ?? 0;
+            if ($score < $threshold) {
+                log_message('warning', "Auth::verifyRecaptcha - Low score: {$score} (threshold: {$threshold})");
+                return '보안 검증 점수가 낮습니다. 잠시 후 다시 시도해주세요.';
+            }
+
+            log_message('info', "Auth::verifyRecaptcha - v3 verification successful: score={$score}");
+            return true;
+
+        } catch (\Exception $e) {
+            log_message('error', "Auth::verifyRecaptcha - Exception: " . $e->getMessage());
+            // 예외 발생 시 로그인 허용 (서비스 장애 방지)
+            return true;
+        }
+    }
+
+    /**
+     * reCAPTCHA v2 검증
+     *
+     * @param string $token v2 토큰
+     * @param string $secretKey v2 시크릿 키
+     * @return true|string 성공 시 true, 실패 시 에러 메시지
+     */
+    private function verifyRecaptchaV2($token, $secretKey)
+    {
+        try {
+            // Google reCAPTCHA API 호출
+            $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+            $postData = [
+                'secret' => $secretKey,
+                'response' => $token,
+                'remoteip' => $this->request->getIPAddress()
+            ];
+
+            // cURL 요청
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $verifyUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                log_message('error', "Auth::verifyRecaptchaV2 - cURL error: {$curlError}");
+                return true; // graceful degradation
+            }
+
+            if ($httpCode !== 200) {
+                log_message('error', "Auth::verifyRecaptchaV2 - HTTP error: {$httpCode}");
+                return true;
+            }
+
+            $result = json_decode($response, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                log_message('error', "Auth::verifyRecaptchaV2 - JSON decode error: " . json_last_error_msg());
+                return true;
+            }
+
+            // 검증 결과 확인
+            if (!isset($result['success']) || $result['success'] !== true) {
+                $errorCodes = $result['error-codes'] ?? [];
+                log_message('warning', "Auth::verifyRecaptchaV2 - Verification failed: " . json_encode($errorCodes));
+                return '체크박스 인증에 실패했습니다. 다시 시도해주세요.';
+            }
+
+            log_message('info', "Auth::verifyRecaptchaV2 - Verification successful");
+            return true;
+
+        } catch (\Exception $e) {
+            log_message('error', "Auth::verifyRecaptchaV2 - Exception: " . $e->getMessage());
+            return true;
+        }
+    }
+
 }

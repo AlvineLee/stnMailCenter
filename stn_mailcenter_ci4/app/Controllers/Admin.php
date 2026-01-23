@@ -5122,25 +5122,20 @@ class Admin extends BaseController
         }
 
         try {
-            // 인성 API로 토큰 갱신 요청
+            // 인성 API로 토큰 갱신 요청 (updateTokenKey가 DB 저장까지 처리)
             $insungApiService = new \App\Libraries\InsungApiService();
-            $tokenResult = $insungApiService->refreshToken($apiInfo['mcode'], $apiInfo['cccode'], $apiInfo['ckey']);
+            $newToken = $insungApiService->updateTokenKey($idx);
 
-            if ($tokenResult['success']) {
-                // 토큰 업데이트
-                $this->insungApiListModel->update($idx, [
-                    'token' => $tokenResult['token']
-                ]);
-
+            if ($newToken) {
                 return $this->response->setJSON([
                     'success' => true,
                     'message' => '토큰이 갱신되었습니다.',
-                    'token' => $tokenResult['token']
+                    'token' => $newToken
                 ]);
             } else {
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => $tokenResult['message'] ?? '토큰 갱신에 실패했습니다.'
+                    'message' => '토큰 갱신에 실패했습니다.'
                 ]);
             }
         } catch (\Exception $e) {
@@ -5185,16 +5180,14 @@ class Admin extends BaseController
             $insungApiService = new \App\Libraries\InsungApiService();
 
             foreach ($apiList as $api) {
-                $tokenResult = $insungApiService->refreshToken($api['mcode'], $api['cccode'], $api['ckey']);
+                // updateTokenKey가 DB 저장까지 처리
+                $newToken = $insungApiService->updateTokenKey($api['idx']);
 
-                if ($tokenResult['success']) {
-                    $this->insungApiListModel->update($api['idx'], [
-                        'token' => $tokenResult['token']
-                    ]);
+                if ($newToken) {
                     $successCount++;
                 } else {
                     $failCount++;
-                    log_message('error', "Token refresh failed for idx={$api['idx']}: " . ($tokenResult['message'] ?? 'Unknown error'));
+                    log_message('error', "Token refresh failed for idx={$api['idx']}");
                 }
             }
 

@@ -6,6 +6,7 @@ use App\Controllers\BaseController;
 use App\Models\InsungCcListModel;
 use App\Models\InsungCompanyListModel;
 use App\Models\InsungUsersListModel;
+use App\Models\InsungStatsModel;
 
 class Insung extends BaseController
 {
@@ -1262,7 +1263,7 @@ class Insung extends BaseController
                 // 파일 내용을 먼저 읽어서 메모리에 저장 (여러 고객사에 복사하기 위해)
                 $fileContent = file_get_contents($file->getTempName());
                 if ($fileContent === false) {
-                    throw new \Exception('파일을 읽을 수 없습니다.');
+                    throw new \Exception('파일을 읽��� 수 없습니다.');
                 }
                 
                 // 각 고객사에 대해 로고 업로드
@@ -1935,6 +1936,169 @@ class Insung extends BaseController
         return $this->response->setJSON([
             'success' => true,
             'api_list' => $apiList
+        ]);
+    }
+
+    /**
+     * 퀵사별 통계 대시보드 (user_type = 1 접근 가능)
+     */
+    public function stats()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return redirect()->to('/auth/login');
+        }
+
+        // daumdata 로그인 및 user_type = 1 체크
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return redirect()->to('/')->with('error', '접근 권한이 없습니다.');
+        }
+
+        $statsModel = new InsungStatsModel();
+        $db = \Config\Database::connect();
+
+        // 기간 유형 (기본: 일별)
+        $periodType = $this->request->getGet('period_type') ?? 'daily';
+        $ccCode = $this->request->getGet('cc_code') ?? null;
+        $periodStart = $this->request->getGet('period_start') ?? null;
+
+        // 유효한 기간 유형 체크
+        $validPeriodTypes = ['daily', 'weekly', 'monthly', 'quarterly', 'semi_annual', 'yearly'];
+        if (!in_array($periodType, $validPeriodTypes)) {
+            $periodType = 'daily';
+        }
+
+        if ($ccCode === 'all' || $ccCode === '') {
+            $ccCode = null;
+        }
+
+        // 사용 가능한 기간 목록 조회 (최근 30개)
+        $availablePeriods = $db->table('tbl_insung_stats')
+            ->select('period_start, period_label')
+            ->where('period_type', $periodType)
+            ->where('cc_code IS NULL')
+            ->orderBy('period_start', 'DESC')
+            ->limit(30)
+            ->get()
+            ->getResultArray();
+
+        // 선택된 기간이 없으면 최신 기간 사용
+        if (empty($periodStart) && !empty($availablePeriods)) {
+            $periodStart = $availablePeriods[0]['period_start'];
+        }
+
+        // 기간별 통계 조회 (최근 30개) - 테이블용
+        $stats = $statsModel->getStatsByPeriodType($periodType, $ccCode, 30);
+
+        // 전체 통계 조회 (cc_code = null) - 테이블용
+        $totalStats = $statsModel->getStatsByPeriodType($periodType, null, 30);
+
+        // 선택된 기간의 콜센터별 통계 조회 (전체)
+        $topCallCenters = [];
+        if ($periodStart) {
+            $topCallCenters = $statsModel->getTopCallCenters($periodType, $periodStart, 'total_orders', 50);
+        }
+
+        // 선택된 기간의 전체 통계 (요약 카드용)
+        $selectedPeriodStats = null;
+        if ($periodStart) {
+            $selectedPeriodStats = $statsModel->getTotalStats($periodType, $periodStart);
+        }
+
+        // 콜센터 목록 조회 (필터용) - MAX로 비어있지 않은 api_name 선택
+        $ccList = $db->table('tbl_insung_stats')
+            ->select('cc_code, MAX(api_name) as api_name')
+            ->where('cc_code IS NOT NULL')
+            ->groupBy('cc_code')
+            ->orderBy('api_name', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        // 기간 유형 라벨
+        $periodTypeLabels = [
+            'daily' => '일별',
+            'weekly' => '주별',
+            'monthly' => '월별',
+            'quarterly' => '분기별',
+            'semi_annual' => '반기별',
+            'yearly' => '연별'
+        ];
+
+        $data = [
+            'title' => '퀵사별 통계',
+            'content_header' => [
+                'title' => '퀵사별 통계',
+                'description' => '퀵사별 주문 통계를 조회합니다.'
+            ],
+            'stats' => $stats,
+            'total_stats' => $totalStats,
+            'top_call_centers' => $topCallCenters,
+            'selected_period_stats' => $selectedPeriodStats,
+            'cc_list' => $ccList,
+            'available_periods' => $availablePeriods,
+            'period_type' => $periodType,
+            'period_type_label' => $periodTypeLabels[$periodType] ?? $periodType,
+            'period_type_labels' => $periodTypeLabels,
+            'period_start' => $periodStart,
+            'cc_code_filter' => $ccCode
+        ];
+
+        return view('insung/stats', $data);
+    }
+
+    /**
+     * 통계 데이터 API (AJAX - 차트용)
+     */
+    public function getStatsData()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $statsModel = new InsungStatsModel();
+
+        $periodType = $this->request->getGet('period_type') ?? 'daily';
+        $ccCode = $this->request->getGet('cc_code') ?? null;
+        $limit = (int)($this->request->getGet('limit') ?? 30);
+
+        if ($ccCode === 'all' || $ccCode === '') {
+            $ccCode = null;
+        }
+
+        // 통계 조회
+        $stats = $statsModel->getStatsByPeriodType($periodType, $ccCode, $limit);
+
+        // 차트 데이터 포맷
+        $chartData = [
+            'labels' => [],
+            'total_orders' => [],
+            'completed_orders' => [],
+            'cancelled_orders' => [],
+            'completion_rate' => []
+        ];
+
+        // 역순으로 (오래된 것부터)
+        $stats = array_reverse($stats);
+
+        foreach ($stats as $stat) {
+            $chartData['labels'][] = $stat['period_label'];
+            $chartData['total_orders'][] = (int)$stat['total_orders'];
+            $chartData['completed_orders'][] = (int)$stat['state_30_count'];
+            $chartData['cancelled_orders'][] = (int)$stat['state_40_count'];
+            $chartData['completion_rate'][] = (float)$stat['completion_rate'];
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'chart_data' => $chartData,
+            'stats' => $stats
         ]);
     }
 }
