@@ -227,6 +227,19 @@
             <?php
             // daumdata 로그인 메뉴
             if ($loginType === 'daumdata'):
+                // 거래처 코드 2338395 전용 메뉴 (인성주문)
+                $userCompCode = session()->get('user_company');
+                if ($userCompCode == '2338395'):
+            ?>
+            <li class="nav-item">
+                <a href="<?= base_url('insung-order/list') ?>" class="nav-link">
+                    <span class="nav-icon">📦</span>
+                    <span class="nav-text">인성주문</span>
+                </a>
+            </li>
+            <?php
+                endif;
+
                 // 거래처관리 메뉴 (user_type = 1만)
                 if ($userType == '1'):
             ?>
@@ -254,6 +267,8 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('insung/cc-list') ?>">콜센터 목록</a></li>
+                    <!-- 통계 메뉴는 데이터 누적 후 활성화 예정 -->
+                    <!-- <li><a href="<?= base_url('insung/stats') ?>">📊 퀵사별 통계</a></li> -->
                 </ul>
             </li>
             <?php

@@ -7,6 +7,12 @@
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
+    <!-- Google reCAPTCHA v3 + v2 하이브리드 (v3 스크립트로 v2 위젯도 렌더링) -->
+    <?php $recaptchaV3SiteKey = getenv('RECAPTCHA_V3_SITE_KEY') ?: ''; ?>
+    <?php $recaptchaV2SiteKey = getenv('RECAPTCHA_V2_SITE_KEY') ?: ''; ?>
+    <?php if ($recaptchaV3SiteKey): ?>
+    <script src="https://www.google.com/recaptcha/api.js?render=<?= esc($recaptchaV3SiteKey) ?>"></script>
+    <?php endif; ?>
 </head>
 <body class="login-page">
     <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-300 to-gray-400">
@@ -71,6 +77,19 @@
             <?php endif; ?>
             
             <?= form_open('auth/processLogin', ['class' => 'space-y-3', 'id' => 'loginForm', 'data-ajax' => 'true']) ?>
+                <!-- reCAPTCHA v3 토큰 -->
+                <input type="hidden" name="recaptcha_token" id="recaptchaToken" value="">
+                <!-- reCAPTCHA v2 토큰 -->
+                <input type="hidden" name="recaptcha_v2_token" id="recaptchaV2Token" value="">
+
+                <!-- reCAPTCHA v2 위젯 (5회 이상 실패 시 표시) -->
+                <div id="recaptchaV2Wrapper" class="hidden mb-3">
+                    <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-2">
+                        <p class="text-xs text-yellow-800 mb-2">로그인 시도가 여러 번 실패했습니다. 아래 체크박스를 클릭해주세요.</p>
+                        <div id="recaptchaV2Widget"></div>
+                    </div>
+                </div>
+
                 <?php if (!$is_subdomain && !empty($api_list)): ?>
                 <!-- 메인도메인에서 회사 선택 (api_list 사용) -->
                 <div class="flex gap-2 mb-3">
@@ -187,11 +206,11 @@
 
 제7조 개인정보의 열람 및 정정
 1.	귀하는 언제든지 등록되어 있는 귀하의 개인정보를 열람하거나 정정하실 수 있습니다. 개인정보 열람 및 정정을 하고자 할 경우에는 "회원정보수정"을 클릭하여 직접 열람 또는 정정하거나, 개인정보관리책임자에게 E-mail로 연락하시면 조치하겠습니다.
-2.	귀하가 개인정보의 오류에 대한 정정을 요청한 경우, 정정을 완료하기 전까지 당해 개인정보를 이용하지 않습니다.
+2.	귀하가 개인정보의 오류에 대한 정정을 요청한 경우, 정정을 완료하기 전까지 당해 개��정보를 이용하지 않습니다.
 
 제8조 개인정보 수집, 이용, 제공에 대한 동의철회
-1.	회원가입 등을 통해 개인정보의 수집, 이용, 제공에 대해 귀하께서 동의하신 내용을 귀하는 언제든지 철회하실 수 있습니다. 동의철회는 "마이페이지"의 "회원탈퇴(동의철회)"를 클릭하거나 개인정보관리책임자에게 E-mail등으로 연락하시면 즉시 개인정보의 삭제 등 필요한 조치를 하겠습니다.
-2.	본 사이트는 개인정보의 수집에 대한 회원탈퇴(동의철회)를 개인정보 수집시와 동등한 방법 및 절차로 행사할 수 있도록 필요한 조치를 하겠습니다.
+1.	회원가입 등을 통해 개인정보��� 수집, 이용, 제공에 대해 귀하께서 동의하신 내용을 귀하는 언제든지 철회하실 수 있습니다. 동의철회는 "마이페이지"의 "회원탈퇴(동의철회)"를 클릭하거나 개인정보관리책임자에게 E-mail등으로 연락하시면 즉시 개인정보의 삭제 등 필요한 조치를 하겠습니다.
+2.	본 사이트는 개인정보의 수집에 대한 회원탈퇴(동의���회)를 개인정보 수집시와 동등한 방법 및 절차로 행사할 수 있도록 필요한 조치를 하겠습니다.
 
 제9조 개인정보의 보유 및 이용기간
 1.	원칙적으로, 개인정보 수집 및 이용목적이 달성된 후에는 해당 정보를 지체 없이 파기합니다. 단, 다음의 정보에 대해서는 아래의 이유로 명시한 기간 동안 보존합니다.
@@ -429,6 +448,69 @@
     </div>
 
     <script>
+        // reCAPTCHA v2 설정
+        const recaptchaV2SiteKey = '<?= esc(getenv('RECAPTCHA_V2_SITE_KEY') ?: '') ?>';
+        let recaptchaV2WidgetId = null;
+        let needsV2Challenge = false;
+
+        // reCAPTCHA v2 성공 콜백
+        function onRecaptchaV2Success(token) {
+            document.getElementById('recaptchaV2Token').value = token;
+        }
+
+        // reCAPTCHA v2 만료 콜백
+        function onRecaptchaV2Expired() {
+            document.getElementById('recaptchaV2Token').value = '';
+        }
+
+        // v2 체크 필요 여부 확인 (서버에 AJAX 요청)
+        async function checkNeedsV2Challenge(username) {
+            if (!recaptchaV2SiteKey || !username) {
+                return false;
+            }
+
+            try {
+                const response = await fetch('<?= base_url('auth/checkRecaptcha') ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ username: username })
+                });
+
+                const data = await response.json();
+                return data.needs_v2 === true;
+            } catch (error) {
+                console.warn('checkNeedsV2Challenge error:', error);
+                return false;
+            }
+        }
+
+        // v2 위젯 표시 (v3 스크립트의 grecaptcha.render() 사용)
+        function showV2Challenge() {
+            const wrapper = document.getElementById('recaptchaV2Wrapper');
+            if (wrapper) {
+                wrapper.classList.remove('hidden');
+                needsV2Challenge = true;
+
+                // v2 위젯이 아직 렌더링되지 않았다면 렌더링
+                if (recaptchaV2WidgetId === null && recaptchaV2SiteKey && typeof grecaptcha !== 'undefined') {
+                    try {
+                        grecaptcha.ready(function() {
+                            recaptchaV2WidgetId = grecaptcha.render('recaptchaV2Widget', {
+                                'sitekey': recaptchaV2SiteKey,
+                                'callback': onRecaptchaV2Success,
+                                'expired-callback': onRecaptchaV2Expired
+                            });
+                        });
+                    } catch (e) {
+                        console.warn('reCAPTCHA v2 render error:', e);
+                    }
+                }
+            }
+        }
+
         // 쿠키 관련 함수
         function setCookie(name, value, days) {
             const expires = new Date();
@@ -672,42 +754,116 @@
             }
             <?php endif; ?>
             
-            const formData = new FormData(form);
             const loginButton = document.getElementById('loginButton');
             const originalButtonText = loginButton.innerHTML;
-            
+            const username = document.getElementById('username').value.trim();
+
             // 로딩 상태
             loginButton.disabled = true;
             loginButton.innerHTML = '<svg class="animate-spin h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 로그인 중...';
-            
-            // AJAX 요청
-            fetch('<?= base_url('auth/processLogin') ?>', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // 로그인 성공
-                    window.location.href = data.redirect || '/';
-                } else {
-                    // 로그인 실패
+
+            // reCAPTCHA v3 토큰 생성 후 로그인 요청
+            const recaptchaSiteKey = '<?= esc(getenv('RECAPTCHA_V3_SITE_KEY') ?: '') ?>';
+
+            // 로그인 AJAX 요청 함수
+            async function submitLogin(recaptchaToken) {
+                try {
+                    if (recaptchaToken) {
+                        document.getElementById('recaptchaToken').value = recaptchaToken;
+                    }
+
+                    const formData = new FormData(form);
+
+                    // AJAX 요청
+                    const response = await fetch('<?= base_url('auth/processLogin') ?>', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // 로그인 성공
+                        window.location.href = data.redirect || '/';
+                    } else {
+                        // 로그인 실패
+                        loginButton.disabled = false;
+                        loginButton.innerHTML = originalButtonText;
+
+                        // v2 챌린지 필요 여부 확인 (실패 횟수 5회 이상)
+                        if (data.needs_v2_challenge) {
+                            showV2Challenge();
+                        }
+
+                        // 모든 오류를 레이어팝업으로 표시
+                        openLoginErrorPopup(data.error || '로그인 실패', data.error_detail || '알 수 없는 오류가 발생했습니다.');
+                    }
+                } catch (error) {
                     loginButton.disabled = false;
                     loginButton.innerHTML = originalButtonText;
-                    
-                    // 모든 오류를 레이어팝업으로 표시
-                    openLoginErrorPopup(data.error || '로그인 실패', data.error_detail || '알 수 없는 오류가 발생했습니다.');
+                    console.error('Login error:', error);
+                    alert('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
                 }
-            })
-            .catch(error => {
-                loginButton.disabled = false;
-                loginButton.innerHTML = originalButtonText;
-                console.error('Login error:', error);
-                alert('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
-            });
+            }
+
+            // v2 챌린지 체크 및 로그인 실행
+            async function executeLogin() {
+                // v2가 이미 필요하다고 표시된 경우, v2 토큰 체크
+                if (needsV2Challenge) {
+                    const v2Token = document.getElementById('recaptchaV2Token').value;
+                    if (!v2Token) {
+                        loginButton.disabled = false;
+                        loginButton.innerHTML = originalButtonText;
+                        alert('체크박스를 클릭하여 로봇이 아님을 확인해주세요.');
+                        return;
+                    }
+                }
+
+                // v3 토큰 생성 후 로그인
+                if (recaptchaSiteKey && typeof grecaptcha !== 'undefined') {
+                    try {
+                        grecaptcha.ready(function() {
+                            try {
+                                grecaptcha.execute(recaptchaSiteKey, { action: 'login' })
+                                    .then(function(token) {
+                                        submitLogin(token);
+                                    })
+                                    .catch(function(error) {
+                                        console.warn('reCAPTCHA execute error:', error);
+                                        submitLogin('');
+                                    });
+                            } catch (executeError) {
+                                console.warn('reCAPTCHA execute exception:', executeError);
+                                submitLogin('');
+                            }
+                        });
+                    } catch (readyError) {
+                        console.warn('reCAPTCHA ready error:', readyError);
+                        submitLogin('');
+                    }
+                } else {
+                    submitLogin('');
+                }
+            }
+
+            // 먼저 v2 필요 여부 체크 (아직 표시되지 않은 경우에만)
+            if (!needsV2Challenge && recaptchaV2SiteKey) {
+                checkNeedsV2Challenge(username).then(function(needs) {
+                    if (needs) {
+                        showV2Challenge();
+                        loginButton.disabled = false;
+                        loginButton.innerHTML = originalButtonText;
+                        alert('로그인 시도가 여러 번 실패했습니다. 아래 체크박스를 클릭해주세요.');
+                    } else {
+                        executeLogin();
+                    }
+                });
+            } else {
+                executeLogin();
+            }
         });
         
         // 모든 입력 필드에서 엔터키로 submit 방지
