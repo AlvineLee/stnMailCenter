@@ -147,4 +147,42 @@ class InsungOrderApi extends ResourceController
             ], 500);
         }
     }
+
+    /**
+     * 인성 API 호출하여 주문 갱신 (Redis 저장)
+     * 거래처 코드 2338395 하드코딩
+     *
+     * GET /api/insung-order/refresh
+     */
+    public function refresh()
+    {
+        if (!$this->validateApiKey()) {
+            return $this->unauthorizedResponse();
+        }
+
+        $fromDate = $this->request->getGet('from_date') ?? date('Y-m-d');
+        $toDate = $this->request->getGet('to_date') ?? date('Y-m-d');
+
+        // 날짜 형식 변환 (YYYY-MM-DD -> YYYYMMDD)
+        $fromDateFormatted = str_replace('-', '', $fromDate);
+        $toDateFormatted = str_replace('-', '', $toDate);
+
+        try {
+            $result = $this->insungOrderService->fetchAllCallCenterOrders($fromDateFormatted, $toDateFormatted);
+
+            return $this->respond([
+                'success' => true,
+                'message' => $result['message'] ?? '주문 갱신 완료',
+                'count' => count($result['orders'] ?? []),
+                'summary' => $result['summary'] ?? [],
+                'redis_stats' => $result['redis_stats'] ?? []
+            ]);
+        } catch (\Exception $e) {
+            return $this->respond([
+                'success' => false,
+                'message' => '주문 갱신 중 오류 발생: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
 }

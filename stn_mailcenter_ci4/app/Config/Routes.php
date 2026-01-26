@@ -94,6 +94,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function($routes) 
     $routes->get('insung-order/list', 'InsungOrderApi::list');
     $routes->get('insung-order/detail/(:any)', 'InsungOrderApi::detail/$1');
     $routes->get('insung-order/stats', 'InsungOrderApi::stats');
+    $routes->get('insung-order/refresh', 'InsungOrderApi::refresh');
 });
 
 // 배송조회 관련 라우트
