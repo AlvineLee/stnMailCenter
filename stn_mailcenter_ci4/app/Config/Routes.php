@@ -89,6 +89,13 @@ $routes->group('api-test', function($routes) {
     $routes->get('sample', 'ApiTest::generateSampleData');
 });
 
+// 외부 API 제공 (인성 주문 Redis 데이터)
+$routes->group('api', ['namespace' => 'App\Controllers\Api'], function($routes) {
+    $routes->get('insung-order/list', 'InsungOrderApi::list');
+    $routes->get('insung-order/detail/(:any)', 'InsungOrderApi::detail/$1');
+    $routes->get('insung-order/stats', 'InsungOrderApi::stats');
+});
+
 // 배송조회 관련 라우트
 $routes->group('delivery', function($routes) {
     $routes->get('list', 'Delivery::list');
