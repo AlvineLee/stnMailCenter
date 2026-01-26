@@ -8,6 +8,12 @@ use CodeIgniter\Router\RouteCollection;
 // 메인 페이지
 $routes->get('/', 'Home::index');
 
+// 메일룸 기사 앱 (PWA)
+$routes->group('mailroom-driver', function($routes) {
+    $routes->get('/', 'MailroomDriver::index');
+    $routes->get('detail/(:num)', 'MailroomDriver::detail/$1');
+});
+
 // 인증 관련 라우트
 $routes->group('auth', function($routes) {
     $routes->get('login', 'Auth::login');
