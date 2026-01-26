@@ -29,11 +29,16 @@ self.addEventListener('activate', event => {
 
 // 네트워크 우선, 실패 시 캐시
 self.addEventListener('fetch', event => {
+    // http/https만 캐시 (chrome-extension 등 제외)
+    if (!event.request.url.startsWith('http')) {
+        return;
+    }
+
     event.respondWith(
         fetch(event.request)
             .then(response => {
-                // 성공하면 캐시에 저장
-                if (response.status === 200) {
+                // 성공하면 캐시에 저장 (같은 origin만)
+                if (response.status === 200 && event.request.url.startsWith(self.location.origin)) {
                     const responseClone = response.clone();
                     caches.open(CACHE_NAME)
                         .then(cache => cache.put(event.request, responseClone));
