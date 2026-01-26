@@ -37,6 +37,35 @@
             opacity: 0.9;
             margin-top: 4px;
         }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .install-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+        }
+        .install-btn.hidden {
+            display: none;
+        }
+        .install-btn:active {
+            background: rgba(255,255,255,0.3);
+        }
+        .install-btn svg {
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
         .stats {
             display: flex;
             gap: 8px;
@@ -247,7 +276,15 @@
 </head>
 <body>
     <div class="header">
-        <h1>메일룸 기사</h1>
+        <div class="header-row">
+            <h1>메일룸 기사</h1>
+            <button id="installBtn" class="install-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                앱 설치
+            </button>
+        </div>
         <div class="driver-info"><?= esc($driver_name) ?> 님 | 그랑서울타워 담당</div>
     </div>
 
@@ -363,6 +400,52 @@
                 .then(reg => console.log('SW registered'))
                 .catch(err => console.log('SW registration failed', err));
         }
+
+        // PWA 설치 프롬프트
+        let deferredPrompt = null;
+        const installBtn = document.getElementById('installBtn');
+
+        // 이미 앱으로 실행 중이면 버튼 숨김
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+            installBtn.classList.add('hidden');
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+
+        installBtn.addEventListener('click', async () => {
+            // PWA 설치 가능한 경우
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.classList.add('hidden');
+                }
+                deferredPrompt = null;
+                return;
+            }
+
+            // iOS Safari
+            if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                alert('📱 앱 설치 방법\n\n1. Safari 하단의 공유 버튼(□↑)을 누르세요\n2. "홈 화면에 추가"를 선택하세요');
+                return;
+            }
+
+            // Android Chrome
+            if (/Android/.test(navigator.userAgent)) {
+                alert('📱 앱 설치 방법\n\n1. 우측 상단 ⋮ 메뉴를 누르세요\n2. "홈 화면에 추가" 또는 "앱 설치"를 선택하세요');
+                return;
+            }
+
+            // PC 브라우저
+            alert('📱 앱 설치 방법\n\n주소창 오른쪽의 설치 아이콘(⊕)을 클릭하거나,\n메뉴에서 "앱 설치"를 선택하세요.\n\n※ HTTPS 환경에서만 설치 가능합니다.');
+        });
+
+        window.addEventListener('appinstalled', () => {
+            installBtn.classList.add('hidden');
+        });
     </script>
 </body>
 </html>
