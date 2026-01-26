@@ -116,7 +116,7 @@ class Cache extends BaseConfig
      */
     public array $redis = [
         'host'     => '127.0.0.1',
-        'password' => 'dptmxldps1!',
+        'password' => 'dptmxldps1',
         'port'     => 6379,
         'timeout'  => 0,
         'database' => 0,

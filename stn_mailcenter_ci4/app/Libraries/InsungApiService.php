@@ -55,12 +55,9 @@ class InsungApiService
         
         if (curl_errno($ch)) {
             $error = curl_error($ch);
-            curl_close($ch);
             log_message('error', 'Insung API cURL Error: ' . $error);
             return false;
         }
-        
-        curl_close($ch);
         
         // JSON 문자열 전처리 (기존 로직과 동일)
         $response = str_replace("\\u", "[slashu]", $response);
