@@ -51,13 +51,13 @@ class Logger extends BaseConfig
                 $this->threshold = 4;   // 운영: Error 이상만 로그 (INFO, DEBUG 제외)
                 break;
             case 'development':
-                $this->threshold = 9;  // 개발서버: 모든 로그 출력
+                $this->threshold = 7;  // 개발서버: Info 이상 (DEBUG 제외)
                 break;
             case 'local':
-                $this->threshold = 9;  // 로컬: 모든 로그 출력
+                $this->threshold = 7;  // 로컬: Info 이상 (DEBUG 제외)
                 break;
             default:
-                $this->threshold = 9;  // 기본값: 모든 로그 출력
+                $this->threshold = 7;  // 기본값: Info 이상
         }
     }
 
