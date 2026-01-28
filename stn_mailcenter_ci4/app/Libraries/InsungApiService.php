@@ -570,7 +570,7 @@ class InsungApiService
      * @param string $chargeName 담당자명
      * @param string $email 이메일
      * @param string $location 상세주소
-     * @param string $lon 경도
+     * @param string $lon 경���
      * @param string $lat 위도
      * @param string $address 기본주소
      * @param string $compNo 거래처 코드
@@ -926,8 +926,11 @@ class InsungApiService
         // sfast 변환 (배송선택: 1:일반, 3:급송 등)
         // 여러 변수명 시도: deliveryType, delivery_type, sfast
         $deliveryTypeForSfast = $orderData['deliveryType'] ?? $orderData['delivery_type'] ?? $orderData['sfast'] ?? '';
-        $sfast = $this->convertSfast($deliveryTypeForSfast, $orderData['urgency_level'] ?? '', $orderData['is_overload'] ?? false);
-        
+        $urgencyLevelForSfast = $orderData['urgency_level'] ?? '';
+        $isOverloadForSfast = $orderData['is_overload'] ?? false;
+
+        $sfast = $this->convertSfast($deliveryTypeForSfast, $urgencyLevelForSfast, $isOverloadForSfast);
+
         // state는 빈 값으로 전송 (인성관제 시스템에서 자동 관리)
         $state = '';
         
@@ -1324,42 +1327,29 @@ class InsungApiService
      */
     private function convertSfast($deliveryType, $urgencyLevel, $isOverload = false)
     {
-        $sfastOptions = [];
-        
-        // deliveryType 우선 확인
-        if ($deliveryType === 'express' || $deliveryType === '3') {
-            $sfastOptions[] = '3'; // 급송
-        } elseif ($deliveryType === 'normal' || $deliveryType === '1') {
-            $sfastOptions[] = '1'; // 일반
-        } elseif (!empty($deliveryType) && strlen($deliveryType) === 1 && preg_match('/[0-9A-Z]/', $deliveryType)) {
-            // 이미 인성 API 형식인 경우 (예: '3', 'A' 등)
-            $sfastOptions[] = $deliveryType;
+        // sfast는 단일 값만 사용 (1=일반, 3=급송)
+        // urgency_level이 urgent이면 급송(3), 그 외 deliveryType에 따라 결정
+        $sfast = '1'; // 기본값: 일반
+
+        // 1. urgency_level 우선 확인 (긴급이면 급송)
+        if ($urgencyLevel === 'urgent') {
+            $sfast = '3';
         }
-        
-        // urgency_level 확인
-        if ($urgencyLevel === 'urgent' || $urgencyLevel === 'super_urgent') {
-            if (!in_array('3', $sfastOptions)) {
-                $sfastOptions[] = '3'; // 급송
-            }
-        } elseif ($urgencyLevel === 'normal' && empty($sfastOptions)) {
-            $sfastOptions[] = '1'; // 일반
+        // 2. deliveryType이 express 또는 '3'이면 급송
+        elseif ($deliveryType === 'express' || $deliveryType === '3') {
+            $sfast = '3';
         }
-        
-        // 과적 옵션 추가
+        // 3. deliveryType이 인성 API 형식인 경우 (5=조조, 7=야간, A=심야 등)
+        elseif (!empty($deliveryType) && strlen($deliveryType) === 1 && preg_match('/[0-9A-Z]/', $deliveryType) && $deliveryType !== '1') {
+            $sfast = $deliveryType;
+        }
+
+        // 과적 옵션 추가 (sfast와 조합: '19', '39' 등)
         if ($isOverload) {
-            if (!in_array('9', $sfastOptions)) {
-                $sfastOptions[] = '9'; // 과적
-            }
+            $sfast .= '9';
         }
-        
-        // 기본값: 일반(1) - 옵션이 없을 때만
-        if (empty($sfastOptions)) {
-            $sfastOptions[] = '1';
-        }
-        
-        // 옵션들을 정렬하여 문자열로 반환 (예: '13', '19', '139' 등)
-        sort($sfastOptions);
-        return implode('', $sfastOptions);
+
+        return $sfast;
     }
 
     /**

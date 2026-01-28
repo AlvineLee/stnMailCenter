@@ -30,12 +30,28 @@ class InsungOrder extends BaseController
             return redirect()->to('/dashboard')->with('error', '접근 권한이 없습니다.');
         }
 
+        // 콜센터 목록 조회 (중복 제거)
+        $ccModel = new \App\Models\InsungCcListModel();
+        $allCallCenters = $ccModel->getCcListWithApiInfo([], 1, 100)['cc_list'] ?? [];
+
+        // api_name 기준으로 중복 제거
+        $callCenters = [];
+        $seenNames = [];
+        foreach ($allCallCenters as $cc) {
+            $name = $cc['api_name'] ?? '';
+            if ($name && !in_array($name, $seenNames)) {
+                $callCenters[] = $cc;
+                $seenNames[] = $name;
+            }
+        }
+
         $data = [
             'title' => '인성주문 - 전체 콜센터 주문 현황',
             'content_header' => [
                 'title' => '인성주문',
                 'description' => '콜센터 전체 주문 현황 (실시간)'
-            ]
+            ],
+            'call_centers' => $callCenters
         ];
 
         return view('insung_order/list', $data);

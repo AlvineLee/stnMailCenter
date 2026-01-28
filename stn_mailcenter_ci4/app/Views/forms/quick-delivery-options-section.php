@@ -11,14 +11,6 @@
                 <input type="radio" name="urgency_level" value="urgent" <?= old('urgency_level') === 'urgent' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
                 <span class="text-sm font-medium text-gray-700">긴급</span>
             </label>
-            <label class="flex items-center space-x-2 cursor-pointer">
-                <input type="radio" name="urgency_level" value="super_urgent" <?= old('urgency_level') === 'super_urgent' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                <span class="text-sm font-medium text-gray-700">초긴급</span>
-            </label>
-            <label class="flex items-center space-x-2 cursor-pointer">
-                <input type="radio" name="urgency_level" value="outsource" <?= old('urgency_level') === 'outsource' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
-                <span class="text-sm font-medium text-gray-700">외주처리</span>
-            </label>
         </div>
     </div>
     

@@ -211,6 +211,27 @@
                         <span class="nav-text">배송조회</span>
                     </a>
                 </li>
+                <?php if (hasServicePermission('mailroom')): ?>
+                <?php
+                $uriPath = service('uri')->getPath();
+                $mailroomActive = strpos($uriPath, 'mailroom') !== false;
+                $dashboardActive = ($uriPath === 'mailroom' || $uriPath === 'mailroom/');
+                $buildingsActive = strpos($uriPath, 'mailroom/buildings') !== false;
+                $driversActive = strpos($uriPath, 'mailroom/drivers') !== false;
+                ?>
+                <li class="nav-item has-submenu<?= $mailroomActive ? ' active open' : '' ?>">
+                    <a href="#" class="nav-link" data-toggle="submenu">
+                        <span class="nav-icon">📬</span>
+                        <span class="nav-text">메일룸 관리</span>
+                        <span class="nav-arrow">v</span>
+                    </a>
+                    <ul class="submenu"<?= $mailroomActive ? ' style="max-height:1000px;"' : '' ?>>
+                        <li<?= $dashboardActive ? ' class="active"' : '' ?>><a href="<?= base_url('mailroom') ?>">대시보드</a></li>
+                        <li<?= $buildingsActive ? ' class="active"' : '' ?>><a href="<?= base_url('mailroom/buildings') ?>">건물 관리</a></li>
+                        <li<?= $driversActive ? ' class="active"' : '' ?>><a href="<?= base_url('mailroom/drivers') ?>">기사 관리</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
                 <li class="nav-item">
                     <a href="<?= base_url('history/list') ?>" class="nav-link">
                         <span class="nav-icon">📋</span>

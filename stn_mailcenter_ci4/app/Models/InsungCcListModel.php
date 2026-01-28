@@ -120,6 +120,10 @@ class InsungCcListModel extends Model
         ');
         $builder->join('tbl_api_list a', 'c.cc_apicode = a.idx', 'inner');
         $builder->where("TRIM(a.api_gbn) = 'M'");
+        $builder->groupStart()
+                ->where('c.insung_not_use', 'N')
+                ->orWhere('c.insung_not_use IS NULL')
+                ->groupEnd();
 
         // 검색 필터 적용
         if (!empty($filters['cc_code'])) {

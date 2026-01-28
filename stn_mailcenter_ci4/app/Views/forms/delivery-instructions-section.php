@@ -30,6 +30,32 @@ $placeholder = $placeholder ?? '전달하실 내용을 입력하세요.';
     </section>
 </div>
 
+<?php if (isset($useDeliveryReason) && $useDeliveryReason === 'Y'): ?>
+<!-- 배송사유 (필수) -->
+<div class="mb-2">
+    <section class="bg-yellow-50 rounded-lg shadow-sm border border-yellow-300 p-3">
+        <div class="flex items-center justify-between mb-2 pb-1 border-b border-yellow-400">
+            <h2 class="text-sm font-semibold text-yellow-800">배송사유 <span class="text-red-500">*</span></h2>
+        </div>
+        <div class="space-y-2">
+            <?php if (!empty($deliveryReasons)): ?>
+            <div class="flex flex-wrap gap-1 mb-2">
+                <?php foreach ($deliveryReasons as $reason): ?>
+                <button type="button"
+                        class="delivery-reason-btn bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs font-medium transition-colors border border-yellow-300"
+                        data-reason="<?= esc($reason['reason_name']) ?>">
+                    <?= esc($reason['reason_name']) ?>
+                </button>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+            <textarea id="delivery_reason" name="delivery_reason" placeholder="배송사유를 입력하세요. (필수)" lang="ko" required
+                      class="w-full px-3 py-2 text-sm border border-yellow-400 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent h-16 resize-none bg-white"><?= old('delivery_reason') ?></textarea>
+        </div>
+    </section>
+</div>
+<?php endif; ?>
+
 <style>
 /* 상하차방법 버튼은 기본적으로 숨김 */
 .loading-unloading-btn {
@@ -100,6 +126,44 @@ $placeholder = $placeholder ?? '전달하실 내용을 입력하세요.';
     
     // 전역 함수로도 노출 (다른 스크립트에서 호출 가능)
     window.toggleLoadingUnloadingButton = toggleLoadingUnloadingButton;
+})();
+
+// 배송사유 버튼 클릭 이벤트
+(function() {
+    function initDeliveryReasonButtons() {
+        const reasonBtns = document.querySelectorAll('.delivery-reason-btn');
+        const reasonTextarea = document.getElementById('delivery_reason');
+
+        if (!reasonTextarea || reasonBtns.length === 0) return;
+
+        reasonBtns.forEach(function(btn) {
+            if (!btn.hasAttribute('data-reason-listener')) {
+                btn.addEventListener('click', function() {
+                    const reason = this.getAttribute('data-reason');
+                    if (reason) {
+                        // 기존 텍스트가 있으면 줄바꿈 후 추가, 없으면 바로 삽입
+                        if (reasonTextarea.value.trim()) {
+                            reasonTextarea.value += '\n' + reason;
+                        } else {
+                            reasonTextarea.value = reason;
+                        }
+                        reasonTextarea.focus();
+                    }
+                });
+                btn.setAttribute('data-reason-listener', 'true');
+            }
+        });
+    }
+
+    // DOMContentLoaded 시 실행
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDeliveryReasonButtons);
+    } else {
+        initDeliveryReasonButtons();
+    }
+
+    // window.load 시에도 실행
+    window.addEventListener('load', initDeliveryReasonButtons);
 })();
 </script>
 

@@ -101,6 +101,56 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function($routes) 
     $routes->get('insung-order/detail/(:any)', 'InsungOrderApi::detail/$1');
     $routes->get('insung-order/stats', 'InsungOrderApi::stats');
     $routes->get('insung-order/refresh', 'InsungOrderApi::refresh');
+
+    // 메일룸 기사 앱 API
+    $routes->post('mailroom/login', 'MailroomApi::login');
+    $routes->get('mailroom/orders', 'MailroomApi::orders');
+    $routes->get('mailroom/orders/(:num)', 'MailroomApi::orderDetail/$1');
+    $routes->post('mailroom/orders/(:num)/pickup', 'MailroomApi::pickup/$1');
+    $routes->post('mailroom/orders/(:num)/complete', 'MailroomApi::complete/$1');
+    $routes->post('mailroom/orders/(:num)/message', 'MailroomApi::sendMessage/$1');
+    $routes->get('mailroom/preset-messages', 'MailroomApi::presetMessages');
+    $routes->get('mailroom/stats', 'MailroomApi::stats');
+});
+
+// 메일룸 관리 (웹)
+$routes->group('mailroom', function($routes) {
+    $routes->get('/', 'Mailroom::index');
+    $routes->get('create', 'Mailroom::create');
+    $routes->post('store', 'Mailroom::store');
+    $routes->get('detail/(:num)', 'Mailroom::detail/$1');
+    $routes->post('assign/(:num)', 'Mailroom::assignDriver/$1');
+    $routes->post('handle-directly/(:num)', 'Mailroom::handleDirectly/$1');  // 직접 처리
+    $routes->get('print/(:num)', 'Mailroom::printLabel/$1');
+    $routes->get('cancel/(:num)', 'Mailroom::cancelOrder/$1');
+    $routes->get('floors/(:num)', 'Mailroom::getFloors/$1');
+
+    // 건물 관리
+    $routes->get('buildings', 'Mailroom::buildings');
+    $routes->post('buildings/store', 'Mailroom::storeBuilding');
+    $routes->post('buildings/update/(:num)', 'Mailroom::updateBuilding/$1');
+    $routes->get('buildings/delete/(:num)', 'Mailroom::deleteBuilding/$1');
+
+    // 층 관리 (AJAX)
+    $routes->post('floors/store', 'Mailroom::storeFloor');
+    $routes->delete('floors/delete/(:num)', 'Mailroom::deleteFloor/$1');
+
+    // 기사 관리
+    $routes->get('drivers', 'Mailroom::drivers');
+    $routes->post('drivers/store', 'Mailroom::storeDriver');
+    $routes->post('drivers/update/(:num)', 'Mailroom::updateDriver/$1');
+    $routes->get('drivers/delete/(:num)', 'Mailroom::deleteDriver/$1');
+    $routes->post('drivers/assign-buildings/(:num)', 'Mailroom::assignBuildings/$1');
+    $routes->get('drivers/approve/(:num)', 'Mailroom::approveDriver/$1');
+    $routes->get('drivers/reject/(:num)', 'Mailroom::rejectDriver/$1');
+    $routes->get('drivers/status/(:num)/(:alpha)', 'Mailroom::changeDriverStatus/$1/$2');
+
+    // QR 코드 생성
+    $routes->get('qr/driver-register/(:num)', 'Mailroom::driverRegisterQr/$1');
+
+    // 기사 셀프 등록 (QR 스캔)
+    $routes->get('driver-register/(:num)', 'Mailroom::driverRegisterForm/$1');
+    $routes->post('driver-register/(:num)', 'Mailroom::driverRegisterSubmit/$1');
 });
 
 // 배송조회 관련 라우트

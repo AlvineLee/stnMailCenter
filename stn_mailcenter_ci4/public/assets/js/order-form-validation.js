@@ -163,7 +163,27 @@
                 }
             }
             
-            // 모든 검증 통과 시 폼 제출 허용 (기본 동작 진행)
+            // 모든 검증 통과 시 중복 제출 방지
+            if (orderForm.dataset.submitting === 'true') {
+                e.preventDefault();
+                return false;
+            }
+
+            // 제출 중 플래그 설정
+            orderForm.dataset.submitting = 'true';
+
+            // 제출 버튼 비활성화 및 로딩 표시
+            const submitButtons = orderForm.querySelectorAll('button[type="submit"], input[type="submit"]');
+            submitButtons.forEach(function(btn) {
+                btn.disabled = true;
+                btn.dataset.originalText = btn.textContent || btn.value;
+                if (btn.tagName === 'BUTTON') {
+                    btn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> 접수 중...';
+                } else {
+                    btn.value = '접수 중...';
+                }
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+            });
         });
     });
 })();

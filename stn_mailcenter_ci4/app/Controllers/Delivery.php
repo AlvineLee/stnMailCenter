@@ -600,8 +600,7 @@ class Delivery extends BaseController
             
             $urgencyLabels = [
                 'normal' => '일반',
-                'urgent' => '긴급',
-                'super_urgent' => '초긴급'
+                'urgent' => '긴급'
             ];
             
             $deliveryMethodLabels = [

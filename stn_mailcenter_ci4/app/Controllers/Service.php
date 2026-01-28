@@ -338,6 +338,24 @@ class Service extends BaseController
             session()->set('credit', $credit);
         }
 
+        // 배송사유 설정 조회 (거래처별)
+        $useDeliveryReason = 'N';
+        $deliveryReasons = [];
+        $compCode = session()->get('comp_code');
+        if (!empty($compCode)) {
+            $db = \Config\Database::connect();
+            $company = $db->table('tbl_company_list')
+                ->where('comp_code', $compCode)
+                ->get()
+                ->getRowArray();
+            if ($company && ($company['use_delivery_reason'] ?? 'N') === 'Y') {
+                $useDeliveryReason = 'Y';
+                // 배송사유 목록 조회
+                $deliveryReasonModel = new \App\Models\DeliveryReasonModel();
+                $deliveryReasons = $deliveryReasonModel->getActiveReasons();
+            }
+        }
+
         $data = [
             'title' => "DaumData - {$serviceName}",
             'content_header' => [
@@ -349,7 +367,10 @@ class Service extends BaseController
             'user' => [
                 'username' => session()->get('username'),
                 'company_name' => session()->get('company_name')
-            ]
+            ],
+            // 배송사유 관련
+            'useDeliveryReason' => $useDeliveryReason,
+            'deliveryReasons' => $deliveryReasons
             // credit은 세션에서 조회하므로 별도 전달 불필요
         ];
 
@@ -484,14 +505,23 @@ class Service extends BaseController
             'destination_detail' => 'required', // 도착지 상세주소 필수
             'payment_type' => 'permit_empty'
         ];
-        
-        // 퀵 서비스들만 item_type 필수
-        if (in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
-            $validationRules['item_type'] = 'required';
+
+        // 배송사유 필수 검사 (거래처 설정에 따라)
+        $compCode = session()->get('comp_code');
+        if (!empty($compCode)) {
+            $dbTemp = \Config\Database::connect();
+            $company = $dbTemp->table('tbl_company_list')
+                ->select('use_delivery_reason')
+                ->where('comp_code', $compCode)
+                ->get()
+                ->getRowArray();
+            if ($company && ($company['use_delivery_reason'] ?? 'N') === 'Y') {
+                $validationRules['delivery_reason'] = 'required';
+            }
         }
-        
+
         $validation->setRules($validationRules);
-        
+
         if (!$validation->withRequest($this->request)->run()) {
             log_message('error', 'Service validation failed: ' . json_encode($validation->getErrors()));
             
@@ -638,7 +668,7 @@ class Service extends BaseController
                 'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
                 'quantity' => $this->request->getPost('quantity') ?? 1,
                 'unit' => $this->request->getPost('unit') ?? '개',
-                'delivery_content' => $this->request->getPost('delivery_content') ?? $this->request->getPost('special_instructions') ?? '',
+                'delivery_content' => $this->buildDeliveryContent(),
                 'box_medium_overload' => $this->request->getPost('box_medium_overload') ? 1 : 0,
                 'pouch_medium_overload' => $this->request->getPost('pouch_medium_overload') ? 1 : 0,
                 'bag_medium_overload' => ($serviceType === 'parcel-bag' && $this->request->getPost('bag_medium_overload')) ? 1 : 0,
@@ -798,7 +828,7 @@ class Service extends BaseController
                         $insungOrderData = [
                             'service_type' => $serviceType,
                             'delivery_method' => $this->request->getPost('delivery_method') ?? 'motorcycle',
-                            'deliveryMethod' => $this->request->getPost('deliveryMethod') ?? $this->request->getPost('delivery_method') ?? $this->request->getPost('doc') ?? 'one_way', // 배송방법 (편도/왕복/경유)
+                            'deliveryMethod' => $this->request->getPost('delivery_route') ?? $this->request->getPost('deliveryMethod') ?? $this->request->getPost('delivery_method') ?? $this->request->getPost('doc') ?? 'one_way', // 배송방법 (편도/왕복/경유)
                             'deliveryType' => $this->request->getPost('deliveryType') ?? $this->request->getPost('delivery_type') ?? $this->request->getPost('sfast') ?? 'normal', // 배송형태 (일반/급송)
                             'urgency_level' => $this->request->getPost('urgency_level') ?? 'normal', // 긴급도
                             'is_overload' => $isOverload, // 과적 옵션
@@ -1535,6 +1565,28 @@ class Service extends BaseController
         return '';
     }
     
+    /**
+     * 전달사항 내용 조합 (배송사유 포함)
+     * 배송사유가 있으면 전달사항 앞에 추가
+     */
+    private function buildDeliveryContent()
+    {
+        $deliveryReason = trim($this->request->getPost('delivery_reason') ?? '');
+        $specialInstructions = $this->request->getPost('delivery_content')
+            ?? $this->request->getPost('special_instructions')
+            ?? '';
+
+        // 배송사유가 있으면 앞에 추가
+        if (!empty($deliveryReason)) {
+            if (!empty($specialInstructions)) {
+                return "[배송사유] " . $deliveryReason . "\n" . $specialInstructions;
+            }
+            return "[배송사유] " . $deliveryReason;
+        }
+
+        return $specialInstructions;
+    }
+
     /**
      * 서비스 타입에 따른 기본 item_type 반환
      */

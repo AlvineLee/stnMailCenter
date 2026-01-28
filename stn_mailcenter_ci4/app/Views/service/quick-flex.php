@@ -83,20 +83,7 @@
                 </section>
             </div>
             
-            <!-- 물품종류 -->
-            <?= $this->include('forms/item-type-section', [
-                'itemTypeName' => 'item_type',
-                'itemTypeId' => 'item_type',
-                'defaultValue' => '서류',
-                'showBoxSelection' => true,
-                'showPouchSelection' => true,
-                'showShoppingBagSelection' => true,
-                'showOverloadCheckbox' => true,
-                'boxGuideButtonText' => '박스 규격 안내',
-                'pouchGuideButtonText' => '행낭 규격 안내'
-            ]) ?>
-            
-            <!-- 전달사항 -->
+            <!-- 전달사항(적요) -->
             <?= $this->include('forms/delivery-instructions-section', [
                 'fieldName' => 'special_instructions',
                 'fieldId' => 'special_instructions',
