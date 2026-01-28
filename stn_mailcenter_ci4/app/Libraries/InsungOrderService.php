@@ -74,7 +74,7 @@ class InsungOrderService
                 // log_message('info', 'InsungOrderService: Redis 연결 성공');
             }
         } catch (\RedisException $e) {
-            // log_message('warning', 'InsungOrderService: Redis 연결 실패 - ' . $e->getMessage());
+            // log_message('warning', 'InsungOrderService: Redis 연결 실��� - ' . $e->getMessage());
             $this->useRedis = false;
         } catch (\Exception $e) {
             // log_message('warning', 'InsungOrderService: Redis 연결 실패 - ' . $e->getMessage());
@@ -97,7 +97,7 @@ class InsungOrderService
         $cancelledOrders = [];  // DB에 저장할 취소 주문 모음
         $seenSerialNumbers = []; // 중복 체크용 (serial_number 기준)
         $duplicateCount = 0;     // 중복 건수
-        $ordersByCallCenter = []; // 콜센터별 주문 건수
+        $ordersByCallCenter = []; // 콜센터별 주문 ���수
         $summary = [
             'total_call_centers' => 0,
             'success_count' => 0,
@@ -110,7 +110,7 @@ class InsungOrderService
             'errors' => []
         ];
 
-        // 1. tbl_cc_list 기준으로 모든 콜센터 API 정보 조회
+        // 1. tbl_cc_list 기준으로 모든 콜센터 API 정보 조���
         $apiList = $this->getApiListForAllCallCenters();
         $summary['total_call_centers'] = count($apiList);
 
@@ -152,10 +152,10 @@ class InsungOrderService
                 $totalOrders += count($res['orders'] ?? []);
             }
         }
-        log_message('info', "InsungOrderService: 순차 API 호출 완료 - {$apiCallTime}ms, 성공:{$successCount}, 에러:{$errorCount}, 총주문:{$totalOrders}건");
-        if (!empty($errorMessages)) {
-            log_message('warning', "InsungOrderService: 에러 샘플 - " . implode(' | ', $errorMessages));
-        }
+        // log_message('info', "InsungOrderService: 순차 API 호출 완료 - {$apiCallTime}ms, 성공:{$successCount}, 에러:{$errorCount}, 총주문:{$totalOrders}건");
+        // if (!empty($errorMessages)) {
+        //     log_message('warning', "InsungOrderService: 에러 샘플 - " . implode(' | ', $errorMessages));
+        // }
 
         // 4. 결과 처리
         foreach ($apiResults as $ccCode => $result) {
@@ -166,7 +166,7 @@ class InsungOrderService
             $ccName = $apiInfo['cc_name'] ?? $apiName;
             $ccIdxForError = $apiInfo['cc_idx'] ?? 'N/A';
 
-            // 에러 처리
+            // 에러 ��리
             if (isset($result['error'])) {
                 $errorMsg = "[{$ccName}] (cc_idx: {$ccIdxForError}) " . $result['error'];
                 $summary['errors'][] = $errorMsg;
@@ -407,13 +407,12 @@ class InsungOrderService
             'cc_order' => 'F'  // 콜센터 전체 오더 조회
         ];
 
-        // log_message('debug', "InsungOrderService: API 호출 - {$url}, ccCode={$ccCode}" . ($isRetry ? ' (재시도)' : ''));
+        // GET 방식으로 URL에 쿼리스트링 추가
+        $fullUrl = $url . '?' . http_build_query($params);
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
         curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
@@ -421,11 +420,10 @@ class InsungOrderService
 
         if (curl_errno($ch)) {
             $error = curl_error($ch);
-            curl_close($ch);
             throw new \Exception("cURL Error: {$error}");
         }
 
-        curl_close($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         // OAUTH-FAILED 먼저 체크 (JSON 파싱 전에 문자열로 체크)
         if (strpos($response, 'OAUTH-FAILED') !== false && !$isRetry && $apiIdx) {
@@ -444,9 +442,7 @@ class InsungOrderService
             }
         }
 
-        // JSON 파싱 전처리 - 문자열 값 내부의 줄바꿈/제어문자만 제거 (JSON 구조는 유지)
-        // API 응답에서 "customer_name" : "린컴\n주식회사" 같이 이스케이프 안된 줄바꿈이 있음
-        // sanitizeJsonResponse 메서드 사용: 문자열 내부만 정리하여 JSON 구조 보존
+        // JSON 파싱 전처리 - 문자열 내부의 제어문자 정리
         $cleanedResponse = $this->sanitizeJsonResponse($response);
 
         // JSON 디코딩 (UTF-8 정리 후)
@@ -545,6 +541,7 @@ class InsungOrderService
 
         // 주문 데이터 추출 (인덱스 2부터)
         $orders = [];
+
         for ($i = 2; $i < count($data); $i++) {
             $item = $data[$i];
             if (is_object($item)) {
@@ -576,7 +573,7 @@ class InsungOrderService
         $totalApis = count($groupedByApiCcCode);
         $currentApi = 0;
 
-        log_message('info', "InsungOrderService: 순차 API 호출 시작 - 총 {$totalApis}개 API");
+        // log_message('info', "InsungOrderService: 순차 API 호출 시작 - 총 {$totalApis}개 API");
 
         foreach ($groupedByApiCcCode as $ccCode => $apiInfo) {
             $currentApi++;
@@ -586,14 +583,23 @@ class InsungOrderService
             $token = $apiInfo['token'] ?? $apiInfo['token_key'] ?? '';
             $userId = $apiInfo['user_id'] ?? '';
             $apiIdx = $apiInfo['api_idx'] ?? null;
+            $apiName = $apiInfo['api_name'] ?? $apiInfo['cc_name'] ?? $ccCode;
 
             // 필수 정보 체크
             if (empty($mCode) || empty($token) || empty($userId)) {
-                $results[$ccCode] = ['error' => 'API 정보 불완전'];
+                $missing = [];
+                if (empty($mCode)) $missing[] = 'mCode';
+                if (empty($token)) $missing[] = 'token';
+                if (empty($userId)) $missing[] = 'userId';
+                $errorMsg = 'API 정보 불완전 (' . implode(', ', $missing) . ' 누락)';
+                // log_message('warning', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - {$errorMsg}");
+                $results[$ccCode] = ['error' => $errorMsg];
                 continue;
             }
 
             try {
+                // log_message('debug', "InsungOrderService: [{$apiName}] API 호출 시작 - ccCode={$ccCode}, mCode={$mCode}, userId={$userId}, apiIdx={$apiIdx}");
+
                 $orders = $this->callOrderListApi(
                     $mCode,
                     $ccCode,
@@ -603,13 +609,22 @@ class InsungOrderService
                     $toDate,
                     $apiIdx
                 );
+
+                // $orderCount = count($orders);
+                // if ($orderCount === 0) {
+                //     log_message('info', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 주문 0건 (응답 정상, 데이터 없음)");
+                // } else {
+                //     log_message('info', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 주문 {$orderCount}건 조회 성공");
+                // }
+
                 $results[$ccCode] = ['orders' => $orders];
             } catch (\Exception $e) {
+                // log_message('error', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 예외 발생: " . $e->getMessage());
                 $results[$ccCode] = ['error' => $e->getMessage()];
             }
         }
 
-        log_message('info', "InsungOrderService: 순차 API 호출 완료 - {$totalApis}개 API");
+        // log_message('info', "InsungOrderService: 순차 API 호출 완료 - {$totalApis}개 API");
 
         return $results;
     }
@@ -644,7 +659,7 @@ class InsungOrderService
         $totalBatches = count($batches);
         $batchNum = 0;
 
-        log_message('info', "InsungOrderService: 병렬 API 호출 시작 - 총 " . count($groupedByApiCcCode) . "개 API, {$totalBatches}개 배치 (배치당 {$batchSize}개)");
+        // log_message('info', "InsungOrderService: 병렬 API 호출 시작 - 총 " . count($groupedByApiCcCode) . "개 API, {$totalBatches}개 배치 (배치당 {$batchSize}개)");
 
         foreach ($batches as $batch) {
             $batchNum++;
@@ -711,7 +726,6 @@ class InsungOrderService
                 if (curl_errno($ch)) {
                     $results[$ccCode] = ['error' => 'cURL Error: ' . curl_error($ch)];
                     curl_multi_remove_handle($multiHandle, $ch);
-                    curl_close($ch);
                     continue;
                 }
 
@@ -720,13 +734,11 @@ class InsungOrderService
                 if ($httpCode !== 200) {
                     $results[$ccCode] = ['error' => "HTTP {$httpCode}"];
                     curl_multi_remove_handle($multiHandle, $ch);
-                    curl_close($ch);
                     continue;
                 }
 
                 $response = curl_multi_getcontent($ch);
                 curl_multi_remove_handle($multiHandle, $ch);
-                curl_close($ch);
 
                 // 빈 응답 체크
                 if (empty($response)) {
@@ -766,7 +778,7 @@ class InsungOrderService
 
         // 4. OAUTH-FAILED 건 개별 재시도 (토큰 갱신 후)
         if (!empty($retryList)) {
-            log_message('info', "InsungOrderService: OAUTH-FAILED " . count($retryList) . "건 토큰 갱신 후 재시도");
+            // log_message('info', "InsungOrderService: OAUTH-FAILED " . count($retryList) . "건 토큰 갱신 후 재시도");
 
             foreach ($retryList as $ccCode => $apiInfo) {
                 $apiIdx = $apiInfo['api_idx'] ?? null;
@@ -815,23 +827,23 @@ class InsungOrderService
     {
         // 빈 응답 체크
         if (empty($response)) {
-            log_message('warning', "parseApiResponse: 빈 응답 - ccCode={$ccCode}");
+            // log_message('warning', "parseApiResponse: 빈 응답 - ccCode={$ccCode}");
             return null;
         }
 
         // 응답 길이 체크 (너무 짧으면 에러 응답일 가능성)
         $responseLen = strlen($response);
         if ($responseLen < 50) {
-            log_message('warning', "parseApiResponse: 짧은 응답 - ccCode={$ccCode}, len={$responseLen}, content=" . addcslashes($response, "\r\n\t"));
+            // log_message('warning', "parseApiResponse: 짧은 응답 - ccCode={$ccCode}, len={$responseLen}, content=" . addcslashes($response, "\r\n\t"));
             return null;
         }
 
         // JSON 배열 구조 기본 체크 (시작/끝 문자)
         $trimmed = trim($response);
         if ($trimmed[0] !== '[' || $trimmed[strlen($trimmed) - 1] !== ']') {
-            log_message('warning', "parseApiResponse: JSON 배열 아님 - ccCode={$ccCode}, start=" . ord($trimmed[0]) . ", end=" . ord($trimmed[strlen($trimmed) - 1]));
-            $firstPart = substr($response, 0, 200);
-            log_message('warning', "parseApiResponse: 응답 시작 - " . addcslashes($firstPart, "\r\n\t"));
+            // log_message('warning', "parseApiResponse: JSON 배열 아님 - ccCode={$ccCode}, start=" . ord($trimmed[0]) . ", end=" . ord($trimmed[strlen($trimmed) - 1]));
+            // $firstPart = substr($response, 0, 200);
+            // log_message('warning', "parseApiResponse: 응답 시작 - " . addcslashes($firstPart, "\r\n\t"));
             return null;
         }
 
@@ -841,9 +853,9 @@ class InsungOrderService
         $data = json_decode($cleanedResponse, true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $jsonError = json_last_error_msg();
-            $firstPart = substr($response, 0, 200);
-            log_message('warning', "parseApiResponse: JSON 에러 - ccCode={$ccCode}, error={$jsonError}, len={$responseLen}, start=" . addcslashes($firstPart, "\r\n\t"));
+            // $jsonError = json_last_error_msg();
+            // $firstPart = substr($response, 0, 200);
+            // log_message('warning', "parseApiResponse: JSON 에러 - ccCode={$ccCode}, error={$jsonError}, len={$responseLen}, start=" . addcslashes($firstPart, "\r\n\t"));
             return null;
         }
 
@@ -861,7 +873,7 @@ class InsungOrderService
         }
 
         if ($code !== '1000') {
-            log_message('info', "parseApiResponse: API 오류 응답 - ccCode={$ccCode}, code={$code}, msg={$msg}");
+            // log_message('info', "parseApiResponse: API 오류 응답 - ccCode={$ccCode}, code={$code}, msg={$msg}");
             return [];
         }
 
@@ -889,73 +901,28 @@ class InsungOrderService
      */
     protected function sanitizeJsonResponse(string $response): string
     {
-        // JSON 문자열 내부의 제어문자를 처리
-        // 문자 단위로 처리하여 문자열 값 내부의 제어문자만 공백으로 치환
-        // 문자열 외부의 제어문자는 삭제 (JSON 포맷팅용 \r\n 등)
-        $result = '';
-        $len = strlen($response);
-        $inString = false;
-        $escape = false;
+        // 0단계: 모든 실제 줄바꿈/캐리지리턴 제거
+        $response = str_replace(["\r\n", "\r", "\n"], '', $response);
 
-        for ($i = 0; $i < $len; $i++) {
-            $char = $response[$i];
-            $ord = ord($char);
+        // 1단계: 문자열 값 끝의 잘못된 백슬래시 수정
+        // API에서 "value\" 형태로 잘못 내려오는 경우 처리
+        // \"," → ","  (값 끝의 백슬래시 제거)
+        // \"} → "}
+        // \"] → "]
+        $response = preg_replace('/\\\\"\\s*,/', '",', $response);
+        $response = preg_replace('/\\\\"\\s*}/', '"}', $response);
+        $response = preg_replace('/\\\\"\\s*\\]/', '"]', $response);
 
-            // 제어문자 확인 (0x00-0x1F, 0x7F)
-            $isControl = ($ord < 32 || $ord === 127);
-
-            if ($escape) {
-                // 이전 문자가 백슬래시인 경우
-                // 유효한 JSON 이스케이프: ", \, /, b, f, n, r, t, u (+ 4 hex digits)
-                // 그 외는 잘못된 이스케이프 → 백슬래시 제거하고 문자만 유지
-                static $validEscapes = ['"' => 1, '\\' => 1, '/' => 1, 'b' => 1, 'f' => 1, 'n' => 1, 'r' => 1, 't' => 1, 'u' => 1];
-                if ($isControl) {
-                    // 백슬래시 + 제어문자 → 공백으로 치환 (마지막에 추가된 \ 제거)
-                    $result = substr($result, 0, -1) . ' ';
-                } elseif (!isset($validEscapes[$char])) {
-                    // 잘못된 이스케이프 (예: \a, \v, \x, \0, \' 등) → 백슬래시 제거
-                    // 첫 10개만 로깅
-                    // static $invalidEscapeCount = 0;
-                    // if ($invalidEscapeCount < 10) {
-                    //     $context = substr($response, max(0, $i - 20), 50);
-                    //     log_message('debug', "sanitizeJson: 잘못된 이스케이프 \\{$char} at pos {$i}: " . addcslashes($context, "\r\n\t"));
-                    //     $invalidEscapeCount++;
-                    // }
-                    $result = substr($result, 0, -1) . $char;
-                } else {
-                    $result .= $char;
-                }
-                $escape = false;
-                continue;
-            }
-
-            if ($char === '\\' && $inString) {
-                // 백슬래시 - 다음 문자가 이스케이프됨
-                $result .= $char;
-                $escape = true;
-                continue;
-            }
-
-            if ($char === '"') {
-                // 따옴표 - 문자열 시작/끝
-                $inString = !$inString;
-                $result .= $char;
-                continue;
-            }
-
-            if ($isControl) {
-                if ($inString) {
-                    // 문자열 내부의 제어문자 → 공백으로 치환
-                    $result .= ' ';
-                }
-                // 문자열 외부의 제어문자 → 삭제 (JSON 포맷팅용)
-                continue;
-            }
-
-            $result .= $char;
+        // 2단계: 파싱 시도
+        $testDecode = json_decode($response, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $response;
         }
 
-        return $result;
+        // 3단계: 그래도 실패하면 다른 제어문자 처리 (탭 등)
+        $response = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', ' ', $response);
+
+        return $response;
     }
 
     /**
@@ -1640,7 +1607,7 @@ class InsungOrderService
         $classifyElapsed = round(($endTime - $redisTime) * 1000, 2);
         $totalElapsed = round(($endTime - $startTime) * 1000, 2);
 
-        log_message('info', "InsungOrderService::getAllOrdersCombined - Redis조회 {$redisElapsed}ms, 분류처리 {$classifyElapsed}ms, 총 {$totalElapsed}ms, 주문수 " . count($allOrders) . "건");
+        // log_message('info', "InsungOrderService::getAllOrdersCombined - Redis조회 {$redisElapsed}ms, 분류처리 {$classifyElapsed}ms, 총 {$totalElapsed}ms, 주문수 " . count($allOrders) . "건");
 
         return [
             'orders' => $allOrders,
@@ -1664,7 +1631,7 @@ class InsungOrderService
             $keysTime = microtime(true);
 
             if (empty($keys)) {
-                log_message('info', "InsungOrderService::getAllOrdersFromRedis - keys조회 " . round(($keysTime - $startTime) * 1000, 2) . "ms, 키 0개");
+                // log_message('info', "InsungOrderService::getAllOrdersFromRedis - keys조회 " . round(($keysTime - $startTime) * 1000, 2) . "ms, 키 0개");
                 return [];
             }
 
@@ -1687,11 +1654,11 @@ class InsungOrderService
             $parseElapsed = round(($parseTime - $mgetTime) * 1000, 2);
             $totalElapsed = round(($parseTime - $startTime) * 1000, 2);
 
-            log_message('info', "InsungOrderService::getAllOrdersFromRedis - keys조회 {$keysElapsed}ms, mGet {$mgetElapsed}ms, JSON파싱 {$parseElapsed}ms, 총 {$totalElapsed}ms, 키 " . count($keys) . "개, 주문 " . count($orders) . "건");
+            // log_message('info', "InsungOrderService::getAllOrdersFromRedis - keys조회 {$keysElapsed}ms, mGet {$mgetElapsed}ms, JSON파싱 {$parseElapsed}ms, 총 {$totalElapsed}ms, 키 " . count($keys) . "개, 주문 " . count($orders) . "건");
 
             return $orders;
         } catch (\Exception $e) {
-            log_message('error', 'Redis 전체 조회 오류: ' . $e->getMessage());
+            // log_message('error', 'Redis 전체 조회 오류: ' . $e->getMessage());
             return [];
         }
     }

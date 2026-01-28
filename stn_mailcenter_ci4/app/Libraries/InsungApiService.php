@@ -81,7 +81,7 @@ class InsungApiService
         // API 호출 로그 (민감한 정보는 마스킹)
         $maskedParam = preg_replace('/(token|ukey|akey|password)=[^&]*/', '$1=***', $param);
         // log_message('info', "Insung API Call: {$url}");
-        log_message('debug', "Insung API Params (masked): {$maskedParam}");
+        // log_message('debug', "Insung API Params (masked): {$maskedParam}");
         
         $response = $this->curlPost($url, $param);
         
@@ -92,8 +92,8 @@ class InsungApiService
         
         // 응답 로그 (처음 200자만)
         $responsePreview = strlen($response) > 200 ? substr($response, 0, 200) . '...' : $response;
-        log_message('debug', "Insung API Response: {$responsePreview}");
-        
+        // log_message('debug', "Insung API Response: {$responsePreview}");
+
         $decoded = json_decode($response);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
@@ -140,7 +140,7 @@ class InsungApiService
         // 레거시 코드와 동일하게 urlencode 사용하지 않음
         $poststring = "m_code=$mcode&cc_code=$cccode&ukey=$ukey&akey=$akey&type=JSON";
         
-        log_message('debug', "Token creation - mcode: {$mcode}, cccode: {$cccode}, ukey length: " . strlen($ukey) . ", akey: " . substr($akey, 0, 10) . "...");
+        // log_message('debug', "Token creation - mcode: {$mcode}, cccode: {$cccode}, ukey length: " . strlen($ukey) . ", akey: " . substr($akey, 0, 10) . "...");
         
         $jresult = $this->callApi($url, $poststring);
         
@@ -242,7 +242,7 @@ class InsungApiService
         
         // ckey 값 확인 (디버깅용 - 처음 10자만)
         $ckeyPreview = strlen($ckey) > 10 ? substr($ckey, 0, 10) . '...' : $ckey;
-        log_message('debug', "ckey preview (first 10 chars): {$ckeyPreview}, full length: " . strlen($ckey));
+        // log_message('debug', "ckey preview (first 10 chars): {$ckeyPreview}, full length: " . strlen($ckey));
         
         $ukey = $keyStr . $ckey;
         
@@ -250,7 +250,7 @@ class InsungApiService
         $akey = md5($ukey);
         
         // log_message('info', "Updating token for api_idx: {$apiIdx}, mcode: {$mcode}, cccode: {$cccode}");
-        log_message('debug', "ukey prefix: {$keyStr}, ukey length: " . strlen($ukey) . ", akey: " . substr($akey, 0, 16) . "...");
+        // log_message('debug', "ukey prefix: {$keyStr}, ukey length: " . strlen($ukey) . ", akey: " . substr($akey, 0, 16) . "...");
         
         // apiIdx를 직접 전달하여 토큰 생성 및 업데이트
         return $this->createToken($mcode, $cccode, $ukey, $akey, $apiIdx);
