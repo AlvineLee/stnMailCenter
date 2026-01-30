@@ -544,8 +544,15 @@ class Auth extends BaseController
                                             if (isset($updateData['user_pass'])) {
                                                 $user = $this->insungUsersListModel->authenticate($username, $password);
                                                 log_message('info', "Auth::processLogin - Re-authenticated after password update: user_id={$username}, success=" . ($user ? 'yes' : 'no'));
+                                            } else {
+                                                // 비밀번호 업데이트 없이 주소만 업데이트한 경우에도 최신 데이터로 갱신
+                                                // (세션에 업데이트된 주소 정보가 저장되도록)
+                                                $refreshedUser = $this->insungUsersListModel->authenticate($username, $password);
+                                                if ($refreshedUser) {
+                                                    $user = $refreshedUser;
+                                                    log_message('info', "Auth::processLogin - Refreshed user data after address update: user_id={$username}");
+                                                }
                                             }
-                                            // 비밀번호 업데이트 없이 주소만 업데이트한 경우 $user는 최초 authenticate() 결과 유지
                                         } else {
                                             log_message('warning', "Auth::processLogin - Update failed: user_id={$username}, updateResult={$updateResult}, SQL error: " . ($db->error()['message'] ?? 'none'));
                                         }

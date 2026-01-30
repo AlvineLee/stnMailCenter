@@ -3,25 +3,136 @@
 <?= $this->section('content') ?>
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 list-page-container">
 <script>
-// 페이지 로드 후 해시에 따라 포커스 복원 및 거래처 목록 유지
+// 거래처 목록 저장 (모달 검색용)
+let companyListData = [];
+
+// 거래처 검색 모달 열기
+function openCompanySearchModal() {
+    // 레이어 팝업이 열릴 때 사이드바 처리
+    if (typeof window.hideSidebarForModal === 'function') {
+        window.hideSidebarForModal();
+    }
+    if (typeof window.lowerSidebarZIndex === 'function') {
+        window.lowerSidebarZIndex();
+    }
+
+    const modal = document.getElementById('companySearchModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        // 검색 입력창 포커스
+        setTimeout(() => {
+            const searchInput = document.getElementById('companySearchInput');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            // 목록 초기 표시
+            filterCompanyList('');
+        }, 100);
+    }
+}
+
+// 거래처 검색 모달 닫기
+function closeCompanySearchModal() {
+    const modal = document.getElementById('companySearchModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    // 레이어 팝업이 닫힐 때 사이드바 z-index 복원
+    if (typeof window.restoreSidebarZIndex === 'function') {
+        window.restoreSidebarZIndex();
+    }
+}
+
+// 거래처 목록 필터링
+function filterCompanyList(searchText) {
+    const listContainer = document.getElementById('companySearchList');
+    if (!listContainer) return;
+
+    const searchLower = searchText.toLowerCase().trim();
+
+    // 전체(콜센터 설정) 옵션 + 필터링된 목록
+    let html = '<div class="company-item" data-code="" onclick="selectCompanyFromModal(\'\', \'전체\')">전체</div>';
+
+    let count = 0;
+    companyListData.forEach(company => {
+        const compName = company.comp_name || company.comp_code;
+        const compCode = company.comp_code;
+
+        // 검색어가 없거나 매치되면 표시
+        if (!searchLower || compName.toLowerCase().includes(searchLower) || compCode.toLowerCase().includes(searchLower)) {
+            html += `<div class="company-item" data-code="${escapeHtml(compCode)}" onclick="selectCompanyFromModal('${escapeHtml(compCode)}', '${escapeHtml(compName)}')">
+                <span class="company-name">${escapeHtml(compName)}</span>
+                <span class="company-code">${escapeHtml(compCode)}</span>
+            </div>`;
+            count++;
+        }
+    });
+
+    if (count === 0 && searchLower) {
+        html += '<div class="text-gray-500 text-center py-4">검색 결과가 없습니다</div>';
+    }
+
+    listContainer.innerHTML = html;
+
+    // 검색 결과 수 표시
+    const countEl = document.getElementById('companySearchCount');
+    if (countEl) {
+        countEl.textContent = searchLower ? `${count}건 검색됨` : `총 ${companyListData.length}건`;
+    }
+}
+
+// 모달에서 거래처 선택
+function selectCompanyFromModal(compCode, compName) {
+    // 선택된 거래처 표시
+    const displayEl = document.getElementById('selectedCompanyText');
+    if (displayEl) {
+        displayEl.textContent = compName || '전체';
+    }
+
+    // 히든 필드에 값 저장
+    const hiddenInput = document.getElementById('selected_comp_code');
+    if (hiddenInput) {
+        hiddenInput.value = compCode;
+    }
+
+    // 모달 닫기
+    closeCompanySearchModal();
+
+    // 페이지 이동
+    const ccCode = document.getElementById('cc_code_select').value;
+    const url = new URL(window.location.href);
+
+    if (ccCode) {
+        url.searchParams.set('cc_code', ccCode);
+    }
+
+    if (compCode) {
+        url.searchParams.set('comp_code', compCode);
+    } else {
+        url.searchParams.delete('comp_code');
+    }
+
+    window.location.href = url.toString();
+}
+
+// HTML 이스케이프
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 페이지 로드 후 거래처 목록 초기화 및 모달 이벤트 설정
 document.addEventListener('DOMContentLoaded', function() {
     // URL 파라미터에서 코드 가져오기
     const urlParams = new URLSearchParams(window.location.search);
     const ccCode = urlParams.get('cc_code');
     const compCode = urlParams.get('comp_code');
-
-    // 해시가 있으면 포커스 복원
-    if (window.location.hash === '#comp_code_select') {
-        const compSelect = document.getElementById('comp_code_select');
-        if (compSelect) {
-            // 약간의 지연 후 포커스 (렌더링 완료 대기)
-            setTimeout(function() {
-                compSelect.focus();
-                // 해시 제거 (다음 리로드 시 중복 방지)
-                window.history.replaceState(null, null, window.location.pathname + window.location.search);
-            }, 100);
-        }
-    }
 
     if (ccCode) {
         // 거래처 선택 영역 표시
@@ -30,25 +141,29 @@ document.addEventListener('DOMContentLoaded', function() {
             companyContainer.style.display = 'flex';
         }
 
-        // 거래처 선택 박스 확인 및 선택된 값 설정
-        const compSelect = document.getElementById('comp_code_select');
-        if (compSelect) {
-            // 서버에서 이미 거래처 목록이 렌더링되었는지 확인
-            // 옵션이 2개 이상이면 서버에서 이미 로드된 것 (기본 옵션 + 거래처 목록)
-            const hasServerRenderedOptions = compSelect.options.length > 1;
+        // 서버에서 이미 거래처 목록이 렌더링되었는지 확인 (PHP에서 전달된 company_list 사용)
+        <?php if (!empty($company_list)): ?>
+        // 서버에서 렌더링된 거래처 목록을 companyListData에 저장
+        companyListData = <?= json_encode($company_list) ?>;
 
-            if (hasServerRenderedOptions && compCode) {
-                // 서버에서 이미 로드됨 - 선택된 값 강제 설정
-                compSelect.value = compCode;
-                // 배송사유 설정 영역 표시 및 불러오기 (URL 파라미터의 compCode 사용)
-                showDeliveryReasonSetting(compCode);
-            } else if (!hasServerRenderedOptions) {
-                // 서버에서 로드되지 않음 - AJAX로 로드
-                loadCompaniesByCc(ccCode, compCode);
+        // 선택된 거래처 표시 업데이트
+        <?php if (!empty($selected_comp_code)): ?>
+        const selectedCompany = companyListData.find(c => c.comp_code === '<?= $selected_comp_code ?>');
+        if (selectedCompany) {
+            const displayEl = document.getElementById('selectedCompanyText');
+            if (displayEl) {
+                displayEl.textContent = selectedCompany.comp_name || selectedCompany.comp_code;
             }
         }
+        // 배송사유 설정 영역 표시 및 불러오기
+        showDeliveryReasonSetting('<?= $selected_comp_code ?>');
+        <?php endif; ?>
+        <?php else: ?>
+        // 서버에서 로드되지 않음 - AJAX로 로드
+        loadCompaniesByCc(ccCode, compCode);
+        <?php endif; ?>
 
-        // compCode가 있으면 배송사유 설정 영역 표시 (selectbox 값과 무관하게)
+        // compCode가 있으면 배송사유 설정 영역 표시
         if (compCode) {
             const deliveryContainer = document.getElementById('delivery_reason_setting_container');
             if (deliveryContainer) {
@@ -56,10 +171,42 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+
+    // 검색 모달 외부 클릭 시 닫기
+    const companyModal = document.getElementById('companySearchModal');
+    if (companyModal) {
+        companyModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCompanySearchModal();
+            }
+        });
+    }
+
+    // 검색 입력 시 필터링
+    const searchInput = document.getElementById('companySearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            filterCompanyList(this.value);
+        });
+
+        // Enter 키 시 첫번째 결과 선택, Escape 키 시 모달 닫기
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstItem = document.querySelector('#companySearchList .company-item');
+                if (firstItem) {
+                    firstItem.click();
+                }
+            } else if (e.key === 'Escape') {
+                closeCompanySearchModal();
+            }
+        });
+    }
 });
 
 // 콜센터별 거래처 목록 로드 (AJAX) - 선택된 거래처 코드 전달
-function loadCompaniesByCc(ccCode, selectedCompCode = null) {
+// openModal: true이면 로드 완료 후 거래처 검색 모달 자동 열기
+function loadCompaniesByCc(ccCode, selectedCompCode = null, openModal = false) {
     if (!ccCode) {
         return;
     }
@@ -73,89 +220,173 @@ function loadCompaniesByCc(ccCode, selectedCompCode = null) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // 건수가 다르면 동기화 확인
+            // 건수가 다르면 동기화 확인 (모달 레이어팝업 사용)
             if (data.need_sync) {
-                const confirmSync = confirm(`거래처 리스트를 동기화하시겠습니까?\n\nAPI: ${data.api_count}건 / DB: ${data.db_count}건`);
-                if (confirmSync) {
-                    // 동기화 실행
-                    syncCompanies(ccCode, selectedCompCode);
-                    return;
-                }
+                showConfirmModal(
+                    '거래처 동기화',
+                    `거래처 리스트를 동기화하시겠습니까?\n\nAPI: ${data.api_count}건 / DB: ${data.db_count}건`,
+                    function() {
+                        // 확인 - 동기화 실행
+                        syncCompanies(ccCode, selectedCompCode, openModal);
+                    },
+                    function() {
+                        // 취소 - DB 데이터로 표시
+                        updateCompanySelect(data.companies, selectedCompCode, openModal);
+                    }
+                );
+                return;
             }
 
             // 동기화 안 함 - DB 데이터로 표시
-            updateCompanySelect(data.companies, selectedCompCode);
+            updateCompanySelect(data.companies, selectedCompCode, openModal);
         }
     })
     .catch(error => {
         console.error('Error loading companies:', error);
+        // 에러 시에도 모달 열기 옵션이 있으면 모달 열기
+        if (openModal) {
+            openCompanySearchModal();
+        }
     });
 }
 
-// 거래처 동기화 실행
-function syncCompanies(ccCode, selectedCompCode = null) {
-    // 로딩 표시
-    const compSelect = document.getElementById('comp_code_select');
-    if (compSelect) {
-        compSelect.innerHTML = '<option value="">동기화 중...</option>';
-        compSelect.disabled = true;
+// 진행률 모달 표시
+function showProgressModal() {
+    let modal = document.getElementById('syncProgressModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'syncProgressModal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg shadow-xl p-6 w-96 max-w-[90%]">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">거래처 동기화</h3>
+                <div class="mb-3">
+                    <div class="flex justify-between text-sm text-gray-600 mb-1">
+                        <span id="syncProgressMessage">준비 중...</span>
+                        <span id="syncProgressPercent">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                        <div id="syncProgressBar" class="bg-blue-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div id="syncProgressDetail" class="text-xs text-gray-500 mt-2"></div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}
+
+// 진행률 모달 업데이트
+function updateProgressModal(percent, message, detail = '') {
+    const bar = document.getElementById('syncProgressBar');
+    const percentEl = document.getElementById('syncProgressPercent');
+    const msgEl = document.getElementById('syncProgressMessage');
+    const detailEl = document.getElementById('syncProgressDetail');
+
+    if (bar) bar.style.width = `${percent}%`;
+    if (percentEl) percentEl.textContent = `${percent}%`;
+    if (msgEl) msgEl.textContent = message;
+    if (detailEl) detailEl.textContent = detail;
+}
+
+// 진행률 모달 숨기기
+function hideProgressModal() {
+    const modal = document.getElementById('syncProgressModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// 거래처 동기화 실행 (SSE 실시간 진행률)
+function syncCompanies(ccCode, selectedCompCode = null, openModal = false) {
+    // 진행률 모달 표시
+    showProgressModal();
+    updateProgressModal(0, '동기화 시작...', '');
+
+    const displayEl = document.getElementById('selectedCompanyText');
+    if (displayEl) {
+        displayEl.textContent = '동기화 중...';
     }
 
-    fetch(`<?= base_url('admin/syncCompaniesForOrderType') ?>?cc_code=${encodeURIComponent(ccCode)}`, {
-        method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (compSelect) {
-            compSelect.disabled = false;
-        }
+    // EventSource로 SSE 연결
+    const eventSource = new EventSource(`<?= base_url('admin/syncCompaniesWithProgress') ?>?cc_code=${encodeURIComponent(ccCode)}`);
 
-        if (data.success) {
-            // 동기화 결과 표시
-            if (data.stats) {
-                let msg = `동기화 완료!\n\n총 ${data.stats.total}건 (신규: ${data.stats.inserted}건, 업데이트: ${data.stats.updated}건)`;
-                if (data.stats.deactivated > 0) {
-                    msg += `\n거래종료: ${data.stats.deactivated}건`;
+    eventSource.addEventListener('start', function(e) {
+        const data = JSON.parse(e.data);
+        updateProgressModal(2, data.message, '');
+    });
+
+    eventSource.addEventListener('progress', function(e) {
+        const data = JSON.parse(e.data);
+        let detail = '';
+        if (data.current !== undefined && data.total !== undefined) {
+            detail = `처리: ${data.current} / ${data.total}건`;
+        }
+        if (data.page !== undefined && data.totalPage !== undefined) {
+            detail += ` (${data.page}/${data.totalPage} 페이지)`;
+        }
+        updateProgressModal(data.percent, data.message, detail);
+    });
+
+    eventSource.addEventListener('complete', function(e) {
+        eventSource.close();
+        const data = JSON.parse(e.data);
+
+        // 진행률 100%로 업데이트
+        updateProgressModal(100, '완료!', '');
+
+        // 약간의 딜레이 후 모달 닫기
+        setTimeout(() => {
+            hideProgressModal();
+
+            if (data.success) {
+                // 동기화 결과 표시
+                if (data.stats) {
+                    let msg = `총 ${data.stats.total}건 (신규: ${data.stats.inserted}건, 업데이트: ${data.stats.updated}건)`;
+                    if (data.stats.deactivated > 0) {
+                        msg += `\n거래종료: ${data.stats.deactivated}건`;
+                    }
+                    showSuccessModal('동기화 완료', msg);
                 }
-                alert(msg);
+                // 거래처 목록 업데이트
+                updateCompanySelect(data.companies, selectedCompCode, openModal);
+            } else {
+                showErrorModal('동기화 실패', data.message || '알 수 없는 오류');
             }
-            // 동기화된 거래처 목록 표시
-            updateCompanySelect(data.companies, selectedCompCode);
-        } else {
-            alert('동기화 실패: ' + (data.message || '알 수 없는 오류'));
-            // 실패 시 기존 목록 유지를 위해 다시 로드
-            loadCompaniesByCc(ccCode, selectedCompCode);
-        }
-    })
-    .catch(error => {
-        console.error('Error syncing companies:', error);
-        if (compSelect) {
-            compSelect.disabled = false;
-        }
-        alert('동기화 중 오류가 발생했습니다.');
+        }, 500);
     });
+
+    eventSource.addEventListener('error', function(e) {
+        eventSource.close();
+        hideProgressModal();
+
+        try {
+            const data = JSON.parse(e.data);
+            showErrorModal('동기화 오류', data.message || '동기화 중 오류가 발생했습니다.');
+        } catch {
+            showErrorModal('동기화 오류', '동기화 중 오류가 발생했습니다.');
+        }
+
+        if (displayEl) {
+            displayEl.textContent = '전체';
+        }
+    });
+
+    eventSource.onerror = function(e) {
+        eventSource.close();
+        hideProgressModal();
+        showErrorModal('연결 오류', '서버와의 연결이 끊어졌습니다.');
+        if (displayEl) {
+            displayEl.textContent = '전체';
+        }
+    };
 }
 
-// 거래처 select 업데이트
-function updateCompanySelect(companies, selectedCompCode = null) {
-    const compSelect = document.getElementById('comp_code_select');
-    if (!compSelect) return;
-
-    // 거래처 목록 초기화
-    compSelect.innerHTML = '<option value="">전체 (콜센터 설정)</option>';
-
-    // 거래처 목록 추가
-    if (companies && companies.length > 0) {
-        companies.forEach(company => {
-            const option = document.createElement('option');
-            option.value = company.comp_code;
-            option.textContent = company.comp_name || company.comp_code;
-            compSelect.appendChild(option);
-        });
-    }
+// 거래처 select 업데이트 (모달 검색용 데이터 저장)
+function updateCompanySelect(companies, selectedCompCode = null, openModal = false) {
+    // 거래처 목록 저장 (모달 검색용)
+    companyListData = companies || [];
 
     // 거래처 선택 영역 표시
     const companyContainer = document.getElementById('company_select_container');
@@ -163,11 +394,32 @@ function updateCompanySelect(companies, selectedCompCode = null) {
         companyContainer.style.display = 'flex';
     }
 
-    // 선택된 거래처 코드 설정
+    // 선택된 거래처 표시 업데이트
     if (selectedCompCode) {
-        setTimeout(function() {
-            compSelect.value = selectedCompCode;
-        }, 100);
+        const selectedCompany = companyListData.find(c => c.comp_code === selectedCompCode);
+        if (selectedCompany) {
+            const displayEl = document.getElementById('selectedCompanyText');
+            if (displayEl) {
+                displayEl.textContent = selectedCompany.comp_name || selectedCompany.comp_code;
+            }
+            // 히든 필드에 값 저장
+            const hiddenInput = document.getElementById('selected_comp_code');
+            if (hiddenInput) {
+                hiddenInput.value = selectedCompCode;
+            }
+            // 배송사유 설정 표시
+            showDeliveryReasonSetting(selectedCompCode);
+        }
+    } else {
+        const displayEl = document.getElementById('selectedCompanyText');
+        if (displayEl) {
+            displayEl.textContent = '전체';
+        }
+    }
+
+    // 모달 자동 열기 옵션이 있으면 모달 열기
+    if (openModal) {
+        openCompanySearchModal();
     }
 }
 </script>
@@ -189,16 +441,32 @@ function updateCompanySelect(companies, selectedCompCode = null) {
             </div>
             <div class="flex items-center gap-2" id="company_select_container" style="display: <?= !empty($selected_cc_code) ? 'flex' : 'none' ?>;">
                 <label class="text-sm font-medium text-gray-700">거래처 선택:</label>
-                <select id="comp_code_select" class="search-filter-select" onchange="changeCompCode()">
-                    <option value="">전체 (콜센터 설정)</option>
-                    <?php if (!empty($company_list)): ?>
-                        <?php foreach ($company_list as $company): ?>
-                        <option value="<?= htmlspecialchars($company['comp_code']) ?>" <?= (isset($selected_comp_code) && $selected_comp_code === $company['comp_code']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($company['comp_name'] ?? $company['comp_code']) ?>
-                        </option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </select>
+                <input type="hidden" id="selected_comp_code" name="comp_code" value="<?= htmlspecialchars($selected_comp_code ?? '') ?>">
+                <div class="flex items-center gap-1">
+                    <span id="selectedCompanyDisplay"
+                          onclick="openCompanySearchModal()"
+                          class="text-sm text-blue-600 min-w-[120px] cursor-pointer hover:text-blue-800 hover:underline flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <span id="selectedCompanyText">
+                        <?php if (!empty($selected_comp_code) && !empty($company_list)): ?>
+                            <?php
+                            $selectedCompanyName = '전체';
+                            foreach ($company_list as $company) {
+                                if ($company['comp_code'] === $selected_comp_code) {
+                                    $selectedCompanyName = $company['comp_name'] ?? $company['comp_code'];
+                                    break;
+                                }
+                            }
+                            echo htmlspecialchars($selectedCompanyName);
+                            ?>
+                        <?php else: ?>
+                            전체
+                        <?php endif; ?>
+                        </span>
+                    </span>
+                </div>
             </div>
             <!-- 배송사유 사용 설정 (거래처 선택 시에만 표시) -->
             <div class="flex items-center gap-2" id="delivery_reason_setting_container" style="display: <?= !empty($selected_comp_code) ? 'flex' : 'none' ?>;">
@@ -261,37 +529,49 @@ function updateCompanySelect(companies, selectedCompCode = null) {
                     </svg>
                 </div>
                 <div class="ml-3">
-                    <p class="text-sm font-medium text-gray-600">비활성화된 유형</p>
+                    <p class="text-sm font-medium text-gray-600">비활���화된 유형</p>
                     <p class="text-2xl font-bold text-gray-900" id="inactive-count"><?= $stats['inactive'] ?? 0 ?></p>
                 </div>
             </div>
         </div>
     </div>
     //-->
-    <!-- 주문유형 그리드 (DB 데이터로 동적 생성) -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-6" id="service-types-grid">
-        <?php 
-        // 데이터가 없으면 빈 배열로 초기화
-        $service_types_grouped = $service_types_grouped ?? [];
-        
-        // 카테고리 순서 정의
-        $categoryOrder = ['퀵서비스', '연계배송서비스', '택배서비스', '우편서비스', '일반서비스', '생활서비스'];
-        $categoryLabels = [
-            '퀵서비스' => '퀵서비스',
-            'quick' => '퀵서비스',
-            '연계배송서비스' => '연계배송서비스',
-            'linked' => '연계배송서비스',
-            '택배서비스' => '택배서비스',
-            'parcel' => '택배서비스',
-            '우편서비스' => '우편서비스',
-            'postal' => '우편서비스',
-            '일반서비스' => '일반서비스',
-            'general' => '일반서비스',
-            '생활서비스' => '생활서비스',
-            'life' => '생활서비스'
-        ];
-        
-        // 카테고리별로 그룹화된 데이터 정렬
+    <?php
+    // 데이터가 없으면 빈 배열로 초기화
+    $service_types_grouped = $service_types_grouped ?? [];
+
+    // 카테고리 순서 정의 (메일룸서비스 제외)
+    $categoryOrder = ['퀵서비스', '연계배송서비스', '택배서비스', '우편서비스', '일반서비스', '생활서비스', '해외특송서비스'];
+    $categoryLabels = [
+        '퀵서비스' => '퀵서비스',
+        'quick' => '퀵서비스',
+        '연계배송서비스' => '연계배송서비스',
+        'linked' => '연계배송서비스',
+        '택배서비스' => '택배서비스',
+        'parcel' => '택배서비스',
+        '우편서비스' => '우편서비스',
+        'postal' => '우편서비스',
+        '일반서비스' => '일반서비스',
+        'general' => '일반서비스',
+        '생활서비스' => '생활서비스',
+        'life' => '생활서비스',
+        '해외특송서비스' => '해외특송서비스',
+        'overseas' => '해외특송서비스',
+        '메일룸서비스' => '메일룸서비스',
+        'mailroom' => '메일룸서비스'
+    ];
+
+    // 메일룸은 service_types에서 제거되어 더 이상 $service_types_grouped에 포함되지 않음
+    // 메일룸 권한은 $has_mailroom_permission 변수로 별도 관리됨
+    ?>
+
+    <!-- 주문유형 그리드 + 메일룸서비스 (분리 배치) -->
+    <div class="flex gap-4 mb-6">
+        <!-- 메인 서비스 그리드 (왼쪽) -->
+        <div class="flex-1">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" id="service-types-grid">
+        <?php
+        // 카테고리별로 그룹화된 데이터 정렬 (메일룸 제외)
         $sortedCategories = [];
         if (!empty($service_types_grouped)) {
             foreach ($categoryOrder as $cat) {
@@ -302,7 +582,7 @@ function updateCompanySelect(companies, selectedCompCode = null) {
                     }
                 }
             }
-            
+
             // 나머지 카테고리 추가
             foreach ($service_types_grouped as $category => $services) {
                 if (!isset($sortedCategories[$category])) {
@@ -310,13 +590,13 @@ function updateCompanySelect(companies, selectedCompCode = null) {
                 }
             }
         }
-        
+
         if (empty($sortedCategories)): ?>
         <div class="col-span-full text-center py-8 text-gray-500">
             등록된 주문유형이 없습니다. "새 주문유형 추가" 버튼을 클릭하여 추가하세요.
-                </div>
+        </div>
         <?php else:
-        foreach ($sortedCategories as $category => $services): 
+        foreach ($sortedCategories as $category => $services):
             $categoryLabel = $categoryLabels[$category] ?? $category;
         ?>
         <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
@@ -327,14 +607,15 @@ function updateCompanySelect(companies, selectedCompCode = null) {
                 // 콜센터 선택 시 마스터 비활성화 서비스 체크
                 $isMasterDisabled = (isset($selected_cc_code) && $selected_cc_code && isset($service['master_is_active']) && !$service['master_is_active']);
                 ?>
-                <div class="flex items-center justify-between sortable-service-item <?= $isMasterDisabled ? 'opacity-60' : 'hover:bg-gray-100' ?> py-1 px-2 rounded transition-colors" 
+                <div class="sortable-service-item <?= $isMasterDisabled ? 'opacity-60' : 'hover:bg-gray-100' ?> py-1 px-2 rounded transition-colors"
+                     style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important; flex-wrap: nowrap !important;"
                      data-service-id="<?= $service['id'] ?>"
                      data-sort-order="<?= $service['sort_order'] ?? 0 ?>">
-                    <div class="flex items-center flex-1">
-                        <svg class="w-4 h-4 text-gray-400 mr-2 drag-handle cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24" onclick="event.stopPropagation();">
+                    <div style="display: flex !important; align-items: center !important; flex: 1 !important; min-width: 0 !important;">
+                        <svg class="w-4 h-4 text-gray-400 mr-2 drag-handle cursor-move flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" onclick="event.stopPropagation();">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
                         </svg>
-                        <span class="text-sm <?= $isMasterDisabled ? 'text-gray-400' : 'text-gray-600' ?> service-name-clickable flex-1" 
+                        <span class="text-sm <?= $isMasterDisabled ? 'text-gray-400' : 'text-gray-600' ?> service-name-clickable flex-1 truncate"
                               data-service-id="<?= $service['id'] ?>"
                               data-service-name="<?= htmlspecialchars($service['service_name']) ?>"
                               data-service-category="<?= htmlspecialchars($service['service_category']) ?>"
@@ -351,42 +632,104 @@ function updateCompanySelect(companies, selectedCompCode = null) {
                             <?php endif; ?>
                         </span>
                     </div>
-                    <label class="relative inline-flex items-center ml-2 <?= $isMasterDisabled ? 'cursor-not-allowed' : 'cursor-pointer' ?>" onclick="<?= $isMasterDisabled ? 'return false;' : 'event.stopPropagation();' ?>">
-                        <input type="checkbox" 
-                               class="sr-only peer service-status-toggle" 
+                    <?php
+                    // 메일룸서비스는 오픈여부 토글 없이 계약여부만 표시
+                    $isMailroomService = ($category === '메일룸서비스') || (isset($service['service_name']) && $service['service_name'] === '메일룸');
+                    ?>
+                    <?php if (!$isMailroomService): ?>
+                    <!-- 오픈여부 토글 (파란색) - 메일룸 제외 -->
+                    <label class="relative inline-flex items-center ml-2 <?= $isMasterDisabled ? 'cursor-not-allowed' : 'cursor-pointer' ?>" style="flex-shrink: 0 !important;" onclick="<?= $isMasterDisabled ? 'return false;' : 'event.stopPropagation();' ?>" title="오픈여부">
+                        <input type="checkbox"
+                               class="sr-only peer service-status-toggle"
                                data-service-id="<?= $service['id'] ?>"
                                <?= (isset($service['is_enabled']) && $service['is_enabled']) || (!isset($service['is_enabled']) && isset($service['is_active']) && $service['is_active'] == 1) ? 'checked' : '' ?>
                                <?= $isMasterDisabled ? 'disabled title="마스터에서 비활성화된 서비스는 변경할 수 없습니다"' : '' ?>>
                         <div class="w-11 h-6 <?= $isMasterDisabled ? 'bg-gray-100 opacity-50' : 'bg-gray-200' ?> peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all <?= $isMasterDisabled ? '' : 'peer-checked:bg-blue-600' ?>"></div>
                     </label>
+                    <?php endif; ?>
+                    <?php if (!empty($show_contract_settings) || $isMailroomService): ?>
+                    <!-- 계약여부 토글 (디폴트=계약/녹색, 체크=미계약/빨강) -->
+                    <label class="relative inline-flex items-center ml-2 cursor-pointer" style="flex-shrink: 0 !important;" onclick="event.stopPropagation();" title="계약여부 (빨강=미계약)">
+                        <input type="checkbox"
+                               class="sr-only peer contract-status-toggle"
+                               data-service-id="<?= $service['id'] ?>"
+                               <?= (isset($service['is_uncontracted']) && $service['is_uncontracted']) ? 'checked' : '' ?>>
+                        <div class="w-11 h-6 bg-green-500 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500 peer-checked:ring-red-300"></div>
+                    </label>
+                    <?php endif; ?>
                 </div>
                 <?php endforeach; ?>
             </div>
         </div>
-        <?php 
+        <?php
         endforeach;
-        endif; 
+        endif;
         ?>
+            </div>
         </div>
+        <!-- // 메인 서비스 그리드 끝 -->
 
-    <!-- 액션 버튼들 -->
-    <div class="flex justify-between items-center">
-        <button onclick="openCreateModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-            새 주문유형 추가
-        </button>
-        <div class="flex space-x-2">
-            <button onclick="activateAll()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-                전체 활성화
-            </button>
-            <button onclick="deactivateAll()" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500">
-                전체 비활성화
-            </button>
-            <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                설정 저장
-            </button>
+        <!-- 메일룸 권한 패널 (오른쪽) - service_types와 독립적으로 관리 -->
+        <?php if (!empty($show_contract_settings)): ?>
+        <div class="w-52 flex-shrink-0">
+            <div class="bg-red-50 rounded-lg p-3 border-2 border-red-300 sticky top-4">
+                <h3 class="text-sm font-bold text-red-700 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                    메일룸 권한
+                </h3>
+                <p class="text-xs text-red-600 mb-3">계약 거래처 주문을 메일룸 대기열로 이동</p>
+                <div class="space-y-1">
+                    <div class="hover:bg-red-100 py-2 px-2 rounded transition-colors"
+                         style="display: flex !important; align-items: center !important; justify-content: space-between !important;">
+                        <span class="text-sm text-red-700 font-medium">메일룸 사용</span>
+                        <label class="relative inline-flex items-center cursor-pointer" onclick="event.stopPropagation();" title="메일룸 사용 권한">
+                            <input type="checkbox"
+                                   class="sr-only peer mailroom-permission-toggle"
+                                   <?= !empty($has_mailroom_permission) ? 'checked' : '' ?>>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
+    </div>
+    <!-- // 주문유형 그리드 + 메일룸서비스 끝 -->
+
+    <!-- 액션 버튼들 (한 줄 배치) -->
+    <div class="flex items-center justify-between gap-3 flex-nowrap">
+        <!-- 새 주문유형 추가 버튼 (왼쪽) -->
+        <button onclick="openCreateModal()" class="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 whitespace-nowrap flex-shrink-0">
+            새 주문유형 추가
+        </button>
+
+        <!-- 설정 패널들 + 저장 버튼 (오른쪽) -->
+        <div class="flex items-center gap-2 flex-nowrap">
+            <!-- 오픈여부 설정 패널 (파란색) -->
+            <div class="flex items-center gap-2 px-2 py-1 bg-blue-50 rounded border border-blue-200 flex-nowrap flex-shrink-0">
+                <span class="text-xs font-semibold text-blue-700 whitespace-nowrap">오픈여부</span>
+                <button onclick="activateAll()" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 whitespace-nowrap">전체 활성화</button>
+                <button onclick="deactivateAll()" class="bg-gray-600 text-white px-2 py-1 rounded text-xs hover:bg-gray-700 whitespace-nowrap">전체 비활성화</button>
+            </div>
+
+            <?php if (!empty($show_contract_settings)): ?>
+            <!-- 계약여부 설정 패널 (녹색=계약, 빨강=미계약) -->
+            <div class="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded border border-gray-200 flex-nowrap flex-shrink-0">
+                <span class="text-xs font-semibold text-gray-700 whitespace-nowrap">계약여부</span>
+                <button onclick="activateAllContracts()" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 whitespace-nowrap">전체 계약</button>
+                <button onclick="deactivateAllContracts()" class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700 whitespace-nowrap">전체 미계약</button>
+            </div>
+            <?php endif; ?>
+
+            <!-- 통합 저장 버튼 -->
+            <button onclick="saveAllSettings()" class="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 whitespace-nowrap flex-shrink-0">
+                설정 저장
+            </button>
+        </div>
+    </div>
+    </div>
 
 <!-- 새 주문유형 추가 레이어 팝업 -->
 <div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999 !important;">
@@ -505,6 +848,35 @@ function updateCompanySelect(companies, selectedCompCode = null) {
         </form>
         </div>
     </div>
+
+<!-- 거래처 검색 모달 -->
+<div id="companySearchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999 !important;">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-sm mx-4" onclick="event.stopPropagation();">
+        <div class="flex justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-200 rounded-t-lg">
+            <div>
+                <h3 class="text-sm font-medium text-gray-800">거래처 선택</h3>
+                <p class="text-xs text-gray-500 mt-0.5">검색하여 선택하세요</p>
+            </div>
+            <button onclick="closeCompanySearchModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="p-3">
+            <div class="relative mb-2">
+                <input type="text" id="companySearchInput" class="w-full border border-gray-300 rounded px-2 py-1.5 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" placeholder="거래처명 또는 코드 검색...">
+                <svg class="w-4 h-4 text-gray-400 absolute right-2 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+            <div id="companySearchList" class="max-h-72 overflow-y-auto border border-gray-200 rounded">
+                <!-- 거래처 목록이 여기에 동적으로 생성됨 -->
+            </div>
+            <div class="text-xs text-blue-600 mt-2" id="companySearchCount">검색 결과</div>
+        </div>
+    </div>
+</div>
 
 <!-- Sortable.js 라이브러리 -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -722,56 +1094,210 @@ function deactivateAll() {
     document.querySelectorAll('.service-status-toggle').forEach(toggle => {
         toggle.checked = false;
     });
-    // console.log('모든 서비스가 비활성화 상태로 변경되었습니다. (설정 저장을 눌러주세요.)');
+}
+
+// 계약 전체 활성화 (UI만 변경) - 미체크=계약이므로 false
+function activateAllContracts() {
+    document.querySelectorAll('.contract-status-toggle').forEach(toggle => {
+        toggle.checked = false;  // 미체크 = 계약(녹색)
+    });
+}
+
+// 계약 전체 비활성화 (UI만 변경) - 체크=미계약이므로 true
+function deactivateAllContracts() {
+    document.querySelectorAll('.contract-status-toggle').forEach(toggle => {
+        toggle.checked = true;  // 체크 = 미계약(빨강)
+    });
+}
+
+// 계약여부 설정 저장
+function saveContractSettings() {
+    const compCode = document.getElementById('selected_comp_code')?.value;
+    const ccCode = document.getElementById('cc_code_select')?.value;
+
+    if (!compCode) {
+        showErrorModal('저장 오류', '거래처를 선택해주세요.');
+        return;
+    }
+
+    // 계약 상태 수집
+    const contracts = [];
+    // 메인 그리드 계약 토글 (체크 반대: 미체크=계약, 체크=미계약)
+    document.querySelectorAll('.contract-status-toggle').forEach(toggle => {
+        contracts.push({
+            service_type_id: toggle.dataset.serviceId,
+            is_uncontracted: toggle.checked  // 체크=미계약=1
+        });
+    });
+    // 메일룸서비스 권한 토글 (원래대로: 체크=권한있음)
+    document.querySelectorAll('.mailroom-contract-toggle').forEach(toggle => {
+        contracts.push({
+            service_type_id: toggle.dataset.serviceId,
+            is_uncontracted: !toggle.checked  // 체크=권한있음=0
+        });
+    });
+
+    // 저장 요청
+    fetch('<?= base_url('admin/batchUpdateContractStatus') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            comp_code: compCode,
+            cc_code: ccCode,
+            contracts: contracts
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessModal('저장 완료', '계약여부 설정이 저장되었습니다.');
+        } else {
+            showErrorModal('저장 실패', data.message || '알 수 없는 오류가 발생했습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorModal('저장 오류', '계약여부 저장 중 오류가 발생했습니다.');
+    });
+}
+
+// 통합 저장 (오픈여부 + 계약여부)
+async function saveAllSettings() {
+    const compCode = document.getElementById('selected_comp_code')?.value;
+    const ccCode = document.getElementById('cc_code_select')?.value;
+
+    let hasError = false;
+    let savedCount = 0;
+
+    // 1. 오픈여부 저장
+    const statusUpdates = [];
+    document.querySelectorAll('.service-status-toggle').forEach(toggle => {
+        const serviceId = toggle.dataset.serviceId;
+        const isActive = toggle.checked ? 1 : 0;
+        statusUpdates.push({
+            service_id: serviceId,
+            is_active: isActive
+        });
+    });
+
+    if (statusUpdates.length > 0) {
+        const formData = new FormData();
+        formData.append('status_updates', JSON.stringify(statusUpdates));
+
+        if (ccCode) {
+            formData.append('cc_code', ccCode);
+        }
+        if (compCode) {
+            formData.append('comp_code', compCode);
+        }
+
+        try {
+            const response = await fetch('<?= base_url('admin/batchUpdateServiceStatus') ?>', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (data.success) {
+                savedCount++;
+            } else {
+                hasError = true;
+                console.error('오픈여부 저장 실패:', data.message);
+            }
+        } catch (error) {
+            hasError = true;
+            console.error('오픈여부 저장 오류:', error);
+        }
+    }
+
+    // 2. 계약여부 저장 (거래처가 선택된 경우에만)
+    if (compCode) {
+        const contracts = [];
+        // 메인 그리드 계약 토글 (체크 반대: 미체크=계약, 체크=미계약)
+        document.querySelectorAll('.contract-status-toggle').forEach(toggle => {
+            contracts.push({
+                service_type_id: toggle.dataset.serviceId,
+                is_uncontracted: toggle.checked  // 체크=미계약=1
+            });
+        });
+
+        // 메일룸 권한 (별도 파라미터로 전송, service_type_id 없음)
+        let mailroomPermission = null;
+        const mailroomToggle = document.querySelector('.mailroom-permission-toggle');
+        if (mailroomToggle) {
+            mailroomPermission = mailroomToggle.checked; // 체크=권한있음=true
+        }
+
+        try {
+            const response = await fetch('<?= base_url('admin/batchUpdateContractStatus') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    comp_code: compCode,
+                    cc_code: ccCode,
+                    contracts: contracts,
+                    mailroom_permission: mailroomPermission
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                savedCount++;
+            } else {
+                hasError = true;
+                console.error('계약여부 저장 실패:', data.message);
+            }
+        } catch (error) {
+            hasError = true;
+            console.error('계약여부 저장 오류:', error);
+        }
+    }
+
+    // 결과 표시
+    if (hasError) {
+        showErrorModal('저장 오류', '일부 설정 저장에 실패했습니다. 다시 시도해주세요.');
+    } else if (savedCount > 0) {
+        showSuccessModal('저장 완료', '설정이 저장되었습니다.');
+    } else {
+        alert('저장할 설정이 없습니다.');
+    }
 }
 
 // 콜센터 선택 변경
 function changeCcCode() {
     const ccCode = document.getElementById('cc_code_select').value;
     const url = new URL(window.location.href);
-    
+
     // 거래처 선택 초기화
-    document.getElementById('comp_code_select').innerHTML = '<option value="">전체 (콜센터 설정)</option>';
-    document.getElementById('company_select_container').style.display = 'none';
-    
+    companyListData = [];
+    const displayEl = document.getElementById('selectedCompanyText');
+    if (displayEl) {
+        displayEl.textContent = '전체';
+    }
+    const hiddenInput = document.getElementById('selected_comp_code');
+    if (hiddenInput) {
+        hiddenInput.value = '';
+    }
+
     if (ccCode) {
-        url.searchParams.set('cc_code', ccCode);
-        url.searchParams.delete('comp_code'); // 거래처 파라미터 제거
+        // 콜센터가 선택되면 거래처 목록 로드 (API 동기화 확인 포함) 후 모달 열기
+        document.getElementById('company_select_container').style.display = 'flex';
+        // loadCompaniesByCc의 세번째 파라미터 true: 로드 완료 후 모달 자동 열기
+        loadCompaniesByCc(ccCode, null, true);
     } else {
+        // 콜센터 선택 해제 시 마스터 설정으로 이동
+        document.getElementById('company_select_container').style.display = 'none';
         url.searchParams.delete('cc_code');
         url.searchParams.delete('comp_code');
+        window.location.href = url.toString();
     }
-    
-    // 페이지 리로드 (거래처 목록은 서버에서 다시 조회됨)
-    window.location.href = url.toString();
 }
 
-// 거래처 선택 변경
-function changeCompCode() {
-    const ccCode = document.getElementById('cc_code_select').value;
-    const compCode = document.getElementById('comp_code_select').value;
-    const url = new URL(window.location.href);
-    
-    // 콜센터 코드가 없으면 거래처 선택 불가
-    if (!ccCode) {
-        alert('콜센터를 먼저 선택해주세요.');
-        document.getElementById('comp_code_select').value = '';
-        return;
-    }
-    
-    url.searchParams.set('cc_code', ccCode);
-    
-    if (compCode) {
-        url.searchParams.set('comp_code', compCode);
-    } else {
-        url.searchParams.delete('comp_code');
-    }
-    
-    // 페이지 리로드 후 거래처 선택 박스에 포커스 주기 위해 해시 추가
-    url.hash = 'comp_code_select';
-    
-    window.location.href = url.toString();
-}
+// 거래처 선택 변경 (더 이상 사용되지 않음 - 모달에서 직접 처리)
 
 // 배송사유 설정 영역 표시 및 현재 설정 불러오기
 function showDeliveryReasonSetting(compCode) {
@@ -813,7 +1339,8 @@ function updateDeliveryReasonSetting() {
 
     // URL에 없으면 selectbox에서 가져오기
     if (!compCode) {
-        compCode = document.getElementById('comp_code_select').value;
+        const hiddenInput = document.getElementById('selected_comp_code');
+        compCode = hiddenInput ? hiddenInput.value : '';
     }
 
     const useDeliveryReason = document.getElementById('use_delivery_reason_select').value;
@@ -846,7 +1373,7 @@ function updateDeliveryReasonSetting() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('설정 저장 중 오류가 발생했습니다.');
+        alert('설정 저장 중 오류가 발생했습��다.');
     });
 }
 
@@ -883,9 +1410,9 @@ function saveSettings() {
     }
     
     // 거래처 코드가 선택되어 있으면 함께 전송
-    const compCodeSelect = document.getElementById('comp_code_select');
-    if (compCodeSelect && compCodeSelect.value) {
-        formData.append('comp_code', compCodeSelect.value);
+    const compCodeHidden = document.getElementById('selected_comp_code');
+    if (compCodeHidden && compCodeHidden.value) {
+        formData.append('comp_code', compCodeHidden.value);
         // console.log('거래처 코드:', compCodeSelect.value);
     }
     
@@ -963,7 +1490,7 @@ if (document.readyState === 'loading') {
 } else {
     // 이미 로드 완료된 경우 즉시 실행
     initSortable();
-    // 참고: 거래처 목록 로드는 상단 DOMContentLoaded 이벤트에서 처리됨
+    // 참고: 거래��� 목록 로드는 상단 DOMContentLoaded 이벤트에서 처리됨
 }
 
 // 서비스 순서 업데이트
@@ -1027,6 +1554,71 @@ function updateServiceOrder(listElement) {
 .sortable-drag {
     opacity: 0.8;
 }
+
+/* 거래처 검색 모달 스타일 */
+.company-item {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    color: #374151;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+}
+
+.company-item:last-child {
+    border-bottom: none;
+}
+
+.company-item:hover {
+    background-color: #eff6ff;
+}
+
+.company-item[data-code=""] {
+    font-weight: 500;
+    color: #6b7280;
+    background-color: #f9fafb;
+}
+
+.company-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.company-name {
+    flex: 1;
+}
+
+.company-code {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-left: 0.5rem;
+    font-family: monospace;
+}
+
+.company-item:hover .company-code {
+    color: #6b7280;
+}
+
+#companySearchList::-webkit-scrollbar {
+    width: 6px;
+}
+
+#companySearchList::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#companySearchList::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#companySearchList::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
 </style>
+
+<?= $this->include('forms/alert-modal') ?>
 
 <?= $this->endSection() ?>

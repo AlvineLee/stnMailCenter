@@ -148,7 +148,6 @@ class SyncInsungOrders extends BaseCommand
             $orderModel = new OrderModel();
             $totalInserted = 0;
             $totalUpdated = 0;
-            $totalDeleted = 0;
             $totalErrors = [];
 
             // 부서별 오더목록 API 호출 → 파싱 → DB 저장
@@ -159,25 +158,13 @@ class SyncInsungOrders extends BaseCommand
 
             if ($orderListResultDept['success'] && isset($orderListResultDept['data'])) {
                 CLI::write("부서별 오더목록 저장 중...", 'yellow');
-                // 삭제 로직용 endDate: getOrderList에서 +5일로 변경되므로 동일하게 적용
-                $deleteEndDate = $endDate;
-                $today = date('Y-m-d');
-                if (empty($deleteEndDate) || $deleteEndDate === $today) {
-                    $deleteEndDate = date('Y-m-d', strtotime('+5 days'));
-                }
-                $resultDept = $orderModel->insertOrUpdateInsungOrders($orderListResultDept['data'], $userIdx, $customerId, $isSelfOrderOnly, $userId, $mCode, $ccCode, $token, $apiIdx, $compCode, $startDate, $deleteEndDate);
+                $resultDept = $orderModel->insertOrUpdateInsungOrders($orderListResultDept['data'], $userIdx, $customerId, $isSelfOrderOnly, $userId, $mCode, $ccCode, $token, $apiIdx, $compCode, $startDate, $endDate);
                 $totalInserted += $resultDept['inserted'];
                 $totalUpdated += $resultDept['updated'];
-                if (isset($resultDept['deleted'])) {
-                    $totalDeleted += ($resultDept['deleted'] ?? 0);
-                }
                 if (!empty($resultDept['errors'])) {
                     $totalErrors = array_merge($totalErrors, $resultDept['errors']);
                 }
                 CLI::write("부서별 오더목록 저장 완료: 신규 {$resultDept['inserted']}건, 업데이트 {$resultDept['updated']}건", 'green');
-                if (isset($resultDept['deleted']) && $resultDept['deleted'] > 0) {
-                    CLI::write("삭제된 주문: {$resultDept['deleted']}건 (인성 API에서 사라진 주문)", 'yellow');
-                }
             } else {
                 CLI::write("부서별 오더목록 조회 실패: " . ($orderListResultDept['message'] ?? '알 수 없는 오류'), 'red');
             }
@@ -185,9 +172,6 @@ class SyncInsungOrders extends BaseCommand
             CLI::write("동기화 완료!", 'green');
             CLI::write("총 신규 주문: {$totalInserted}건", 'green');
             CLI::write("총 업데이트: {$totalUpdated}건", 'green');
-            if ($totalDeleted > 0) {
-                CLI::write("총 삭제: {$totalDeleted}건 (인성 API에서 사라진 주문)", 'yellow');
-            }
 
             if (!empty($totalErrors)) {
                 CLI::write("오류 발생: " . count($totalErrors) . "건", 'yellow');

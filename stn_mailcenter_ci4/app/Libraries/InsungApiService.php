@@ -324,7 +324,7 @@ class InsungApiService
             $code = $jresult->code;
         }
         
-        // 토큰 만료 확인 (에러 코드 1001) - 토큰이 만료되었거나 잘못된 경우
+        // 토큰 ��료 확인 (에러 코드 1001) - 토큰이 만료되었거나 잘못된 경우
         // [자동 토큰 갱신 비활성화] 다중 사용자 환경에서 토큰 헬 방지를 위해 자동 갱신 비활성화
         // 토큰 갱신은 관리자 화면에서 수동으로만 수행해야 함
         if ($code == "1001" && $apiIdx !== null) {
@@ -972,7 +972,13 @@ class InsungApiService
 
         $price = (string)$calculatedPrice;
         // log_message('info', "Insung::registerOrder - Price calculated: {$price}");
-        
+
+        // 연락처에서 하이픈 제거 (인성 API 요구사항)
+        $cMobileReg = str_replace('-', '', $orderData['contact'] ?? '');
+        $startTelnoReg = str_replace('-', '', $orderData['departure_contact'] ?? '');
+        $destTelnoReg = str_replace('-', '', $orderData['destination_contact'] ?? '');
+        $smsTelnoReg = str_replace('-', '', $orderData['sms_telno'] ?? ($orderData['contact'] ?? ''));
+
         $params = [
             'type' => 'json',
             'm_code' => $mcode,
@@ -981,13 +987,13 @@ class InsungApiService
             'token' => $token,
             // 주문자 정보
             'c_name' => $orderData['company_name'] ?? '',
-            'c_mobile' => $orderData['contact'] ?? '',
+            'c_mobile' => $cMobileReg,
             'c_dept_name' => $orderData['departure_department'] ?? '',
             'c_charge_name' => $orderData['departure_manager'] ?? '',
             'reason_desc' => '',
             // 출발지 정보
             's_start' => $orderData['departure_company_name'] ?? '',
-            'start_telno' => $orderData['departure_contact'] ?? '',
+            'start_telno' => $startTelnoReg,
             'dept_name' => $orderData['departure_department'] ?? '',
             'charge_name' => $orderData['departure_manager'] ?? '',
             'start_sido' => $startSido,
@@ -999,7 +1005,7 @@ class InsungApiService
             'start_location' => trim(($orderData['departure_address'] ?? '') . ' ' . ($orderData['departure_detail'] ?? '')),
             // 도착지 정보
             's_dest' => $orderData['destination_company_name'] ?? '',
-            'dest_telno' => $orderData['destination_contact'] ?? '',
+            'dest_telno' => $destTelnoReg,
             'dest_dept' => $orderData['destination_department'] ?? '',
             'dest_charge' => $orderData['destination_manager'] ?? '',
             'dest_sido' => $destSido,
@@ -1019,7 +1025,7 @@ class InsungApiService
             // 루비 버전 참조: & 문자 오류로인한 특수문자로 치환
             // delivery_content에 이미 상차방법/하차방법이 포함되어 있으므로 그대로 사용
             'memo' => preg_replace("/&/", "＆", $orderData['delivery_content'] ?? ($orderData['notes'] ?? '')),
-            'sms_telno' => $orderData['sms_telno'] ?? ($orderData['contact'] ?? ''),
+            'sms_telno' => $smsTelnoReg,
             // 예약 정보 (PHP 버전: use_check=$sel_reserve, pickup_date=$reserve_date, pick_hour=$reserve_hour, pick_min=$reserve_min, pick_sec=0)
             'use_check' => $orderData['reserve_check'] ?? ($orderData['use_check'] ?? '0'),
             'pickup_date' => $orderData['reserve_date'] ?? ($orderData['pickup_date'] ?? ''),
@@ -1084,6 +1090,263 @@ class InsungApiService
             'serial_number' => null,
             'message' => '응답 형식 오류',
             'request_params' => $params  // request body 포함
+        ];
+    }
+
+    /**
+     * 주문 접수용 API 파라미터 빌드 (API 호출 없이 파라미터만 생성)
+     * tbl_orders_insung에 먼저 저장하기 위해 분리된 메서드
+     *
+     * @param string $mcode 마스터 코드
+     * @param string $cccode 콜센터 코드
+     * @param string $token 토큰
+     * @param string $userId 사용자 ID
+     * @param array $orderData 주문 데이터
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return array ['success' => bool, 'params' => array|null, 'message' => string]
+     */
+    public function buildOrderParams($mcode, $cccode, $token, $userId, $orderData, $apiIdx = null)
+    {
+        // 주소에서 시도, 구군, 동 추출
+        $startSido = $this->extractSido($orderData['departure_address'] ?? '');
+        $startGugun = $this->extractGugun($orderData['departure_address'] ?? '');
+        $startDong = $orderData['departure_dong'] ?? '';
+        if (empty($startDong)) {
+            $startDong = $this->extractDong($orderData['departure_address'] ?? '');
+        }
+
+        $destSido = $this->extractSido($orderData['destination_address'] ?? '');
+        $destGugun = $this->extractGugun($orderData['destination_address'] ?? '');
+        $destDong = $orderData['destination_dong'] ?? '';
+        if (empty($destDong)) {
+            $destDong = $this->extractDong($orderData['destination_address'] ?? '');
+        }
+
+        // 좌표 처리
+        $startLon = $orderData['departure_lon'] ?? '';
+        $startLat = $orderData['departure_lat'] ?? '';
+        $destLon = $orderData['destination_lon'] ?? '';
+        $destLat = $orderData['destination_lat'] ?? '';
+
+        // 출발지 좌표가 없으면 인성 API로 조회
+        $departureFullAddr = $orderData['departure_fulladdr'] ?? '';
+        $departureAddress = $orderData['departure_address'] ?? '';
+
+        if (empty($startLon) || empty($startLat)) {
+            $addressForCoord = !empty($departureFullAddr) ? $departureFullAddr : $departureAddress;
+            if (!empty($addressForCoord)) {
+                $addressForCoord = str_replace("강원특별자치도", "강원도", $addressForCoord);
+                $addressForCoord = preg_replace('/\s*지하\s*/i', ' ', $addressForCoord);
+                $addressForCoord = preg_replace('/\s+/', ' ', $addressForCoord);
+                $addressForCoord = trim($addressForCoord);
+                $coordResult = $this->getAddressCoordinates($mcode, $cccode, $token, $addressForCoord, $apiIdx);
+                if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
+                    $startLon = $coordResult['lon'];
+                    $startLat = $coordResult['lat'];
+                }
+            }
+        }
+
+        // 도착지 좌표가 없으면 인성 API로 조회
+        $destinationFullAddr = $orderData['destination_fulladdr'] ?? '';
+        $destinationAddress = $orderData['destination_address'] ?? '';
+
+        if (empty($destLon) || empty($destLat)) {
+            $addressForCoord = !empty($destinationFullAddr) ? $destinationFullAddr : $destinationAddress;
+            if (!empty($addressForCoord)) {
+                $addressForCoord = str_replace("강원특별자치도", "강원도", $addressForCoord);
+                $addressForCoord = preg_replace('/\s*지하\s*/i', ' ', $addressForCoord);
+                $addressForCoord = preg_replace('/\s+/', ' ', $addressForCoord);
+                $addressForCoord = trim($addressForCoord);
+                $coordResult = $this->getAddressCoordinates($mcode, $cccode, $token, $addressForCoord, $apiIdx);
+                if ($coordResult && isset($coordResult['lon']) && isset($coordResult['lat'])) {
+                    $destLon = $coordResult['lon'];
+                    $destLat = $coordResult['lat'];
+                }
+            }
+        }
+
+        // kind 변환
+        if (!empty($orderData['kind']) && is_numeric($orderData['kind'])) {
+            $kind = (string)$orderData['kind'];
+        } else {
+            $kind = $this->convertKind($orderData['service_type'] ?? '', $orderData['delivery_method'] ?? '');
+        }
+
+        // kind_etc 변환
+        $kindEtc = '';
+        if ($kind === '7') {
+            $kindEtc = $this->convertKindEtc($orderData['delivery_method'] ?? '');
+        }
+
+        // item_type 변환
+        $itemTypeForConvert = $orderData['item_type'] ?? $orderData['itemType'] ?? '';
+        $itemType = $this->convertItemType($itemTypeForConvert);
+
+        // doc 변환
+        $deliveryMethodForDoc = $orderData['deliveryMethod'] ?? $orderData['delivery_method'] ?? $orderData['doc'] ?? '';
+        $doc = $this->convertDoc($deliveryMethodForDoc);
+
+        // sfast 변환
+        $deliveryTypeForSfast = $orderData['deliveryType'] ?? $orderData['delivery_type'] ?? $orderData['sfast'] ?? '';
+        $urgencyLevelForSfast = $orderData['urgency_level'] ?? '';
+        $isOverloadForSfast = $orderData['is_overload'] ?? false;
+        $sfast = $this->convertSfast($deliveryTypeForSfast, $urgencyLevelForSfast, $isOverloadForSfast);
+
+        $state = '';
+
+        // 좌표 검증
+        if (empty($startLon) || empty($startLat) || empty($destLon) || empty($destLat)) {
+            return [
+                'success' => false,
+                'params' => null,
+                'message' => '출발지 또는 도착지 좌표가 없어 거리 기반 요금 계산이 불가능합니다. 주소를 정확히 입력해주세요.'
+            ];
+        }
+
+        // 가격 계산
+        $orderDataForPrice = $orderData;
+        $orderDataForPrice['doc'] = $doc;
+        $calculatedPrice = $this->calculatePriceByDistance($mcode, $cccode, $token, $userId, $startLon, $startLat, $destLon, $destLat, $kind, $apiIdx, $orderDataForPrice);
+
+        if ($calculatedPrice == -1) {
+            $calculatedPrice = 0;
+        } elseif ($calculatedPrice <= 0) {
+            return [
+                'success' => false,
+                'params' => null,
+                'message' => '거리 기반 요금 계산에 실패했습니다. 거리 또는 차종 정보를 확인해주세요.'
+            ];
+        }
+
+        $price = (string)$calculatedPrice;
+
+        // 연락처에서 하이픈 제거 (인성 API 요구사항)
+        $cMobile = str_replace('-', '', $orderData['contact'] ?? '');
+        $startTelno = str_replace('-', '', $orderData['departure_contact'] ?? '');
+        $destTelno = str_replace('-', '', $orderData['destination_contact'] ?? '');
+        $smsTelno = str_replace('-', '', $orderData['sms_telno'] ?? ($orderData['contact'] ?? ''));
+
+        $params = [
+            'type' => 'json',
+            'm_code' => $mcode,
+            'cc_code' => $cccode,
+            'user_id' => $userId,
+            'token' => $token,
+            'c_name' => $orderData['company_name'] ?? '',
+            'c_mobile' => $cMobile,
+            'c_dept_name' => $orderData['departure_department'] ?? '',
+            'c_charge_name' => $orderData['departure_manager'] ?? '',
+            'reason_desc' => '',
+            's_start' => $orderData['departure_company_name'] ?? '',
+            'start_telno' => $startTelno,
+            'dept_name' => $orderData['departure_department'] ?? '',
+            'charge_name' => $orderData['departure_manager'] ?? '',
+            'start_sido' => $startSido,
+            'start_gugun' => $startGugun,
+            'start_dong' => $startDong,
+            'start_lon' => $startLon,
+            'start_lat' => $startLat,
+            'start_location' => trim(($orderData['departure_address'] ?? '') . ' ' . ($orderData['departure_detail'] ?? '')),
+            's_dest' => $orderData['destination_company_name'] ?? '',
+            'dest_telno' => $destTelno,
+            'dest_dept' => $orderData['destination_department'] ?? '',
+            'dest_charge' => $orderData['destination_manager'] ?? '',
+            'dest_sido' => $destSido,
+            'dest_gugun' => $destGugun,
+            'dest_dong' => $destDong,
+            'dest_location' => trim(($orderData['destination_address'] ?? '') . ' ' . ($orderData['detail_address'] ?? '')),
+            'dest_lon' => $destLon,
+            'dest_lat' => $destLat,
+            'kind' => $kind,
+            'kind_etc' => $kindEtc,
+            'pay_gbn' => $this->convertPaymentType($orderData['payment_type'] ?? ''),
+            'doc' => $doc,
+            'sfast' => $sfast,
+            'item_type' => $itemType,
+            'memo' => preg_replace("/&/", "＆", $orderData['delivery_content'] ?? ($orderData['notes'] ?? '')),
+            'sms_telno' => $smsTelno,
+            'use_check' => $orderData['reserve_check'] ?? ($orderData['use_check'] ?? '0'),
+            'pickup_date' => $orderData['reserve_date'] ?? ($orderData['pickup_date'] ?? ''),
+            'pick_hour' => $orderData['reserve_hour'] ?? ($orderData['pick_hour'] ?? ''),
+            'pick_min' => $orderData['reserve_min'] ?? ($orderData['pick_min'] ?? ''),
+            'pick_sec' => $orderData['reserve_sec'] ?? ($orderData['pick_sec'] ?? '0'),
+            'price' => $price,
+            's_c_code' => $orderData['s_c_code'] ?? '',
+            'd_c_code' => $orderData['d_c_code'] ?? '',
+            'add_cost' => '',
+            'discount_cost' => '',
+            'delivery_cost' => '',
+            'car_kind' => $orderData['car_kind'] ?? '',
+            'state' => $state,
+            'distince' => $orderData['distance'] ?? '',
+            'o_c_code' => $orderData['o_c_code'] ?? ''
+        ];
+
+        return [
+            'success' => true,
+            'params' => $params,
+            'message' => '파라미터 빌드 성공'
+        ];
+    }
+
+    /**
+     * 미리 빌드된 파라미터로 주문 접수 API 호출
+     *
+     * @param array $params buildOrderParams()에서 생성된 파라미터
+     * @param int|null $apiIdx api_list 테이블의 idx (토큰 갱신용)
+     * @return array ['success' => bool, 'serial_number' => string|null, 'message' => string, 'request_params' => array]
+     */
+    public function executeOrderWithParams($params, $apiIdx = null)
+    {
+        $url = $this->baseUrl . "/api/order_regist/";
+
+        // 인성 API 주문 접수 파라미터 로그 (kind 확인용)
+        log_message('info', "Insung API 주문 접수 - kind=" . ($params['kind'] ?? 'null') . ", car_kind=" . ($params['car_kind'] ?? 'null') . ", s_dest=" . ($params['s_dest'] ?? 'null'));
+
+        $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
+
+        if (!$result) {
+            return [
+                'success' => false,
+                'serial_number' => null,
+                'message' => 'API 호출 실패',
+                'request_params' => $params
+            ];
+        }
+
+        // 응답이 배열인 경우 첫 번째 요소 확인
+        if (is_array($result) && isset($result[0])) {
+            $code = $result[0]->code ?? $result[0]['code'] ?? '';
+            $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
+
+            if ($code === '1000') {
+                $serialNumber = null;
+                if (isset($result[1])) {
+                    $serialNumber = $result[1]->serial_number ?? $result[1]['serial_number'] ?? null;
+                }
+
+                return [
+                    'success' => true,
+                    'request_params' => $params,
+                    'serial_number' => $serialNumber,
+                    'message' => '주문 접수 성공'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'serial_number' => null,
+                    'message' => "주문 접수 실패: [{$code}] {$msg}",
+                    'request_params' => $params
+                ];
+            }
+        }
+
+        return [
+            'success' => false,
+            'serial_number' => null,
+            'message' => '응답 형식 오류',
+            'request_params' => $params
         ];
     }
 
@@ -1593,6 +1856,11 @@ class InsungApiService
             log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 1/2 - state íŒŒë¼ë¯¸í„° ì—†ìŒ (ëª¨ë“  ìƒíƒœ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
             
             $paramsWithoutState['page'] = 1;
+            $queryString1 = http_build_query($paramsWithoutState);
+            log_message('info', "Insung API 1/2 - state 없음
+URL: {$urlDept}
+Params: {$queryString1}
+Full: {$urlDept}?{$queryString1}");
             $resultDept1First = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithoutState, $apiIdx);
             
             
@@ -1626,7 +1894,12 @@ class InsungApiService
             $paramsWithCancel = $params;
             $paramsWithCancel['state'] = '40'; // ì·¨ì†Œ ìƒíƒœ
             
-            //log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 2/2 - state=40 (ì·¨ì†Œ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
+            $queryString2 = http_build_query($paramsWithCancel);
+            log_message('info', "Insung API 2/2 - state=40 (취소)
+URL: {$urlDept}
+Params: {$queryString2}
+Full: {$urlDept}?{$queryString2}");
+            log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 2/2 - state=40 (ì·¨ì†Œ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
             
             $paramsWithCancel['page'] = 1;
             $resultDept2First = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithCancel, $apiIdx);
@@ -1634,7 +1907,7 @@ class InsungApiService
             // API ì‘ë‹µ JSON ì „ì²´ ì¶œë ¥
             if ($resultDept2First) {
                 $responseJson = json_encode($resultDept2First, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-                //log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´ (2/2 - state=40):\n" . $responseJson);
+                log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´ (2/2 - state=40):\n" . $responseJson);
             }
             
             if ($resultDept2First) {

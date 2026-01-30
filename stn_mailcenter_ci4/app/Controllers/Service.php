@@ -356,6 +356,33 @@ class Service extends BaseController
             }
         }
 
+        // 계약 상태 확인 (거래처별 서비스 타입 계약 여부)
+        $isUncontracted = false;
+        $serviceTypeName = '';
+        if (!empty($compCode)) {
+            $db = \Config\Database::connect();
+            // service_type 문자열을 사용하여 tbl_service_types에서 ID와 이름 조회
+            $serviceRecord = $db->table('tbl_service_types')
+                ->where('service_code', $serviceType)
+                ->get()
+                ->getRowArray();
+
+            if ($serviceRecord) {
+                $serviceTypeId = $serviceRecord['id'];
+                $serviceTypeName = $serviceRecord['service_name'];
+
+                // 거래처별 계약 상태 확인 (is_uncontracted = 1이면 미계약)
+                $permission = $db->table('tbl_company_service_permissions')
+                    ->where('comp_code', $compCode)
+                    ->where('service_type_id', $serviceTypeId)
+                    ->where('is_uncontracted', 1)
+                    ->get()
+                    ->getRowArray();
+
+                $isUncontracted = !empty($permission);
+            }
+        }
+
         $data = [
             'title' => "DaumData - {$serviceName}",
             'content_header' => [
@@ -370,7 +397,10 @@ class Service extends BaseController
             ],
             // 배송사유 관련
             'useDeliveryReason' => $useDeliveryReason,
-            'deliveryReasons' => $deliveryReasons
+            'deliveryReasons' => $deliveryReasons,
+            // 계약 상태
+            'is_uncontracted' => $isUncontracted,
+            'service_type_name' => $serviceTypeName
             // credit은 세션에서 조회하므로 별도 전달 불필요
         ];
 
@@ -630,7 +660,7 @@ class Service extends BaseController
                 'customer_id' => $customerId ?? 1,
                 'department_id' => 1, // 기본값
                 'service_type_id' => $serviceTypeId,
-                'order_number' => $orderNumber ?? 'TEMP-' . date('YmdHis') . '-' . substr(time(), -4), // daumdata는 임시 번호, 인성 API 등록 후 업데이트
+                'order_number' => $orderNumber ?? 'TEMP-' . date('YmdHis') . '-' . substr(time(), -4), // daumdata는 임시 번호, 인성 API 등록 후 업���이트
                 'order_system' => $orderSystem,
                 'company_name' => $this->request->getPost('company_name'),
                 'contact' => $this->request->getPost('contact'),
@@ -730,6 +760,153 @@ class Service extends BaseController
 
             // log_message('debug', 'Order inserted with ID: ' . $orderId);
 
+            // 메일룸 권한 확인 - 권한이 있는 거래처는 API 호출 없이 메일룸 대기열로 전송
+            $hasMailroomPermission = false;
+            $compCode = session()->get('comp_code');
+
+            if ($compCode) {
+                try {
+                    $mailroomPermissionModel = new \App\Models\CompanyMailroomPermissionModel();
+                    $hasMailroomPermission = $mailroomPermissionModel->hasPermission($compCode);
+
+                    if ($hasMailroomPermission) {
+                        log_message('info', "Mailroom permission detected for company: {$compCode}. Order will be queued for mailroom approval.");
+                    } else {
+                        log_message('debug', "No mailroom permission for company: {$compCode}");
+                    }
+                } catch (\Exception $e) {
+                    log_message('error', "Error checking mailroom permission: " . $e->getMessage());
+                }
+            }
+
+            // 메일룸 권한이 있는 거래처인 경우 - API 호출 없이 대기 상태로 저장
+            if ($hasMailroomPermission) {
+                // mailroom_status만 업데이트 (status는 기존 'pending' 유지)
+                $updateResult = $orderModel->update($orderId, [
+                    'mailroom_status' => 'pending'
+                ]);
+                if (!$updateResult) {
+                    log_message('error', "Mailroom status update FAILED for order_id={$orderId}. DB Error: " . json_encode($orderModel->errors()));
+                }
+                log_message('info', "Mailroom status update result: " . ($updateResult ? 'success' : 'failed') . " for order_id={$orderId}");
+                log_message('info', "Order {$orderId} queued for mailroom approval. API call skipped.");
+
+                // 메일룸 권한이 있는 주문도 tbl_orders_insung/tbl_orders_ilyang에 저장
+                // (승인 후 API 호출 전에 사용자가 주문 내용을 확인할 수 있도록)
+                if (in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
+                    // 퀵 서비스: tbl_orders_insung에 저장
+                    try {
+                        $insungApiService = new \App\Libraries\InsungApiService();
+                        $insungApiListModel = new \App\Models\InsungApiListModel();
+
+                        // API 정보 조회 (기본값 사용)
+                        $mCode = session()->get('m_code') ?: '4540';
+                        $ccCode = session()->get('cc_code') ?: '7829';
+                        $apiIdx = session()->get('api_idx');
+
+                        if (!$apiIdx) {
+                            $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+                            $apiIdx = $apiInfo ? $apiInfo['idx'] : null;
+                        }
+
+                        $token = '';
+                        if ($apiIdx) {
+                            $apiInfo = $insungApiListModel->find($apiIdx);
+                            $token = $apiInfo['token'] ?? '';
+                        }
+
+                        // 실제 로그인한 user_id 사용
+                        $insungApiUserId = session()->get('user_id') ?: session()->get('insung_user_id') ?: '에스티엔온라인접수';
+
+                        // 인성 API 파라미터 빌드
+                        $insungOrderData = [
+                            'service_type' => $serviceType,
+                            'delivery_method' => $this->request->getPost('delivery_method') ?? 'motorcycle',
+                            'deliveryMethod' => $this->request->getPost('delivery_route') ?? 'one_way',
+                            'deliveryType' => $this->request->getPost('deliveryType') ?? 'normal',
+                            'company_name' => $this->request->getPost('company_name'),
+                            'contact' => $this->request->getPost('contact'),
+                            'sms_telno' => $this->request->getPost('sms_telno') ?? $this->request->getPost('contact'),
+                            'departure_company_name' => $this->request->getPost('departure_company_name'),
+                            'departure_contact' => $this->request->getPost('departure_contact'),
+                            'departure_address' => $this->request->getPost('departure_address'),
+                            'departure_detail' => $this->request->getPost('departure_detail'),
+                            'departure_dong' => $this->request->getPost('departure_dong2') ?: $this->request->getPost('departure_dong'),
+                            'departure_fulladdr' => $this->request->getPost('departure_fulladdr') ?? '',
+                            'destination_company_name' => $this->request->getPost('destination_company_name'),
+                            'destination_contact' => $this->request->getPost('destination_contact'),
+                            'destination_address' => $this->request->getPost('destination_address'),
+                            'detail_address' => $this->request->getPost('detail_address'),
+                            'destination_dong' => $this->request->getPost('destination_dong2') ?: $this->request->getPost('destination_dong'),
+                            'destination_fulladdr' => $this->request->getPost('destination_fulladdr') ?? '',
+                            'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
+                            'delivery_content' => $this->request->getPost('delivery_content') ?? '',
+                            'notes' => $this->request->getPost('notes') ?? '',
+                            'payment_type' => $this->request->getPost('payment_type'),
+                            'car_kind' => $this->buildCarKind($this->request->getPost('truck_capacity'), $this->request->getPost('truck_body_type'))
+                        ];
+
+                        $buildResult = $insungApiService->buildOrderParams($mCode, $ccCode, $token, $insungApiUserId, $insungOrderData, $apiIdx);
+
+                        if ($buildResult['success'] && $buildResult['params']) {
+                            $insungOrderModel = new \App\Models\InsungOrderModel();
+                            $insungOrderModel->saveInsungOrderData($orderId, $buildResult['params'], null);
+                            log_message('info', "Mailroom order: Insung params saved to tbl_orders_insung for order_id={$orderId}");
+                        }
+                    } catch (\Exception $e) {
+                        log_message('error', "Mailroom order: Failed to save Insung params: " . $e->getMessage());
+                    }
+                } elseif (in_array($serviceType, ['international', 'parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag'])) {
+                    // 택배/해외특송 서비스: tbl_orders_ilyang에 저장
+                    try {
+                        $apiService = \App\Libraries\ApiServiceFactory::createForService($serviceType, true);
+
+                        if ($apiService && method_exists($apiService, 'convertOrderToWaybillData')) {
+                            $deliveryData = [
+                                'order_number' => $orderData['order_number'],
+                                'shipping_tracking_number' => $orderData['shipping_tracking_number'] ?? '',
+                                'departure_company_name' => $this->request->getPost('departure_company_name'),
+                                'departure_contact' => $this->request->getPost('departure_contact'),
+                                'departure_address' => $this->request->getPost('departure_address'),
+                                'departure_manager' => $this->request->getPost('departure_manager'),
+                                'destination_company_name' => $this->request->getPost('destination_company_name'),
+                                'destination_contact' => $this->request->getPost('destination_contact'),
+                                'destination_address' => $this->request->getPost('destination_address'),
+                                'destination_manager' => $this->request->getPost('destination_manager'),
+                                'item_type' => $this->request->getPost('item_type'),
+                                'weight' => $this->request->getPost('weight') ?? '1',
+                                'quantity' => $this->request->getPost('quantity') ?? '1',
+                                'payment_type' => $this->request->getPost('payment_type'),
+                                'delivery_notes' => $this->request->getPost('notes')
+                            ];
+
+                            $waybillData = $apiService->convertOrderToWaybillData($deliveryData);
+                            $ilyangOrderModel = new \App\Models\IlyangOrderModel();
+                            $ilyangOrderModel->saveIlyangOrderData($orderId, $waybillData);
+                            log_message('info', "Mailroom order: Ilyang params saved to tbl_orders_ilyang for order_id={$orderId}");
+                        }
+                    } catch (\Exception $e) {
+                        log_message('error', "Mailroom order: Failed to save Ilyang params: " . $e->getMessage());
+                    }
+                }
+
+                // 서비스명 조회
+                $serviceTypeBuilder = $db->table('tbl_service_types');
+                $serviceTypeBuilder->select('service_name');
+                $serviceTypeBuilder->where('service_code', $serviceType);
+                $serviceTypeQuery = $serviceTypeBuilder->get();
+                $serviceNameRow = $serviceTypeQuery ? $serviceTypeQuery->getRowArray() : null;
+                $serviceName = $serviceNameRow['service_name'] ?? $serviceType;
+
+                // 메일룸 대기 주문은 배송조회 리스트로 리다이렉트
+                return redirect()->to('/delivery/list')
+                    ->with('success', "{$serviceName} 주문이 메일룸 승인 대기열에 등록되었습니다. 주문번호: {$orderData['order_number']}")
+                    ->with('info', '메일룸 담당자의 승인 후 배송이 시작됩니다.');
+            }
+
+            // 메일룸 권한이 없는 거래처 - 일반 API 호출 프로세스 진행
+            $orderModel->update($orderId, ['mailroom_status' => 'none']);
+
             // 3-1. 퀵 서비스인 경우 인성 API 주문 접수
             if (in_array($serviceType, ['quick-motorcycle', 'quick-vehicle', 'quick-flex', 'quick-moving'])) {
                 try {
@@ -801,18 +978,21 @@ class Service extends BaseController
                     
                     // daumdata 로그인인 경우 인성 API에 전달할 user_id (문자열) 조회
                     // $userId는 tbl_users_list.idx (숫자)이므로, 인성 API에는 user_id 문자열을 전달해야 함
-                    $insungApiUserId = null;
-                    if (!$isStnLogin) {
-                        // 이미 위에서 $insungUserId를 조회했으므로 재사용
-                        if (!empty($insungUserId)) {
-                            $insungApiUserId = $insungUserId;
+                    // 실제 로그인한 user_id를 우선 사용
+                    $insungApiUserId = session()->get('user_id');
+
+                    if (empty($insungApiUserId)) {
+                        if (!$isStnLogin) {
+                            // 이미 위에서 $insungUserId를 조회했으므로 재사용
+                            if (!empty($insungUserId)) {
+                                $insungApiUserId = $insungUserId;
+                            } else {
+                                $insungApiUserId = '에스티엔온라인접수';
+                            }
                         } else {
-                            // $insungUserId가 없으면 세션에서 user_id 문자열 가져오기
-                            $insungApiUserId = session()->get('user_id');
+                            // STN 로그인: 고정 user_id 사용
+                            $insungApiUserId = '에스티엔온라인접수';
                         }
-                    } else {
-                        // STN 로그인: 고정 user_id 사용
-                        $insungApiUserId = '에스티엔온라인접수';
                     }
                     
                     if ($mCode && $ccCode && $token && $insungApiUserId && $apiIdx) {
@@ -880,67 +1060,12 @@ class Service extends BaseController
                             'distance' => $this->request->getPost('distance') ?? ''
                         ];
                         
-                        $insungResult = $insungApiService->registerOrder($mCode, $ccCode, $token, $insungApiUserId, $insungOrderData, $apiIdx);
-                        
-                        if ($insungResult['success'] && !empty($insungResult['serial_number'])) {
-                            // 인성 주문번호 저장 및 order_number, user_id 업데이트 (daumdata 로그인은 INSUNG- 형식 사용)
-                            $updateData = [
-                                'insung_order_number' => $insungResult['serial_number'],
-                                'order_number' => 'INSUNG-' . $insungResult['serial_number']
-                            ];
-                            
-                            // user_id도 함께 업데이트 (인터넷 접수 시 인성 API에 전달한 user_id)
-                            // $userId는 tbl_users_list.idx (숫자)이므로 그대로 저장
-                            if (!empty($userId)) {
-                                $updateData['user_id'] = $userId;
-                                
-                                // insung_user_id도 함께 저장 (tbl_users_list에서 user_id 문자열 조회)
-                                $userListBuilder = $db->table('tbl_users_list');
-                                $userListBuilder->select('user_id');
-                                $userListBuilder->where('idx', $userId);
-                                $userListQuery = $userListBuilder->get();
-                                if ($userListQuery !== false) {
-                                    $userListResult = $userListQuery->getRowArray();
-                                    if ($userListResult && !empty($userListResult['user_id'])) {
-                                        $updateData['insung_user_id'] = $userListResult['user_id'];
-                                    }
-                                }
-                            }
-                            
-                            $orderModel->update($orderId, $updateData);
-                            
-                            // 인성 접수 데이터를 별도 테이블에 저장
-                            try {
-                                $insungOrderModel = new \App\Models\InsungOrderModel();
-                                
-                                // 인성 API에 전송한 request body ($params)와 응답의 serial_number 저장
-                                // registerOrder의 결과에 request_params가 포함되어 있음
-                                $requestParams = $insungResult['request_params'] ?? null;
-                                
-                                if ($requestParams) {
-                                    $saveResult = $insungOrderModel->saveInsungOrderData(
-                                        $orderId, 
-                                        $requestParams, 
-                                        $insungResult['serial_number'] ?? null
-                                    );
-                                    
-                                    if ($saveResult) {
-                                        log_message('info', "Insung order data saved: order_id={$orderId}, serial_number={$insungResult['serial_number']}");
-                                    } else {
-                                        log_message('error', "Failed to save Insung order data: order_id={$orderId}");
-                                    }
-                                } else {
-                                    log_message('warning', "Insung request_params not found in API result for order_id={$orderId}");
-                                }
-                            } catch (\Exception $e) {
-                                log_message('error', "Exception saving Insung order data: " . $e->getMessage());
-                                // 인성 접수 데이터 저장 실패해도 주문은 정상 처리됨
-                            }
-                            
-                            log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}, User ID: {$userId}");
-                        } else {
-                            log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: " . ($insungResult['message'] ?? 'Unknown error'));
-                            // 인성 API 실패 시 주문 상태를 'api_failed'로 변경
+                        // 1단계: API 파라미터 먼저 빌드
+                        $buildResult = $insungApiService->buildOrderParams($mCode, $ccCode, $token, $insungApiUserId, $insungOrderData, $apiIdx);
+
+                        if (!$buildResult['success']) {
+                            log_message('warning', "Insung API params build failed. Order ID: {$orderId}, Message: " . ($buildResult['message'] ?? 'Unknown error'));
+                            // 파라미터 빌드 실패 시 주문 상태를 'api_failed'로 변경
                             try {
                                 $orderModel->update($orderId, [
                                     'status' => 'api_failed'
@@ -948,6 +1073,87 @@ class Service extends BaseController
                                 log_message('info', "Order status updated to 'api_failed' for Order ID: {$orderId}");
                             } catch (\Exception $e) {
                                 log_message('error', "Failed to update order status to 'api_failed' for Order ID: {$orderId}. Error: " . $e->getMessage());
+                            }
+                        } else {
+                            $requestParams = $buildResult['params'];
+
+                            // 2단계: API 호출 전에 먼저 tbl_orders_insung에 저장 (serial_number는 null)
+                            // 사용자가 API 실패시에도 주문 내용을 확인할 수 있도록 함
+                            try {
+                                $insungOrderModel = new \App\Models\InsungOrderModel();
+                                $saveResult = $insungOrderModel->saveInsungOrderData(
+                                    $orderId,
+                                    $requestParams,
+                                    null  // API 호출 전이므로 serial_number는 null
+                                );
+
+                                if ($saveResult) {
+                                    log_message('info', "Insung order data saved BEFORE API call: order_id={$orderId}");
+                                } else {
+                                    log_message('error', "Failed to save Insung order data before API call: order_id={$orderId}");
+                                }
+                            } catch (\Exception $e) {
+                                log_message('error', "Exception saving Insung order data before API call: " . $e->getMessage());
+                                // 인성 접수 데이터 저장 실패해도 API 호출은 진행
+                            }
+
+                            // 3단계: 인성 API 호출
+                            $insungResult = $insungApiService->executeOrderWithParams($requestParams, $apiIdx);
+
+                            if ($insungResult['success'] && !empty($insungResult['serial_number'])) {
+                                // 인성 주문번호 저장 및 order_number, user_id 업데이트 (daumdata 로그인은 INSUNG- 형식 사용)
+                                $updateData = [
+                                    'insung_order_number' => $insungResult['serial_number'],
+                                    'order_number' => 'INSUNG-' . $insungResult['serial_number']
+                                ];
+
+                                // user_id도 함께 업데이트 (인터넷 접수 시 인성 API에 전달한 user_id)
+                                // $userId는 tbl_users_list.idx (숫자)이므로 그대로 저장
+                                if (!empty($userId)) {
+                                    $updateData['user_id'] = $userId;
+
+                                    // insung_user_id도 함께 저장 (tbl_users_list에서 user_id 문자열 조회)
+                                    $userListBuilder = $db->table('tbl_users_list');
+                                    $userListBuilder->select('user_id');
+                                    $userListBuilder->where('idx', $userId);
+                                    $userListQuery = $userListBuilder->get();
+                                    if ($userListQuery !== false) {
+                                        $userListResult = $userListQuery->getRowArray();
+                                        if ($userListResult && !empty($userListResult['user_id'])) {
+                                            $updateData['insung_user_id'] = $userListResult['user_id'];
+                                        }
+                                    }
+                                }
+
+                                $orderModel->update($orderId, $updateData);
+
+                                // 4단계: API 성공 후 tbl_orders_insung에 serial_number 업데이트
+                                try {
+                                    $insungOrderModel = new \App\Models\InsungOrderModel();
+                                    $updateSerialResult = $insungOrderModel->updateSerialNumber($orderId, $insungResult['serial_number']);
+
+                                    if ($updateSerialResult) {
+                                        log_message('info', "Insung order serial_number updated: order_id={$orderId}, serial_number={$insungResult['serial_number']}");
+                                    } else {
+                                        log_message('error', "Failed to update Insung order serial_number: order_id={$orderId}");
+                                    }
+                                } catch (\Exception $e) {
+                                    log_message('error', "Exception updating Insung order serial_number: " . $e->getMessage());
+                                }
+
+                                log_message('info', "Insung API order registered successfully. Order ID: {$orderId}, Serial Number: {$insungResult['serial_number']}, User ID: {$userId}");
+                            } else {
+                                log_message('warning', "Insung API order registration failed. Order ID: {$orderId}, Message: " . ($insungResult['message'] ?? 'Unknown error'));
+                                // 인성 API 실패 시 주문 상태를 'api_failed'로 변경
+                                // 단, tbl_orders_insung에는 이미 데이터가 저장되어 있음
+                                try {
+                                    $orderModel->update($orderId, [
+                                        'status' => 'api_failed'
+                                    ]);
+                                    log_message('info', "Order status updated to 'api_failed' for Order ID: {$orderId}");
+                                } catch (\Exception $e) {
+                                    log_message('error', "Failed to update order status to 'api_failed' for Order ID: {$orderId}. Error: " . $e->getMessage());
+                                }
                             }
                         }
                     } else {
@@ -970,7 +1176,7 @@ class Service extends BaseController
             // 4. 해외특송 또는 택배서비스인 경우 송장번호 할당 및 플랫폼코드 저장
             if (in_array($serviceType, ['international', 'parcel-visit', 'parcel-same-day', 'parcel-convenience', 'parcel-night', 'parcel-bag'])) {
                 try {
-                    // 4-1. 활성화된 운송사 조회 (Factory Pattern 사용 - 동적 조회)
+                    // 4-1. 활성화된 운송사 조회 (Factory Pattern 사용 - ���적 조회)
                     $activeShippingCompany = ApiServiceFactory::getActiveShippingCompany($serviceType);
                     
                     if ($activeShippingCompany) {
@@ -1044,65 +1250,64 @@ class Service extends BaseController
                             'delivery_instructions' => $this->request->getPost('delivery_instructions'),
                             'delivery_notes' => $this->request->getPost('notes')
                         ];
-                        
+
+                        // 일양 API의 경우: API 호출 전에 먼저 tbl_orders_ilyang에 저장
+                        // 사용자가 API 실패시에도 주문 내용을 확인할 수 있도록 함
+                        if ($apiType === 'ilyang') {
+                            try {
+                                if (method_exists($apiService, 'convertOrderToWaybillData')) {
+                                    $waybillData = $apiService->convertOrderToWaybillData($deliveryData);
+                                    $ilyangOrderModel = new \App\Models\IlyangOrderModel();
+                                    $saveResult = $ilyangOrderModel->saveIlyangOrderData($orderId, $waybillData);
+
+                                    if ($saveResult) {
+                                        log_message('info', "Ilyang order data saved BEFORE API call: order_id={$orderId}, ily_awb_no={$waybillData['ilyAwbNo']}");
+                                    } else {
+                                        log_message('error', "Failed to save Ilyang order data before API call: order_id={$orderId}");
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                log_message('error', "Exception saving Ilyang order data before API call: " . $e->getMessage());
+                                // 일양 접수 데이터 저장 실패해도 API 호출은 진행
+                            }
+                        }
+
                         $apiResult = $apiService->createDelivery($deliveryData);
-                        
+
                         // 일양 API 응답 확인 (returnCode와 successCount 확인)
                         if ($apiResult['success']) {
                             $returnCode = $apiResult['return_code'] ?? '';
                             $returnDesc = $apiResult['return_desc'] ?? '';
                             $successCount = $apiResult['success_count'] ?? 0;
-                            
+
                             // returnCode가 'R0'이고 successCount가 0보다 크면 성공
                             if ($returnCode === 'R0' && $successCount > 0) {
                                 log_message('info', "{$apiType} API success: returnCode={$returnCode}, successCount={$successCount}, " . json_encode($apiResult['data']));
-                                
-                                // 일양 API 연동 성공 시 order_system과 order_number 업데이트 및 일양 접수 데이터 저장
+
+                                // 일양 API 연동 성공 시 order_system과 order_number 업데이트
                                 if ($apiType === 'ilyang') {
                                     // order_number 형식: ILYANG-{기존주문번호} 또는 ILYANG-{운송장번호}
                                     $ilyangOrderNumber = 'ILYANG-' . ($orderNumber ?: ($orderInfo['shipping_tracking_number'] ?? $orderId));
-                                    
+
                                     $updateData = [
                                         'order_system' => 'ilyang',
                                         'order_number' => $ilyangOrderNumber,
                                         'status' => 'processing'  // API 연동 성공 시 자동으로 '접수완료' 상태로 변경
                                     ];
-                                    
+
                                     $orderModel->update($orderId, $updateData);
                                     log_message('info', "Ilyang API order updated: order_id={$orderId}, order_system=ilyang, order_number={$ilyangOrderNumber}, status=processing");
-                                    
-                                    // 일양 접수 데이터를 별도 테���블에 저장
-                                    try {
-                                        $ilyangOrderModel = new \App\Models\IlyangOrderModel();
-                                        
-                                        // API 응답에서 변��된 waybillData 가져오기
-                                        if (isset($apiResult['waybill_data']) && is_array($apiResult['waybill_data'])) {
-                                            $waybillData = $apiResult['waybill_data'];
-                                            $saveResult = $ilyangOrderModel->saveIlyangOrderData($orderId, $waybillData);
-                                            
-                                            if ($saveResult) {
-                                                log_message('info', "Ilyang order data saved: order_id={$orderId}, ily_awb_no={$waybillData['ilyAwbNo']}");
-                                            } else {
-                                                log_message('error', "Failed to save Ilyang order data: order_id={$orderId}");
-                                            }
-                                        } else {
-                                            // waybill_data가 없으면 deliveryData를 기반으로 다시 변환
-                                            if (method_exists($apiService, 'convertOrderToWaybillData')) {
-                                                $waybillData = $apiService->convertOrderToWaybillData($deliveryData);
-                                                $saveResult = $ilyangOrderModel->saveIlyangOrderData($orderId, $waybillData);
-                                                
-                                                if ($saveResult) {
-                                                    log_message('info', "Ilyang order data saved (converted): order_id={$orderId}, ily_awb_no={$waybillData['ilyAwbNo']}");
-                                                } else {
-                                                    log_message('error', "Failed to save Ilyang order data: order_id={$orderId}");
-                                                }
-                                            } else {
-                                                log_message('warning', "Ilyang API service does not have convertOrderToWaybillData method");
-                                            }
+
+                                    // API 응답에서 추가 데이터가 있으면 tbl_orders_ilyang 업데이트
+                                    // (이미 API 호출 전에 저장했으므로 업데이트만 수행)
+                                    if (isset($apiResult['waybill_data']) && is_array($apiResult['waybill_data'])) {
+                                        try {
+                                            $ilyangOrderModel = new \App\Models\IlyangOrderModel();
+                                            $ilyangOrderModel->saveIlyangOrderData($orderId, $apiResult['waybill_data']);
+                                            log_message('info', "Ilyang order data updated with API response: order_id={$orderId}");
+                                        } catch (\Exception $e) {
+                                            log_message('error', "Exception updating Ilyang order data with API response: " . $e->getMessage());
                                         }
-                                    } catch (\Exception $e) {
-                                        log_message('error', "Exception saving Ilyang order data: " . $e->getMessage());
-                                        // 일양 접수 데이터 저장 실패해도 주문은 정상 처리됨
                                     }
                                 }
                             } else {
@@ -1422,7 +1627,7 @@ class Service extends BaseController
                     ->with('success', "{$serviceName} 주문이 임시로 저장되었습니다. (DB 연결 실패)")
                     ->with('warning', '데이터베이스 연결에 실패했습니다. 임시 저장된 데이터입니다.');
             } else {
-                // 다른 에러인 경우 - 서비스 타입에 따라 해당 서비스 페이지로 리다이렉트
+                // 다른 ��러인 경우 - 서비스 타입에 따라 해당 서비스 페이지로 리다이렉트
                 $redirectUrl = '/service/' . $serviceType;
                 if (empty($serviceType)) {
                     // service_type이 없으면 메인으로
@@ -1503,7 +1708,7 @@ class Service extends BaseController
      */
     private function buildCarKind($truckCapacity = null, $truckBodyType = null)
     {
-        // 루비 버전 참조: car_kind는 select 태그에서 직접 선택된 값이 우선
+        // ��비 버전 참조: car_kind는 select 태그에서 직접 선택된 값이 우선
         $carKind = $this->request->getPost('car_kind');
         if (!empty($carKind)) {
             return $carKind;
@@ -1773,10 +1978,511 @@ class Service extends BaseController
             }
         }
         unset($order);
-        
+
         return $this->response->setJSON([
             'success' => true,
             'data' => $orders
         ]);
+    }
+
+    /**
+     * 메일룸 대기 주문 목록 조회
+     * GET /service/mailroom-pending-orders
+     */
+    public function getMailroomPendingOrders()
+    {
+        // 로그인 체크 및 권한 확인 (메일룸 담당자 또는 관리자)
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $userClass = session()->get('user_class');
+        // user_class 9 = 메일룸 담당자, 1 = 슈퍼관리자
+        if (!in_array($userClass, [1, 9])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '메일룸 관리 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        $db = \Config\Database::connect();
+        $builder = $db->table('tbl_orders o');
+        $builder->select('o.*, st.service_name, st.service_code');
+        $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+        $builder->where('o.mailroom_status', 'pending');
+        $builder->orderBy('o.save_date', 'DESC');
+
+        $query = $builder->get();
+
+        if ($query === false) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 조회에 실패했습니다.'
+            ]);
+        }
+
+        $orders = $query->getResultArray();
+
+        // 연락처 복호화
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        foreach ($orders as &$order) {
+            $order = $encryptionHelper->decryptFields($order, ['contact', 'departure_contact', 'destination_contact']);
+        }
+        unset($order);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'count' => count($orders),
+            'data' => $orders
+        ]);
+    }
+
+    /**
+     * 메일룸 주문 승인 처리 - API 호출 실행
+     * POST /service/mailroom-approve
+     */
+    public function approveMailroomOrder()
+    {
+        // 로그인 체크 및 권한 확인
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로그인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $userClass = session()->get('user_class');
+        if (!in_array($userClass, [1, 9])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '메일룸 관리 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        $orderId = $this->request->getPost('order_id') ?? $this->request->getJSON()->order_id ?? null;
+
+        if (!$orderId) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        $db = \Config\Database::connect();
+        $orderModel = new \App\Models\OrderModel();
+
+        // 주문 조회
+        $order = $orderModel->find($orderId);
+        if (!$order) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문을 찾을 수 없습니다.'
+            ])->setStatusCode(404);
+        }
+
+        // 메일룸 대기 상태 확인
+        if ($order['mailroom_status'] !== 'pending') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '승인 대기 상태가 아닙니다. 현재 상태: ' . $order['mailroom_status']
+            ])->setStatusCode(400);
+        }
+
+        // 서비스 타입 조회
+        $serviceTypeBuilder = $db->table('tbl_service_types');
+        $serviceTypeBuilder->where('id', $order['service_type_id']);
+        $serviceTypeQuery = $serviceTypeBuilder->get();
+        $serviceTypeRow = $serviceTypeQuery->getRowArray();
+        $serviceCode = $serviceTypeRow['service_code'] ?? '';
+
+        try {
+            $apiResult = ['success' => false, 'message' => 'API 연동 대상이 아닙니다.'];
+
+            // 서비스 타입에 따라 적절한 API 호출
+            $apiType = \App\Libraries\ApiServiceFactory::getApiTypeByService($serviceCode);
+
+            if ($apiType === 'insung') {
+                // 인성 API 호출 (퀵서비스)
+                $apiResult = $this->callInsungApiForApproval($order, $serviceCode);
+            } elseif ($apiType === 'ilyang') {
+                // 일양 API 호출 (택배/해외특송)
+                $apiResult = $this->callIlyangApiForApproval($order, $serviceCode);
+            } else {
+                // API 연동 없는 서비스 - 바로 승인 처리
+                $apiResult = ['success' => true, 'message' => 'API 연동 없이 승인 처리'];
+            }
+
+            if ($apiResult['success']) {
+                // 승인 완료 상태로 업데이트
+                $orderModel->update($orderId, [
+                    'mailroom_status' => 'approved',
+                    'status' => 'processing'  // 접수완료
+                ]);
+
+                log_message('info', "Mailroom order approved: order_id={$orderId}, api_type={$apiType}");
+
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => '주문이 승인되었습니다.',
+                    'order_id' => $orderId,
+                    'api_result' => $apiResult
+                ]);
+            } else {
+                // API 호출 실패
+                $orderModel->update($orderId, [
+                    'status' => 'api_failed'
+                ]);
+
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'API 연동 실패: ' . ($apiResult['message'] ?? '알 수 없는 오류'),
+                    'order_id' => $orderId,
+                    'api_result' => $apiResult
+                ]);
+            }
+        } catch (\Exception $e) {
+            log_message('error', "Mailroom approval error: " . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '승인 처리 중 오류가 발생했습니다: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * 메일룸 주문 반려 처리
+     * POST /service/mailroom-reject
+     */
+    public function rejectMailroomOrder()
+    {
+        // 로그인 체크 및 권한 확인
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '로���인이 필요합니다.'
+            ])->setStatusCode(401);
+        }
+
+        $userClass = session()->get('user_class');
+        if (!in_array($userClass, [1, 9])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '메일룸 관리 권한이 없습니다.'
+            ])->setStatusCode(403);
+        }
+
+        $orderId = $this->request->getPost('order_id') ?? $this->request->getJSON()->order_id ?? null;
+        $rejectReason = $this->request->getPost('reject_reason') ?? $this->request->getJSON()->reject_reason ?? '';
+
+        if (!$orderId) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문 ID가 필요합니다.'
+            ])->setStatusCode(400);
+        }
+
+        $orderModel = new \App\Models\OrderModel();
+
+        // 주문 조회
+        $order = $orderModel->find($orderId);
+        if (!$order) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '주문을 찾을 수 없습니다.'
+            ])->setStatusCode(404);
+        }
+
+        // 메일룸 대기 상태 확인
+        if ($order['mailroom_status'] !== 'pending') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '승인 대기 상태가 아닙니다. 현재 상태: ' . $order['mailroom_status']
+            ])->setStatusCode(400);
+        }
+
+        // 반려 처리
+        $updateData = [
+            'mailroom_status' => 'rejected',
+            'status' => 'cancelled'
+        ];
+
+        // 반려 사유 저장 (notes에 추가)
+        if (!empty($rejectReason)) {
+            $existingNotes = $order['notes'] ?? '';
+            $updateData['notes'] = $existingNotes . "\n[메일룸 반려] " . $rejectReason;
+        }
+
+        $orderModel->update($orderId, $updateData);
+
+        log_message('info', "Mailroom order rejected: order_id={$orderId}, reason={$rejectReason}");
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => '주문이 반려되었습니다.',
+            'order_id' => $orderId
+        ]);
+    }
+
+    /**
+     * 인성 API 호출 (메일룸 승인용)
+     */
+    private function callInsungApiForApproval($order, $serviceCode)
+    {
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+            $insungApiListModel = new \App\Models\InsungApiListModel();
+            $orderModel = new \App\Models\OrderModel();
+
+            // tbl_orders_insung에서 인성 API 관련 필드들 조회
+            $insungOrderModel = new \App\Models\InsungOrderModel();
+            $insungOrderInfo = $insungOrderModel->getByOrderId($order['id']);
+
+            if (!$insungOrderInfo) {
+                return ['success' => false, 'message' => '인성 주문 정보를 찾을 수 없습니다.'];
+            }
+
+            // tbl_orders_insung에 저장된 실제 API 정보 사용
+            $mCode = $insungOrderInfo['ins_m_code'] ?? null;
+            $ccCode = $insungOrderInfo['ins_cc_code'] ?? null;
+            $insungApiUserId = $insungOrderInfo['ins_user_id'] ?? null;
+
+            if (!$mCode || !$ccCode || !$insungApiUserId) {
+                return ['success' => false, 'message' => '인성 API 정보가 누락되었습니다.'];
+            }
+
+            // API 토큰 조회
+            $apiInfo = $insungApiListModel->getApiInfoByMcodeCccode($mCode, $ccCode);
+            $token = $apiInfo['token'] ?? '';
+            $apiIdx = $apiInfo['idx'] ?? null;
+
+            if (!$token || !$apiIdx) {
+                return ['success' => false, 'message' => 'API 인증 정보를 찾을 수 없습니다.'];
+            }
+
+            // 연락처 복호화 (DB에 암호화되어 저장됨)
+            $encryptionHelper = new \App\Libraries\EncryptionHelper();
+            $decryptedContact = $encryptionHelper->decrypt($order['contact'] ?? '');
+            $decryptedDepartureContact = $encryptionHelper->decrypt($order['departure_contact'] ?? '');
+            $decryptedDestinationContact = $encryptionHelper->decrypt($order['destination_contact'] ?? '');
+            $decryptedSmsContact = $encryptionHelper->decrypt($order['sms_telno'] ?? $order['contact'] ?? '');
+
+            // 인성 API 파라미터에 필요한 필드들 추출
+            $insKind = $insungOrderInfo['ins_kind'] ?? null;
+            $insCarKind = $insungOrderInfo['ins_car_kind'] ?? '';
+            $insDoc = $insungOrderInfo['ins_doc'] ?? null;
+            $insSfast = $insungOrderInfo['ins_sfast'] ?? null;
+            $insUseCheck = $insungOrderInfo['ins_use_check'] ?? '0';
+            $insPickupDate = $insungOrderInfo['ins_pickup_date'] ?? '';
+            $insPickHour = $insungOrderInfo['ins_pick_hour'] ?? '';
+            $insPickMin = $insungOrderInfo['ins_pick_min'] ?? '';
+            $insPickSec = $insungOrderInfo['ins_pick_sec'] ?? '0';
+            $insOCCode = $insungOrderInfo['ins_o_c_code'] ?? '';
+            $insSCCode = $insungOrderInfo['ins_s_c_code'] ?? '';
+            $insDCCode = $insungOrderInfo['ins_d_c_code'] ?? '';
+
+            // 인성 API 주문 데이터 구성 (기존 접수 로직과 동일한 형식)
+            $insungOrderData = [
+                'service_type' => $serviceCode,
+                'kind' => $insKind, // tbl_orders_insung의 실제 ins_kind 값 사용
+                'delivery_method' => $order['delivery_method'] ?? 'motorcycle',
+                'deliveryMethod' => $insDoc ?? 'one_way', // tbl_orders_insung의 ins_doc 사용
+                'deliveryType' => $insSfast ?? 'normal', // tbl_orders_insung의 ins_sfast 사용
+                'urgency_level' => 'normal',
+                'is_overload' => false,
+                'company_name' => $order['company_name'],
+                'contact' => $decryptedContact,
+                'sms_telno' => $decryptedSmsContact,
+                'o_c_code' => $insOCCode, // tbl_orders_insung의 ins_o_c_code 사용
+                'departure_company_name' => $order['departure_company_name'],
+                'departure_contact' => $decryptedDepartureContact,
+                'departure_address' => $order['departure_address'],
+                'departure_detail' => $order['departure_detail'],
+                'departure_manager' => $order['departure_manager'] ?? '',
+                'departure_department' => $order['departure_department'] ?? '',
+                'departure_dong' => $order['departure_dong'],
+                'departure_lon' => $order['departure_lon'] ?? '',
+                'departure_lat' => $order['departure_lat'] ?? '',
+                'departure_fulladdr' => '',
+                's_c_code' => $insSCCode, // tbl_orders_insung의 ins_s_c_code 사용
+                'destination_company_name' => $order['destination_company_name'],
+                'destination_contact' => $decryptedDestinationContact,
+                'destination_address' => $order['destination_address'],
+                'detail_address' => $order['detail_address'],
+                'destination_manager' => $order['destination_manager'] ?? '',
+                'destination_department' => $order['destination_department'] ?? '',
+                'destination_dong' => $order['destination_dong'],
+                'destination_lon' => $order['destination_lon'] ?? '',
+                'destination_lat' => $order['destination_lat'] ?? '',
+                'destination_fulladdr' => '',
+                'd_c_code' => $insDCCode, // tbl_orders_insung의 ins_d_c_code 사용
+                'item_type' => $order['item_type'],
+                'delivery_content' => $order['delivery_content'] ?? '',
+                'notes' => $order['notes'] ?? '',
+                'payment_type' => $order['payment_type'],
+                'total_amount' => $order['total_amount'] ?? '0',
+                'add_cost' => $order['add_cost'] ?? '0',
+                'discount_cost' => $order['discount_cost'] ?? '0',
+                'delivery_cost' => $order['delivery_cost'] ?? '0',
+                'car_kind' => $insCarKind, // tbl_orders_insung의 ins_car_kind 사용
+                'reserve_check' => $insUseCheck, // tbl_orders_insung의 ins_use_check 사용
+                'reserve_date' => $insPickupDate, // tbl_orders_insung의 ins_pickup_date 사용
+                'reserve_hour' => $insPickHour, // tbl_orders_insung의 ins_pick_hour 사용
+                'reserve_min' => $insPickMin, // tbl_orders_insung의 ins_pick_min 사용
+                'reserve_sec' => $insPickSec, // tbl_orders_insung의 ins_pick_sec 사용
+                'distance' => $order['distance'] ?? ''
+            ];
+
+            // 1단계: API 파라미터 빌드 (기존 접수 로직과 동일)
+            $buildResult = $insungApiService->buildOrderParams($mCode, $ccCode, $token, $insungApiUserId, $insungOrderData, $apiIdx);
+
+            if (!$buildResult['success']) {
+                return ['success' => false, 'message' => 'API 파라미터 빌드 실패: ' . ($buildResult['message'] ?? 'Unknown error')];
+            }
+
+            $requestParams = $buildResult['params'];
+
+            // 디버그: API 파라미터 로그
+            // log_message('debug', "Mailroom approval API params: " . json_encode([
+            //     'm_code' => $mCode,
+            //     'cc_code' => $ccCode,
+            //     'user_id' => $insungApiUserId,
+            //     'api_idx' => $apiIdx,
+            //     'kind' => $requestParams['kind'] ?? 'null',
+            //     'c_name' => $requestParams['c_name'] ?? 'null',
+            //     's_start' => $requestParams['s_start'] ?? 'null',
+            //     's_dest' => $requestParams['s_dest'] ?? 'null',
+            //     'o_c_code' => $requestParams['o_c_code'] ?? 'null',
+            //     's_c_code' => $requestParams['s_c_code'] ?? 'null',
+            //     'd_c_code' => $requestParams['d_c_code'] ?? 'null',
+            //     'order_id' => $order['id']
+            // ], JSON_UNESCAPED_UNICODE));
+
+            // 2단계: 인성 API 호출 (기존 접수 로직과 동일)
+            $result = $insungApiService->executeOrderWithParams($requestParams, $apiIdx);
+
+            if ($result['success'] && !empty($result['serial_number'])) {
+                // 주문번호 업데이트 (insung_order_number 포함)
+                $orderModel->update($order['id'], [
+                    'order_number' => 'INSUNG-' . $result['serial_number'],
+                    'insung_order_number' => $result['serial_number'],
+                    'order_system' => 'insung'
+                ]);
+
+                // tbl_orders_insung에 serial_number 업데이트
+                try {
+                    $insungOrderModel = new \App\Models\InsungOrderModel();
+                    $insungOrderModel->updateSerialNumber($order['id'], $result['serial_number']);
+                    log_message('info', "Mailroom approval: Insung serial_number updated for order_id={$order['id']}");
+                } catch (\Exception $e) {
+                    log_message('error', "Mailroom approval: Failed to update Insung serial_number: " . $e->getMessage());
+                }
+
+                return [
+                    'success' => true,
+                    'message' => '인성 API 연동 성공',
+                    'serial_number' => $result['serial_number']
+                ];
+            }
+
+            // 에러 발생 시 파라미터 정보 포함
+            // $debugInfo = sprintf(
+            //     "m_code=%s, cc_code=%s, user_id=%s, o_c_code=%s, s_c_code=%s, d_c_code=%s, kind=%s",
+            //     $mCode,
+            //     $ccCode,
+            //     $insungApiUserId,
+            //     $requestParams['o_c_code'] ?? 'empty',
+            //     $requestParams['s_c_code'] ?? 'empty',
+            //     $requestParams['d_c_code'] ?? 'empty',
+            //     $requestParams['kind'] ?? 'null'
+            // );
+
+            return [
+                'success' => false,
+                'message' => $result['message'] ?? '인성 API 연동 실패'
+            ];
+        } catch (\Exception $e) {
+            log_message('error', "Insung API call for approval failed: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * 일양 API 호출 (메일룸 승인용)
+     */
+    private function callIlyangApiForApproval($order, $serviceCode)
+    {
+        try {
+            $orderModel = new \App\Models\OrderModel();
+
+            // Factory Pattern을 통해 API 서비스 생성
+            $apiService = \App\Libraries\ApiServiceFactory::createForService($serviceCode, true);
+
+            if (!$apiService) {
+                return ['success' => false, 'message' => 'API 서비스 생성 실패'];
+            }
+
+            $deliveryData = [
+                'order_number' => $order['order_number'],
+                'shipping_tracking_number' => $order['shipping_tracking_number'] ?? '',
+                'shipping_platform_code' => $order['shipping_platform_code'] ?? '',
+                'departure_company_name' => $order['departure_company_name'],
+                'departure_contact' => $order['departure_contact'],
+                'departure_address' => $order['departure_address'],
+                'departure_manager' => $order['departure_manager'],
+                'destination_company_name' => $order['destination_company_name'],
+                'destination_contact' => $order['destination_contact'],
+                'destination_address' => $order['destination_address'],
+                'destination_manager' => $order['destination_manager'],
+                'item_type' => $order['item_type'],
+                'weight' => $order['weight'] ?? '1',
+                'quantity' => $order['quantity'] ?? '1',
+                'payment_type' => $order['payment_type'],
+                'delivery_notes' => $order['notes']
+            ];
+
+            $apiResult = $apiService->createDelivery($deliveryData);
+
+            if ($apiResult['success']) {
+                $returnCode = $apiResult['return_code'] ?? '';
+                $successCount = $apiResult['success_count'] ?? 0;
+
+                if ($returnCode === 'R0' && $successCount > 0) {
+                    // 일양 주문번호 업데이트
+                    $ilyangOrderNumber = 'ILYANG-' . ($order['order_number'] ?: $order['id']);
+                    $orderModel->update($order['id'], [
+                        'order_system' => 'ilyang',
+                        'order_number' => $ilyangOrderNumber
+                    ]);
+
+                    // tbl_orders_ilyang 업데이트 (API 응답 데이터로)
+                    try {
+                        if (isset($apiResult['waybill_data']) && is_array($apiResult['waybill_data'])) {
+                            $ilyangOrderModel = new \App\Models\IlyangOrderModel();
+                            $ilyangOrderModel->saveIlyangOrderData($order['id'], $apiResult['waybill_data']);
+                            log_message('info', "Mailroom approval: Ilyang data updated for order_id={$order['id']}");
+                        }
+                    } catch (\Exception $e) {
+                        log_message('error', "Mailroom approval: Failed to update Ilyang data: " . $e->getMessage());
+                    }
+
+                    return [
+                        'success' => true,
+                        'message' => '일양 API 연동 성공',
+                        'order_number' => $ilyangOrderNumber
+                    ];
+                }
+            }
+
+            return [
+                'success' => false,
+                'message' => $apiResult['message'] ?? '일양 API 연동 실패'
+            ];
+        } catch (\Exception $e) {
+            log_message('error', "Ilyang API call for approval failed: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 }

@@ -38,7 +38,7 @@ $placeholder = $placeholder ?? '전달하실 내용을 입력하세요.';
             <h2 class="text-sm font-semibold text-yellow-800">배송사유 <span class="text-red-500">*</span></h2>
         </div>
         <div class="space-y-2">
-            <?php if (!empty($deliveryReasons)): ?>
+            <?php /*if (!empty($deliveryReasons)): ?>
             <div class="flex flex-wrap gap-1 mb-2">
                 <?php foreach ($deliveryReasons as $reason): ?>
                 <button type="button"
@@ -48,7 +48,7 @@ $placeholder = $placeholder ?? '전달하실 내용을 입력하세요.';
                 </button>
                 <?php endforeach; ?>
             </div>
-            <?php endif; ?>
+            <?php endif; */?>
             <textarea id="delivery_reason" name="delivery_reason" placeholder="배송사유를 입력하세요. (필수)" lang="ko" required
                       class="w-full px-3 py-2 text-sm border border-yellow-400 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent h-16 resize-none bg-white"><?= old('delivery_reason') ?></textarea>
         </div>

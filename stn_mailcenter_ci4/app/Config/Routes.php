@@ -84,6 +84,11 @@ $routes->group('service', function($routes) {
     // 서비스별 주문 접수
     $routes->post('submitServiceOrder', 'Service::submitServiceOrder');
     $routes->post('parseMultiOrderExcel', 'Service::parseMultiOrderExcel');
+
+    // 메일룸 승인 관련 API
+    $routes->get('mailroom-pending-orders', 'Service::getMailroomPendingOrders');
+    $routes->post('mailroom-approve', 'Service::approveMailroomOrder');
+    $routes->post('mailroom-reject', 'Service::rejectMailroomOrder');
 });
 
 // API 테스트 라우트
@@ -151,6 +156,9 @@ $routes->group('mailroom', function($routes) {
     // 기사 셀프 등록 (QR 스캔)
     $routes->get('driver-register/(:num)', 'Mailroom::driverRegisterForm/$1');
     $routes->post('driver-register/(:num)', 'Mailroom::driverRegisterSubmit/$1');
+
+    // 메일룸 승인 대기 주문 관리
+    $routes->get('pending-orders', 'Mailroom::pendingOrders');
 });
 
 // 배송조회 관련 라우트
@@ -264,6 +272,7 @@ $routes->group('admin', function($routes) {
     $routes->post('createServiceType', 'Admin::createServiceType');
     $routes->post('updateServiceType', 'Admin::updateServiceType');
     $routes->post('batchUpdateServiceStatus', 'Admin::batchUpdateServiceStatus');
+    $routes->post('batchUpdateContractStatus', 'Admin::batchUpdateContractStatus');
     $routes->post('deactivateAllServices', 'Admin::deactivateAllServices');
     $routes->post('updateServiceSortOrder', 'Admin::updateServiceSortOrder');
     // 시스템 설정 관련
@@ -368,6 +377,7 @@ $routes->group('admin', function($routes) {
     $routes->get('order-type', 'Admin::orderType');
     $routes->get('getCompaniesByCcForOrderType', 'Admin::getCompaniesByCcForOrderType');
     $routes->get('syncCompaniesForOrderType', 'Admin::syncCompaniesForOrderType');
+    $routes->get('syncCompaniesWithProgress', 'Admin::syncCompaniesWithProgress');
     $routes->get('pricing', 'Admin::pricing');
     $routes->get('notification', 'Admin::notification');
     $routes->get('order-list', 'Admin::orderList');

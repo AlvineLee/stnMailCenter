@@ -45,6 +45,9 @@
                 </section>
             </div>
             
+            <!-- 물품종류 -->
+            <?= $this->include('forms/item-type-section') ?>
+
             <!-- 전달사항(적요) -->
             <?= $this->include('forms/delivery-instructions-section', [
                 'fieldName' => 'special_instructions',
@@ -53,7 +56,7 @@
             ]) ?>
             </div>
         </div>
-        
+
         <!-- 오른쪽: 지급구분 -->
         <div class="w-full lg:w-64 flex-shrink-0 max-w-full box-border">
             <div class="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4">

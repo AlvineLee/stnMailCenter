@@ -80,11 +80,13 @@
                                    value="<?= esc($user['address'] ?? '') ?>" 
                                    placeholder="주소"
                                    class="form-input mb-2">
-                            <input type="text" 
-                                   id="address_detail" 
-                                   value="<?= esc($user['address_detail'] ?? '') ?>" 
+                            <input type="text"
+                                   id="address_detail"
+                                   value="<?= esc($user['address_detail'] ?? '') ?>"
                                    placeholder="상세주소"
                                    class="form-input">
+                            <!-- 동명 저장 (인성 API용) -->
+                            <input type="hidden" id="user_dong" value="">
                         </div>
                     </div>
                 </section>
@@ -488,6 +490,13 @@ function openAddressSearch() {
                     detailField.focus();
                 }, 100);
             }
+
+            // 동명(user_dong) 저장 - 인성 API용
+            const dongField = document.getElementById('user_dong');
+            if (dongField) {
+                // 법정동명 사용 (data.bname: 법정동/법정리 이름)
+                dongField.value = data.bname || '';
+            }
         }
     }).open();
 }
@@ -537,6 +546,9 @@ function saveAll() {
     const settlementDeptCheckboxes = document.querySelectorAll('#settlement-depts-list input[type="checkbox"]:checked');
     const settlementDepts = Array.from(settlementDeptCheckboxes).map(cb => cb.value);
     
+    // 동명 (인성 API용)
+    const userDong = document.getElementById('user_dong') ? document.getElementById('user_dong').value : '';
+
     const requestData = {
         real_name: realName,
         user_dept: userDept,
@@ -544,7 +556,8 @@ function saveAll() {
         phone: phone,
         address_zonecode: zonecode,
         address: address,
-        address_detail: addressDetail
+        address_detail: addressDetail,
+        user_dong: userDong
     };
 
     // 비밀번호 변경이 있는 경우에만 추가

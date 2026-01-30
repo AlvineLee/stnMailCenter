@@ -67,7 +67,8 @@ class InsungOrderModel extends Model
         'ins_car_kind',
         'ins_state',
         'ins_distince',
-        'ins_o_c_code'
+        'ins_o_c_code',
+        'ins_serial_number'
     ];
     
     protected $useTimestamps = true;
@@ -157,9 +158,10 @@ class InsungOrderModel extends Model
             'ins_car_kind' => $params['car_kind'] ?? null,
             'ins_state' => $params['state'] ?? null,
             'ins_distince' => $params['distince'] ?? null,
-            'ins_o_c_code' => $params['o_c_code'] ?? null
+            'ins_o_c_code' => $params['o_c_code'] ?? null,
+            'ins_serial_number' => $serialNumber
         ];
-        
+
         if ($existing) {
             // 업데이트
             return $this->update($existing['id'], $data);
@@ -167,6 +169,25 @@ class InsungOrderModel extends Model
             // 신규 저장
             return $this->insert($data);
         }
+    }
+
+    /**
+     * 인성 주문번호(serial_number)만 업데이트
+     * API 호출 성공 후 serial_number 저장용
+     *
+     * @param int $orderId tbl_orders.id
+     * @param string $serialNumber 인성 API 응답의 serial_number
+     * @return bool 업데이트 결과
+     */
+    public function updateSerialNumber($orderId, $serialNumber)
+    {
+        $existing = $this->where('order_id', $orderId)->first();
+
+        if ($existing) {
+            return $this->update($existing['id'], ['ins_serial_number' => $serialNumber]);
+        }
+
+        return false;
     }
     
     /**

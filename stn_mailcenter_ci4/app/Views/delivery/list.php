@@ -66,8 +66,8 @@ tr.deleted-order:hover {
                 <select name="service" class="search-filter-select">
                     <option value="all" <?= $service_filter === 'all' ? 'selected' : '' ?>>전체</option>
                     <?php foreach ($service_types as $service): ?>
-                        <option value="<?= $service['service_category'] ?>" <?= $service_filter === $service['service_category'] ? 'selected' : '' ?>>
-                            <?= ucfirst($service['service_category']) ?> (<?= $service['count'] ?>)
+                        <option value="<?= $service['service_category'] ?? '' ?>" <?= $service_filter === $service['service_category'] ? 'selected' : '' ?>>
+                            <?= ucfirst($service['service_category'] ?? '') ?> (<?= $service['count'] ?? 0 ?>)
                         </option>
                     <?php endforeach; ?>
                 </select>

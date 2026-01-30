@@ -344,8 +344,8 @@ class SearchCompany extends BaseController
         $compCode = $this->request->getPost('comp_code');
         $chargeName = $this->request->getPost('charge_name') ?? '';
         $telNo = $this->request->getPost('tel_no') ?? '';
-        $page = (int)($this->request->getPost('page') ?? 1);
-        $limit = (int)($this->request->getPost('limit') ?? 15);
+        $page = 1; // 페이징 없이 전체 조회
+        $limit = 5000; // 전체 조회
 
         if (empty($apiIdx) || empty($compCode)) {
             return $this->response->setJSON([
@@ -457,6 +457,12 @@ class SearchCompany extends BaseController
                     }
                 }
 
+                // use_state='N'인 회원(퇴사/미사용)은 제외
+                $useState = $item->use_state ?? '';
+                if ($useState === 'N') {
+                    continue;
+                }
+
                 $members[] = [
                     'dept_name' => $item->dept_name ?? '',
                     'charge_name' => $item->charge_name ?? '',
@@ -464,7 +470,7 @@ class SearchCompany extends BaseController
                     'tel_no2' => $telNo2,
                     'user_id' => $item->user_id ?? '',
                     'c_code' => $item->c_code ?? '',
-                    'use_state' => $item->use_state ?? ''
+                    'use_state' => $useState
                 ];
             }
         } elseif (is_array($result)) {
@@ -500,6 +506,12 @@ class SearchCompany extends BaseController
                     }
                 }
 
+                // use_state='N'인 회원(퇴사/미사용)은 제외
+                $useState = $result[$i]->use_state ?? '';
+                if ($useState === 'N') {
+                    continue;
+                }
+
                 $members[] = [
                     'dept_name' => $result[$i]->dept_name ?? '',
                     'charge_name' => $result[$i]->charge_name ?? '',
@@ -507,11 +519,11 @@ class SearchCompany extends BaseController
                     'tel_no2' => $telNo2,
                     'user_id' => $result[$i]->user_id ?? '',
                     'c_code' => $result[$i]->c_code ?? '',
-                    'use_state' => $result[$i]->use_state ?? ''
+                    'use_state' => $useState
                 ];
             }
         }
-        
+
         // 이미 등록된 사용자 체크 (tbl_users_list에서 user_id로 확인)
         if (!empty($members)) {
             $db = \Config\Database::connect();
@@ -564,16 +576,17 @@ class SearchCompany extends BaseController
             }
         }
 
-        // 페이징 정보 계산
+        // 페이징 정보 계산 (필터링 후 실제 개수 사용)
+        $filteredCount = count($members);
         $pagination = [
             'current_page' => $page,
-            'total_pages' => $totalPage,
-            'total_count' => $totalRecord > 0 ? $totalRecord : count($members),
+            'total_pages' => 1, // 페이징 없이 전체 표시
+            'total_count' => $filteredCount, // 필터링 후 실제 개수
             'per_page' => $limit,
-            'has_prev' => $page > 1,
-            'has_next' => $page < $totalPage,
-            'prev_page' => $page > 1 ? $page - 1 : 1,
-            'next_page' => $page < $totalPage ? $page + 1 : $totalPage
+            'has_prev' => false,
+            'has_next' => false,
+            'prev_page' => 1,
+            'next_page' => 1
         ];
 
         return $this->response->setJSON([
@@ -1175,11 +1188,13 @@ class SearchCompany extends BaseController
                 
                 $item = $result->Result[$i];
                 $cCode = $item->c_code ?? '';
-                
-                if (empty($cCode)) {
+                $useState = $item->use_state ?? '';
+
+                // use_state='N'인 직원(퇴사/미사용)은 제외
+                if (empty($cCode) || $useState === 'N') {
                     continue;
                 }
-                
+
                 $employees[] = [
                     'c_name' => (string)($item->cust_name ?? ''),
                     'dept_name' => (string)($item->dept_name ?? ''),
@@ -1200,11 +1215,13 @@ class SearchCompany extends BaseController
                 
                 $item = $result[$i];
                 $cCode = $item->c_code ?? '';
-                
-                if (empty($cCode)) {
+                $useState = $item->use_state ?? '';
+
+                // use_state='N'인 직원(퇴사/미사용)은 제외
+                if (empty($cCode) || $useState === 'N') {
                     continue;
                 }
-                
+
                 $employees[] = [
                     'c_name' => (string)($item->cust_name ?? ''),
                     'dept_name' => (string)($item->dept_name ?? ''),

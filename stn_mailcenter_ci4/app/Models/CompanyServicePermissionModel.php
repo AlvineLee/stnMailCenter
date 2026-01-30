@@ -16,6 +16,7 @@ class CompanyServicePermissionModel extends Model
         'comp_code',
         'service_type_id',
         'is_enabled',
+        'is_uncontracted',  // 계약 중지 여부 (1=중지, 0/NULL=계약)
         'max_daily_orders',
         'max_monthly_orders',
         'special_instructions',
@@ -125,6 +126,64 @@ class CompanyServicePermissionModel extends Model
     public function deleteCompanyServicePermissions($compCode)
     {
         return $this->where('comp_code', $compCode)->delete();
+    }
+
+    /**
+     * 거래처별 서비스 계약여부 일괄 저장/업데이트
+     */
+    public function batchUpdateCompanyServiceContracts($compCode, $contracts)
+    {
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            foreach ($contracts as $contract) {
+                $serviceTypeId = $contract['service_type_id'] ?? null;
+                $isUncontracted = isset($contract['is_uncontracted']) ? (int)$contract['is_uncontracted'] : 0;
+
+                if (!$serviceTypeId) {
+                    continue;
+                }
+
+                // 기존 레코드 확인
+                $existing = $this->where('comp_code', $compCode)
+                               ->where('service_type_id', $serviceTypeId)
+                               ->first();
+
+                if ($existing) {
+                    // 업데이트: 미계약(1)만 저장, 계약(0)이면 NULL로 설정
+                    $this->update($existing['id'], [
+                        'is_uncontracted' => $isUncontracted == 1 ? 1 : null,
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+                } else {
+                    // 미계약(1)일 때만 INSERT, 계약(0)이면 레코드 생성 안함
+                    if ($isUncontracted == 1) {
+                        $this->insert([
+                            'comp_code' => $compCode,
+                            'service_type_id' => $serviceTypeId,
+                            'is_enabled' => 0,
+                            'is_uncontracted' => 1,
+                            'created_at' => date('Y-m-d H:i:s'),
+                            'updated_at' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                }
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                log_message('error', 'CompanyServicePermissionModel: Contract update transaction failed');
+                return false;
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            log_message('error', 'CompanyServicePermissionModel: ' . $e->getMessage());
+            $db->transRollback();
+            return false;
+        }
     }
 }
 

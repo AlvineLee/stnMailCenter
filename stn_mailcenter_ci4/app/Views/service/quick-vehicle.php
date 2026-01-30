@@ -25,6 +25,9 @@
                 'truckCapacityStyle' => 'select' // quick-vehicle은 select 박스 방식
             ]) ?>
             
+            <!-- 물품종류 -->
+            <?= $this->include('forms/item-type-section') ?>
+
             <!-- 전달사항(적요) -->
             <?= $this->include('forms/delivery-instructions-section', [
                 'fieldName' => 'special_instructions',

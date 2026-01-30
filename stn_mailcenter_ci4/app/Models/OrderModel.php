@@ -73,6 +73,7 @@ class OrderModel extends Model
         'distance',
         'cash_fare',
         'status',
+        'mailroom_status',  // 메일룸 상태 (none, pending, approved, rejected)
         'total_amount',
         'add_cost',
         'discount_cost',
@@ -430,7 +431,7 @@ class OrderModel extends Model
      * 인성 API 주문 목록을 INSERT ON DUPLICATE KEY UPDATE로 저장
      * insung_order_number를 기준으로 중복 체크
      * 주문 상세 API와 동일한 응답 구조로 파싱
-     * 
+     *
      * @param array $orders 인성 API에서 받은 주문 목록 (주문 상세와 동일한 구조)
      * @param int $userId 사용자 ID (tbl_users_list.idx) - 참고용 (더 이상 사용하지 않음)
      * @param int $customerId 고객사 ID
@@ -440,19 +441,17 @@ class OrderModel extends Model
      * @param string|null $ccCode API 콜센터 코드 (회원정보 자동 등록용)
      * @param string|null $token API 토큰 (회원정보 자동 등록용)
      * @param int|null $apiIdx API 인덱스 (회원정보 자동 등록용)
-     * @param string|null $compCode 거래처 코드 (삭제 로직용)
-     * @param string|null $startDate 동기화 시작일 (삭제 로직용, YYYY-MM-DD)
-     * @param string|null $endDate 동기화 종료일 (삭제 로직용, YYYY-MM-DD)
-     * @return array ['inserted' => int, 'updated' => int, 'deleted' => int, 'errors' => array]
+     * @param string|null $compCode 거래처 코드
+     * @param string|null $startDate 동기화 시작일 (YYYY-MM-DD)
+     * @param string|null $endDate 동기화 종료일 (YYYY-MM-DD)
+     * @return array ['inserted' => int, 'updated' => int, 'errors' => array]
      */
     public function insertOrUpdateInsungOrders($orders, $userId, $customerId, $isSelfOrderOnly = false, $loginUserId = null, $mCode = null, $ccCode = null, $token = null, $apiIdx = null, $compCode = null, $startDate = null, $endDate = null)
     {
         $inserted = 0;
         $updated = 0;
-        $deleted = 0;
         $errors = [];
         $reservationOrderNumbers = []; // 예약 상태인 주문들의 인성 주문번호
-        $receivedOrderNumbers = []; // 인성 API에서 받은 주문번호 목록 (삭제 로직용)
         
         if (empty($orders) || !is_array($orders)) {
             return [
@@ -615,12 +614,7 @@ class OrderModel extends Model
                     $errors[] = '주문번호(serial_number)를 찾을 수 없습니다.';
                     continue;
                 }
-                
-                // 인성 API에서 받은 주문번호 수집 (삭제 로직용)
-                if (!empty($serialNumber)) {
-                    $receivedOrderNumbers[] = $serialNumber;
-                }
-                
+
                 // API 응답에서 user_id 추출 (DB 저장용)
                 // 필터링은 하지 않고 모든 주문을 저장 (나중에 DB에서 조회 시 필터링)
                 $orderUserId = null;
@@ -1149,69 +1143,10 @@ class OrderModel extends Model
                 $this->skipValidation = $originalSkipValidation;
             }
         }
-        
-        // 인성 API에서 받지 않은 주문 삭제 처리
-        if (!empty($receivedOrderNumbers) && !empty($compCode)) {
-            try {
-                // DELETE 쿼리 실행 (JOIN을 사용한 DELETE는 MySQL에서 직접 지원하지 않으므로 서브쿼리 사용)
-                $subQuery = $this->db->table('tbl_orders o2');
-                $subQuery->select('o2.id');
-                $subQuery->join('tbl_users_list u_list2', 'o2.user_id = u_list2.idx', 'left');
-                
-                // 기본 조건: 인성 API 주문만
-                $subQuery->where('o2.order_system', 'insung');
-                
-                // comp_code 조건
-                $subQuery->where('u_list2.user_company', $compCode);
-                
-                // 기간 조건 (updated_at 기준)
-                if (!empty($startDate)) {
-                    $subQuery->where('DATE(o2.updated_at) >=', $startDate);
-                } else {
-                    // startDate가 없으면 오늘 날짜 기준
-                    $today = date('Y-m-d');
-                    $subQuery->where('DATE(o2.updated_at) >=', $today);
-                }
-                
-                if (!empty($endDate)) {
-                    $subQuery->where('DATE(o2.updated_at) <=', $endDate);
-                }
-                
-                // 본인오더조회 필터링 (isSelfOrderOnly가 true이고 loginUserId가 있으면)
-                if ($isSelfOrderOnly && !empty($loginUserId)) {
-                    $subQuery->where('o2.insung_user_id', $loginUserId);
-                }
-                
-                // 인성 API에서 받은 주문번호 목록에 없는 주문만 삭제
-                if (!empty($receivedOrderNumbers)) {
-                    $subQuery->whereNotIn('o2.insung_order_number', $receivedOrderNumbers);
-                }
-                
-                // insung_order_number가 NULL이거나 빈 문자열인 주문은 삭제하지 않음 (안전장치)
-                $subQuery->where('o2.insung_order_number IS NOT NULL');
-                $subQuery->where('o2.insung_order_number !=', '');
-                
-                $subQuerySql = $subQuery->getCompiledSelect(false);
-                
-                // DELETE 쿼리 실행
-                $deleteSql = "DELETE FROM tbl_orders WHERE id IN ({$subQuerySql})";
-                $this->db->query($deleteSql);
-                
-                $deleted = $this->db->affectedRows();
-                
-                if ($deleted > 0) {
-                    log_message('info', "OrderModel::insertOrUpdateInsungOrders - Deleted {$deleted} orders not found in API response (comp_code: {$compCode}, startDate: {$startDate}, endDate: {$endDate})");
-                }
-            } catch (\Exception $e) {
-                $errors[] = "주문 삭제 중 오류: " . $e->getMessage();
-                log_message('error', "OrderModel::insertOrUpdateInsungOrders - Error deleting orders: " . $e->getMessage());
-            }
-        }
-        
+
         return [
             'inserted' => $inserted,
             'updated' => $updated,
-            'deleted' => $deleted,
             'errors' => $errors,
             'reservation_order_numbers' => $reservationOrderNumbers
         ];

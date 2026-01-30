@@ -9,6 +9,7 @@ use App\Models\UserServicePermissionModel;
 use App\Models\InsungCcListModel;
 use App\Models\CcServicePermissionModel;
 use App\Models\CompanyServicePermissionModel;
+use App\Models\CompanyMailroomPermissionModel;
 use App\Models\InsungCompanyListModel;
 use App\Models\InsungApiListModel;
 
@@ -20,6 +21,7 @@ class Admin extends BaseController
     protected $insungCcListModel;
     protected $ccServicePermissionModel;
     protected $companyServicePermissionModel;
+    protected $companyMailroomPermissionModel;
     protected $insungCompanyListModel;
     protected $insungApiListModel;
     
@@ -31,6 +33,7 @@ class Admin extends BaseController
         $this->insungCcListModel = new InsungCcListModel();
         $this->ccServicePermissionModel = new CcServicePermissionModel();
         $this->companyServicePermissionModel = new CompanyServicePermissionModel();
+        $this->companyMailroomPermissionModel = new CompanyMailroomPermissionModel();
         $this->insungCompanyListModel = new InsungCompanyListModel();
         $this->insungApiListModel = new InsungApiListModel();
     }
@@ -154,21 +157,29 @@ class Admin extends BaseController
             
             // 권한 조회 우선순위: 거래처 > 콜센터 > 마스터
             $permissionMap = [];
+            $contractMap = [];  // 계약여부 맵 (거래처 레벨에서만)
             $permissionSource = 'master'; // 'master', 'cc', 'company'
-            
+            $hasMailroomPermission = false; // 메일룸 권한 (거래처 레벨에서만)
+
             // 거래처가 선택된 경우: 거래처 권한 우선 조회
             if ($selectedCompCode && $selectedCcCode) {
+                // 메일룸 권한 조회 (service_types와 독립적)
+                $hasMailroomPermission = $this->companyMailroomPermissionModel->hasPermission($selectedCompCode);
+
                 log_message('debug', "orderType - 거래처 권한 조회 시작: compCode={$selectedCompCode}, ccCode={$selectedCcCode}");
                 $companyPermissions = $this->companyServicePermissionModel->getCompanyServicePermissions($selectedCompCode);
                 log_message('debug', "orderType - 거래처 권한 조회 결과 개수: " . count($companyPermissions));
-                
+
                 if (!empty($companyPermissions)) {
                     // 거래처 권한이 있으면 거래처 권한 사용
                     foreach ($companyPermissions as $permission) {
                         $serviceTypeId = $permission['service_type_id'] ?? null;
                         $isEnabled = (bool)($permission['is_enabled'] ?? false);
+                        $isUncontracted = $permission['is_uncontracted'] ?? null;
+                        // is_uncontracted: 1=미계약/권한없음, 0/NULL=계약(기본)
                         if ($serviceTypeId) {
                             $permissionMap[$serviceTypeId] = $isEnabled;
+                            $contractMap[$serviceTypeId] = $isUncontracted;
                         }
                     }
                     $permissionSource = 'company';
@@ -222,12 +233,19 @@ class Admin extends BaseController
                             $service['is_enabled'] = isset($service['is_active']) ? (bool)$service['is_active'] : false;
                         }
                     }
+
+                    // 계약여부 (거래처 선택 시에만)
+                    if ($permissionSource === 'company') {
+                        $service['is_uncontracted'] = isset($contractMap[$service['id']]) ? $contractMap[$service['id']] : null;
+                    } else {
+                        $service['is_uncontracted'] = null;
+                    }
                 }
             }
-            
+
             log_message('debug', "orderType - 권한 적용 완료: permissionSource={$permissionSource}, permissionMap 개수: " . count($permissionMap));
         }
-        
+
         $data = [
             'title' => '오더유형설정',
             'content_header' => [
@@ -242,7 +260,9 @@ class Admin extends BaseController
             'selected_cc_code' => $selectedCcCode,
             'selected_comp_code' => $selectedCompCode,
             'login_type' => $loginType,
-            'user_type' => $userType
+            'user_type' => $userType,
+            'show_contract_settings' => !empty($selectedCompCode),
+            'has_mailroom_permission' => $hasMailroomPermission
         ];
 
         return view('admin/order-type', $data);
@@ -528,7 +548,7 @@ class Admin extends BaseController
     {
         // 로그인 체크
         if (!session()->get('is_logged_in')) {
-            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+            return $this->response->setJSON(['success' => false, 'message' => '로���인이 필요합니다.'])->setStatusCode(401);
         }
         
         // 권한 체크: STN 로그인 super_admin 또는 daumdata 로그인 user_type=1
@@ -711,6 +731,77 @@ class Admin extends BaseController
             ]);
         } else {
             return $this->response->setJSON(['success' => false, 'message' => '상태 업데이트에 실패했습니다.']);
+        }
+    }
+
+    /**
+     * 계약여부 일괄 업데이트 (거래처 레벨)
+     */
+    public function batchUpdateContractStatus()
+    {
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            return $this->response->setJSON(['success' => false, 'message' => '로그인이 필요합니다.'])->setStatusCode(401);
+        }
+
+        // 권한 체크: daumdata 로그인 user_type=1만 가능
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            return $this->response->setJSON(['success' => false, 'message' => '접근 권한이 없습니다.'])->setStatusCode(403);
+        }
+
+        // JSON 요청 처리
+        $json = $this->request->getJSON(true);
+        $compCode = $json['comp_code'] ?? null;
+        $ccCode = $json['cc_code'] ?? null;
+        $contracts = $json['contracts'] ?? [];
+        $mailroomPermission = $json['mailroom_permission'] ?? null; // 메일룸 권한 (별도 파라미터)
+
+        if (empty($compCode)) {
+            return $this->response->setJSON(['success' => false, 'message' => '거래처 코드가 필요합니다.']);
+        }
+
+
+        // 일반 서비스 계약여부 데이터 수집
+        $regularContractData = [];
+        foreach ($contracts as $contract) {
+            $serviceTypeId = $contract['service_type_id'] ?? null;
+            $isUncontracted = $contract['is_uncontracted'] ?? 0;
+
+            if (!$serviceTypeId) {
+                continue;
+            }
+
+            $regularContractData[] = [
+                'service_type_id' => $serviceTypeId,
+                'is_uncontracted' => $isUncontracted ? 1 : 0
+            ];
+        }
+
+        // 결과 저장
+        $regularResult = true;
+        $mailroomResult = true;
+
+        // 일반 서비스 계약여부 저장
+        if (!empty($regularContractData)) {
+            $regularResult = $this->companyServicePermissionModel->batchUpdateCompanyServiceContracts($compCode, $regularContractData);
+        }
+
+        // 메일룸 권한 저장
+        if ($mailroomPermission !== null) {
+            $mailroomResult = $this->companyMailroomPermissionModel->setPermission($compCode, $mailroomPermission);
+        }
+
+        // 전체 결과 확인
+        if ($regularResult && $mailroomResult) {
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => '계약여부 설정이 저장되었습니다.'
+            ]);
+        } else {
+            return $this->response->setJSON(['success' => false, 'message' => '계약여부 저장에 실패했습니다.']);
         }
     }
 
@@ -2033,13 +2124,13 @@ class Admin extends BaseController
         $companyExists = ($checkQuery !== false && $checkQuery->getNumRows() > 0);
         
         // 기본 정보는 모두 API에서만 관리하므로 로컬 DB에 저장하지 않음
-        // (거래처명, 대표자명, 담당자명, 전화번호, 주소, 거래구분, 사업자번호 등)
+        // (거래처명, 대표자명, 담당자명, 전화번호, 주소, 거래구분, 사��자번호 등)
         // 로컬 DB에는 설정 정보만 저장 (comp_memo, comp_dong, comp_addr_detail)
         $companyUpdateData = [
             'comp_code' => $compCode, // INSERT 시 필요 (키값)
             'comp_memo' => $compMemo ?? '', // 메모 (로컬 전용)
             'comp_dong' => $compDong ?? '', // 동 정보 (로컬 전용)
-            'comp_addr_detail' => $compAddrDetail ?? '' // 상세 주소 (로컬 전용)
+            'comp_addr_detail' => $compAddrDetail ?? '' // 상�� 주소 (로컬 전용)
             // comp_type, representative_name, comp_name, comp_tel, comp_addr, business_number 등은 API에서만 관리
             // sido, gungu는 tbl_company_list에 없으므로 저장하지 않음
         ];
@@ -2055,7 +2146,7 @@ class Admin extends BaseController
             $companyResult = $companyBuilder->insert($companyUpdateData);
         }
         
-        // tbl_company_env에 배송조회 제한 정보 저장/업데이트
+        // tbl_company_env에 배송조회 제한 정보 저장/���데이트
         $envCheckBuilder = $db->table('tbl_company_env');
         $envCheckBuilder->select('comp_env_idx, comp_code');
         $envCheckBuilder->where('comp_code', $compCode);
@@ -3474,7 +3565,7 @@ class Admin extends BaseController
                         }
                         
                         if (count($orderData) <= 1) {
-                            log_message('info', "Admin::orderListAjax - 주문 데이터 없음 (배열 크기 1 이하)");
+                            log_message('info', "Admin::orderListAjax - 주문 데이터 없음 (배��� 크기 1 이하)");
                             return $this->response->setJSON([
                                 'success' => true,
                                 'data' => [
@@ -4110,6 +4201,293 @@ class Admin extends BaseController
     }
 
     /**
+     * 거래처 동기화 (SSE - 실시간 진행률 스트리밍)
+     */
+    public function syncCompaniesWithProgress()
+    {
+        // SSE 헤더 설정
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no'); // nginx 버퍼링 비활성화
+
+        // 출력 버퍼링 비활성화
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // SSE 이벤트 전송 헬퍼
+        $sendEvent = function($event, $data) {
+            echo "event: {$event}\n";
+            echo "data: " . json_encode($data) . "\n\n";
+            flush();
+        };
+
+        // 로그인 체크
+        if (!session()->get('is_logged_in')) {
+            $sendEvent('error', ['message' => '로그인이 필요합니다.']);
+            exit;
+        }
+
+        $loginType = session()->get('login_type');
+        $userType = session()->get('user_type');
+
+        if ($loginType !== 'daumdata' || $userType != '1') {
+            $sendEvent('error', ['message' => '접근 권한이 없습니다.']);
+            exit;
+        }
+
+        $ccCode = $this->request->getGet('cc_code');
+        if (!$ccCode) {
+            $sendEvent('error', ['message' => '콜센터 코드가 필요합니다.']);
+            exit;
+        }
+
+        $db = \Config\Database::connect();
+
+        // API 정보 조회
+        $apiInfo = $this->insungApiListModel->where('cccode', $ccCode)->first();
+
+        if (!$apiInfo || empty($apiInfo['idx'])) {
+            $sendEvent('error', ['message' => 'API 정보를 찾을 수 없습니다.']);
+            exit;
+        }
+
+        $apiIdx = (int)$apiInfo['idx'];
+        $mCode = $apiInfo['mcode'] ?? '';
+        $apiCcCode = $apiInfo['cccode'] ?? '';
+        $token = $apiInfo['token'] ?? '';
+
+        // cc_idx 조회
+        $ccBuilder = $db->table('tbl_cc_list');
+        $ccBuilder->select('idx');
+        $ccBuilder->where('cc_apicode', $apiIdx);
+        $ccQuery = $ccBuilder->get();
+        $ccResult = $ccQuery ? $ccQuery->getRowArray() : null;
+        $ccIdx = $ccResult['idx'] ?? null;
+
+        if (empty($ccIdx)) {
+            $sendEvent('error', ['message' => '콜센터 정보를 찾을 수 없습니다.']);
+            exit;
+        }
+
+        // 동기화 시작
+        $sendEvent('start', ['message' => '동기화를 시작합니다...']);
+
+        try {
+            $insungApiService = new \App\Libraries\InsungApiService();
+
+            // 첫 번째 페이지 호출
+            $sendEvent('progress', ['step' => 'api', 'message' => 'API에서 거래처 목록 조회 중...', 'percent' => 5]);
+
+            $firstPageResult = $insungApiService->getCompanyList($mCode, $apiCcCode, $token, '', '', 1, 1000, $apiIdx);
+
+            if (!$firstPageResult) {
+                $sendEvent('error', ['message' => 'API 호출에 실패했습니다.']);
+                exit;
+            }
+
+            // 응답 파싱
+            $code = '';
+            $totalPage = 1;
+            $totalRecord = 0;
+
+            if (is_object($firstPageResult) && isset($firstPageResult->Result)) {
+                if (isset($firstPageResult->Result[0]->result_info[0]->code)) {
+                    $code = $firstPageResult->Result[0]->result_info[0]->code;
+                } elseif (isset($firstPageResult->Result[0]->code)) {
+                    $code = $firstPageResult->Result[0]->code;
+                }
+
+                if (isset($firstPageResult->Result[1])) {
+                    $pageInfoData = $firstPageResult->Result[1];
+                    if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
+                        $pageInfo = $pageInfoData->page_info[0];
+                        $totalPage = (int)($pageInfo->total_page ?? 1);
+                        $totalRecord = (int)($pageInfo->total_record ?? 0);
+                    } elseif (isset($pageInfoData->total_page)) {
+                        $totalPage = (int)$pageInfoData->total_page;
+                        $totalRecord = (int)($pageInfoData->total_record ?? 0);
+                    }
+                }
+            } elseif (is_array($firstPageResult)) {
+                if (isset($firstPageResult[0])) {
+                    if (is_object($firstPageResult[0])) {
+                        if (isset($firstPageResult[0]->result_info[0]->code)) {
+                            $code = $firstPageResult[0]->result_info[0]->code;
+                        } elseif (isset($firstPageResult[0]->code)) {
+                            $code = $firstPageResult[0]->code;
+                        }
+                    } elseif (is_array($firstPageResult[0])) {
+                        $code = $firstPageResult[0]['code'] ?? '';
+                    }
+                }
+
+                if (isset($firstPageResult[1])) {
+                    $pageInfoData = is_object($firstPageResult[1]) ? $firstPageResult[1] : (object)$firstPageResult[1];
+                    if (isset($pageInfoData->page_info) && is_array($pageInfoData->page_info) && isset($pageInfoData->page_info[0])) {
+                        $pageInfo = $pageInfoData->page_info[0];
+                        $totalPage = (int)($pageInfo->total_page ?? 1);
+                        $totalRecord = (int)($pageInfo->total_record ?? 0);
+                    } elseif (isset($pageInfoData->total_page)) {
+                        $totalPage = (int)$pageInfoData->total_page;
+                        $totalRecord = (int)($pageInfoData->total_record ?? 0);
+                    }
+                }
+            }
+
+            if ($code !== '1000') {
+                $sendEvent('error', ['message' => "API 응답 오류 (code: {$code})"]);
+                exit;
+            }
+
+            $sendEvent('progress', [
+                'step' => 'info',
+                'message' => "총 {$totalRecord}건, {$totalPage}페이지 처리 예정",
+                'percent' => 10,
+                'total' => $totalRecord,
+                'totalPage' => $totalPage
+            ]);
+
+            $syncedCount = 0;
+            $updatedCount = 0;
+            $insertedCount = 0;
+            $deactivatedCount = 0;
+            $apiCompCodes = [];
+
+            // 모든 페이지 순회
+            for ($page = 1; $page <= $totalPage; $page++) {
+                if ($page === 1) {
+                    $pageResult = $firstPageResult;
+                } else {
+                    $pageResult = $insungApiService->getCompanyList($mCode, $apiCcCode, $token, '', '', $page, 1000, $apiIdx);
+                }
+
+                if (!$pageResult) {
+                    continue;
+                }
+
+                // 아이템 추출
+                $items = $this->extractCompanyItems($pageResult);
+
+                foreach ($items as $item) {
+                    $compNo = $item->comp_no ?? '';
+                    $corpName = $item->corp_name ?? '';
+                    $owner = $item->owner ?? '';
+                    $telNo = $item->tel_no ?? '';
+                    $address = $item->adddress ?? '';
+
+                    if (empty($compNo)) {
+                        continue;
+                    }
+
+                    $apiCompCodes[] = $compNo;
+
+                    // 기존 거래처 확인
+                    $compBuilder = $db->table('tbl_company_list');
+                    $compBuilder->where('comp_code', $compNo);
+                    $compBuilder->where('cc_idx', $ccIdx);
+                    $compQuery = $compBuilder->get();
+                    $existingCompany = $compQuery ? $compQuery->getRowArray() : null;
+
+                    $now = date('Y-m-d H:i:s');
+
+                    if ($existingCompany) {
+                        $companyData = [
+                            'comp_name' => $corpName,
+                            'comp_owner' => $owner,
+                            'comp_tel' => $telNo,
+                            'comp_addr' => $address,
+                            'use_yn' => 'Y',
+                            'updated_at' => $now
+                        ];
+                        $db->table('tbl_company_list')
+                           ->where('comp_code', $compNo)
+                           ->where('cc_idx', $ccIdx)
+                           ->update($companyData);
+                        $updatedCount++;
+                    } else {
+                        $companyData = [
+                            'cc_idx' => $ccIdx,
+                            'comp_code' => $compNo,
+                            'comp_name' => $corpName,
+                            'comp_owner' => $owner,
+                            'comp_tel' => $telNo,
+                            'comp_addr' => $address,
+                            'use_yn' => 'Y',
+                            'created_at' => $now
+                        ];
+                        $db->table('tbl_company_list')->insert($companyData);
+                        $insertedCount++;
+                    }
+                    $syncedCount++;
+                }
+
+                // 페이지 진행률 (10% ~ 90% 구간)
+                $pagePercent = 10 + (int)(($page / $totalPage) * 80);
+                $sendEvent('progress', [
+                    'step' => 'sync',
+                    'message' => "{$page}/{$totalPage} 페이지 처리 완료 ({$syncedCount}건)",
+                    'percent' => $pagePercent,
+                    'current' => $syncedCount,
+                    'total' => $totalRecord,
+                    'page' => $page,
+                    'totalPage' => $totalPage
+                ]);
+            }
+
+            // 거래 종료 처리
+            $sendEvent('progress', ['step' => 'deactivate', 'message' => '거래 종료 처리 중...', 'percent' => 92]);
+
+            if (!empty($apiCompCodes)) {
+                $deactivateBuilder = $db->table('tbl_company_list');
+                $deactivateBuilder->where('cc_idx', $ccIdx);
+                $deactivateBuilder->where('use_yn', 'Y');
+                $deactivateBuilder->whereNotIn('comp_code', $apiCompCodes);
+                $deactivatedCount = $deactivateBuilder->countAllResults(false);
+
+                $db->table('tbl_company_list')
+                   ->where('cc_idx', $ccIdx)
+                   ->where('use_yn', 'Y')
+                   ->whereNotIn('comp_code', $apiCompCodes)
+                   ->update([
+                       'use_yn' => 'N',
+                       'updated_at' => date('Y-m-d H:i:s')
+                   ]);
+            }
+
+            // 거래처 목록 조회
+            $sendEvent('progress', ['step' => 'fetch', 'message' => '거래처 목록 조회 중...', 'percent' => 95]);
+
+            $builder = $db->table('tbl_company_list c');
+            $builder->select('c.comp_code, c.comp_name, c.cc_idx');
+            $builder->where('c.cc_idx', $ccIdx);
+            $builder->where('c.use_yn', 'Y');
+            $builder->orderBy('c.comp_name', 'ASC');
+            $query = $builder->get();
+            $companyList = $query ? $query->getResultArray() : [];
+
+            // 완료
+            $sendEvent('complete', [
+                'success' => true,
+                'message' => "동기화 완료: 총 {$syncedCount}건",
+                'stats' => [
+                    'total' => $syncedCount,
+                    'inserted' => $insertedCount,
+                    'updated' => $updatedCount,
+                    'deactivated' => $deactivatedCount
+                ],
+                'companies' => $companyList
+            ]);
+
+        } catch (\Exception $e) {
+            $sendEvent('error', ['message' => '동기화 중 오류가 발생했습니다: ' . $e->getMessage()]);
+        }
+
+        exit;
+    }
+
+    /**
      * 인성 API에서 거래처 목록을 조회하여 DB에 동기화
      */
     private function syncCompaniesFromInsungApi($mCode, $ccCode, $token, $apiIdx, $ccIdx, $db)
@@ -4634,7 +5012,7 @@ class Admin extends BaseController
             if ($loginType !== 'daumdata') {
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => '정산관리부서 조회는 daumdata 로그인만 지원됩니다.'
+                    'message' => '정산관���부서 조회는 daumdata 로그인만 지원됩니다.'
                 ])->setStatusCode(400);
             }
 
@@ -4795,7 +5173,7 @@ class Admin extends BaseController
     }
 
     /**
-     * 로그인 시도 내역 조회 페이지
+     * 로그인 시��� 내역 조회 페이지
      */
     public function loginAttempts()
     {

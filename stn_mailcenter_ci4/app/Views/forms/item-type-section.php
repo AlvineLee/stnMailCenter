@@ -16,7 +16,7 @@
 // 기본값 설정
 $itemTypeName = $itemTypeName ?? 'item_type';
 $itemTypeId = $itemTypeId ?? 'item_type';
-$defaultValue = $defaultValue ?? '서류';
+$defaultValue = $defaultValue ?? '1'; // 1:서류봉투, 2:소박스, 3:중박스, 4:대박스
 $showBoxSelection = $showBoxSelection ?? true;
 $showPouchSelection = $showPouchSelection ?? true;
 $showShoppingBagSelection = $showShoppingBagSelection ?? true;
@@ -31,11 +31,32 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
         <h2 class="text-sm font-semibold text-gray-700 mb-2 pb-1 border-b border-gray-300">물품종류</h2>
         <div class="space-y-3">
             <div class="space-y-1">
-                <label for="<?= esc($itemTypeId) ?>" class="block text-xs font-medium text-gray-600">물품종류 *</label>
-                <input type="text" id="<?= esc($itemTypeId) ?>" name="<?= esc($itemTypeName) ?>" value="<?= old($itemTypeName, $defaultValue) ?>" required
-                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white" lang="ko">
+                <label class="block text-xs font-medium text-gray-600">물품종류 *</label>
+                <div class="flex flex-wrap gap-3">
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="radio" name="<?= esc($itemTypeName) ?>" id="<?= esc($itemTypeId) ?>_1" value="1" <?= old($itemTypeName, '1') === '1' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500" required>
+                        <span class="text-sm font-medium text-gray-700">서류봉투</span>
+                    </label>
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="radio" name="<?= esc($itemTypeName) ?>" id="<?= esc($itemTypeId) ?>_2" value="2" <?= old($itemTypeName) === '2' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                        <span class="text-sm font-medium text-gray-700">소박스</span>
+                    </label>
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="radio" name="<?= esc($itemTypeName) ?>" id="<?= esc($itemTypeId) ?>_3" value="3" <?= old($itemTypeName) === '3' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                        <span class="text-sm font-medium text-gray-700">중박스</span>
+                    </label>
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="radio" name="<?= esc($itemTypeName) ?>" id="<?= esc($itemTypeId) ?>_4" value="4" <?= old($itemTypeName) === '4' ? 'checked' : '' ?> class="text-gray-600 focus:ring-gray-500">
+                        <span class="text-sm font-medium text-gray-700">대박스</span>
+                    </label>
+                </div>
             </div>
-            
+
+            <?php /*
+            ================================================================================
+            아래 박스/행낭/쇼핑백 선택 UI는 나중에 복원될 수 있으므로 주석 처리합니다.
+            ================================================================================
+
             <!-- 규격 안내 버튼 (다마스/라보/트럭이 아닐 때만 표시) -->
             <?php if ($showBoxSelection || $showPouchSelection): ?>
             <div id="guideButtons" class="grid grid-cols-2 gap-2">
@@ -51,7 +72,7 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
                 <?php endif; ?>
             </div>
             <?php endif; ?>
-            
+
             <!-- 트럭일 때: 박스/팔레트 선택 -->
             <div id="truckItemSelection" class="space-y-3" style="display: none;">
                 <div class="grid grid-cols-4 gap-2">
@@ -85,7 +106,7 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
                     </div>
                 </div>
             </div>
-            
+
             <!-- 다마스/라보일 때: 박스선택, 개수, 팔레트선택, 개수 표시 -->
             <!-- 다른 배송수단일 때: 박스선택, 행낭선택, 쇼핑백선택 각각 개수 선택 -->
             <div id="normalItemSelection">
@@ -130,7 +151,7 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
                                class="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
                     </div>
                 </div>
-                
+
                 <!-- 다른 배송수단일 때: 박스선택, 행낭선택, 쇼핑백선택 각각 개수 선택 -->
                 <div id="otherVehicleItemSelection" class="flex flex-wrap sm:flex-nowrap gap-1 sm:gap-2 items-end" style="display: none;">
                     <?php if ($showBoxSelection): ?>
@@ -160,7 +181,7 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
                                class="w-full px-1 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-gray-100 cursor-not-allowed">
                     </div>
                     <?php endif; ?>
-                    
+
                     <?php if ($showPouchSelection): ?>
                     <div id="pouchSelectionDivOther" class="flex-1 min-w-[70px] sm:min-w-0">
                         <label for="pouch_selection_other" class="block text-xs font-medium text-gray-600 mb-1">행낭선택</label>
@@ -188,7 +209,7 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
                                class="w-full px-1 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400 bg-gray-100 cursor-not-allowed">
                     </div>
                     <?php endif; ?>
-                    
+
                     <?php if ($showShoppingBagSelection): ?>
                     <div id="shoppingBagSelectionDivOther" class="flex-1 min-w-[80px] sm:min-w-0">
                         <label for="shopping_bag_selection_other" class="block text-xs font-medium text-gray-600 mb-1">쇼핑백선택</label>
@@ -208,320 +229,92 @@ $pouchGuideButtonText = $pouchGuideButtonText ?? '행낭 규격 안내';
                 </div>
                 <?php endif; ?>
             </div>
+
+            ================================================================================
+            주석 처리 끝
+            ================================================================================
+            */ ?>
         </div>
     </section>
 </div>
 
 <script>
-// 배송수단에 따라 물품종류 선택 옵션 표시/숨김 (전역 함수)
-window.toggleItemTypeSelection = function() {
-    const truckItemSelection = document.getElementById('truckItemSelection');
-    const normalItemSelection = document.getElementById('normalItemSelection');
-    const damasLaboItemSelection = document.getElementById('damasLaboItemSelection');
-    const otherVehicleItemSelection = document.getElementById('otherVehicleItemSelection');
-    const guideButtons = document.getElementById('guideButtons');
-    const selectedVehicle = document.querySelector('input[name="delivery_method"]:checked');
-    
-    if (selectedVehicle && (selectedVehicle.value === 'damas' || selectedVehicle.value === 'labo' || selectedVehicle.value === 'truck')) {
-        // 다마스/라보/트럭일 때: 규격 안내 버튼 숨김
-        if (guideButtons) guideButtons.style.display = 'none';
-        
-        if (selectedVehicle.value === 'truck') {
-            // 트럭일 때: 박스/팔레트 선택 표시
-            if (truckItemSelection) truckItemSelection.style.display = 'block';
-            if (normalItemSelection) normalItemSelection.style.display = 'none';
-        } else {
-            // 다마스/라보일 때: 박스선택, 개수, 팔레트선택, 개수 표시
-            if (truckItemSelection) truckItemSelection.style.display = 'none';
-            if (normalItemSelection) normalItemSelection.style.display = 'block';
-            if (damasLaboItemSelection) damasLaboItemSelection.style.display = 'grid';
-            if (otherVehicleItemSelection) otherVehicleItemSelection.style.display = 'none';
-        }
-    } else {
-        // 다른 배송수단일 때: 규격 안내 버튼 표시, 박스/행낭/쇼핑백 선택 표시
-        if (guideButtons) guideButtons.style.display = 'grid';
-        if (truckItemSelection) truckItemSelection.style.display = 'none';
-        if (normalItemSelection) normalItemSelection.style.display = 'block';
-        if (damasLaboItemSelection) damasLaboItemSelection.style.display = 'none';
-        if (otherVehicleItemSelection) otherVehicleItemSelection.style.display = 'flex';
-        
-        // 개수 필드 상태 업데이트
-        setTimeout(function() {
-            if (typeof toggleQuantityFields === 'function') {
-                toggleQuantityFields();
-            }
-        }, 100);
-    }
-}
-
-// 전달사항에 물품종류 선택 값 추가/업데이트
-function updateDeliveryInstructionsWithItemTypes() {
-    const selectedVehicle = document.querySelector('input[name="delivery_method"]:checked');
-    if (!selectedVehicle || (selectedVehicle.value === 'damas' || selectedVehicle.value === 'labo' || selectedVehicle.value === 'truck')) {
-        return; // 다마스/라보/트럭일 때는 전달사항에 추가하지 않음
-    }
-    
-    // 전달사항 필드 찾기
-    const deliveryContentField = document.getElementById('special_instructions') || 
-                                 document.getElementById('delivery_content') || 
-                                 document.getElementById('deliveryInstructions') ||
-                                 document.querySelector('textarea[name="special_instructions"]') ||
-                                 document.querySelector('textarea[name="delivery_content"]') ||
-                                 document.querySelector('textarea[name="deliveryInstructions"]');
-    
-    if (!deliveryContentField) return;
-    
-    const parts = [];
-    
-    // 박스선택
-    const boxSelection = document.getElementById('box_selection_other');
-    const boxQuantity = document.getElementById('box_quantity_other');
-    const boxOverload = document.getElementById('box_medium_overload_check_other');
-    if (boxSelection && boxQuantity && boxSelection.value && parseInt(boxQuantity.value) > 0) {
-        const boxTextMap = { 'small': '소박스', 'medium': '중박스', 'large': '대박스' };
-        let boxText = boxTextMap[boxSelection.value] + ' ' + boxQuantity.value + '개';
-        if (boxOverload && boxOverload.checked && boxSelection.value === 'medium') {
-            boxText += ' (과적)';
-        }
-        parts.push(boxText);
-    }
-    
-    // 행낭선택
-    const pouchSelection = document.getElementById('pouch_selection_other');
-    const pouchQuantity = document.getElementById('pouch_quantity_other');
-    const pouchOverload = document.getElementById('pouch_medium_overload_check_other');
-    if (pouchSelection && pouchQuantity && pouchSelection.value && parseInt(pouchQuantity.value) > 0) {
-        const pouchTextMap = { 'small': '소행낭', 'medium': '중행낭', 'large': '대행낭' };
-        let pouchText = pouchTextMap[pouchSelection.value] + ' ' + pouchQuantity.value + '개';
-        if (pouchOverload && pouchOverload.checked && pouchSelection.value === 'medium') {
-            pouchText += ' (과적)';
-        }
-        parts.push(pouchText);
-    }
-    
-    // 쇼핑백선택
-    const shoppingBagSelection = document.getElementById('shopping_bag_selection_other');
-    const shoppingBagQuantity = document.getElementById('shopping_bag_quantity_other');
-    if (shoppingBagSelection && shoppingBagQuantity && shoppingBagSelection.value && parseInt(shoppingBagQuantity.value) > 0) {
-        const bagTextMap = { 'small': '소쇼핑팩', 'medium': '중쇼핑백', 'large': '대쇼핑백' };
-        const bagText = bagTextMap[shoppingBagSelection.value] + ' ' + shoppingBagQuantity.value + '개';
-        parts.push(bagText);
-    }
-    
-    // 기존 전달사항에서 물품종류 관련 텍스트 제거
-    let currentValue = deliveryContentField.value || '';
-    // 물품종류 관련 패턴 제거 (소/중/대 + 박스/행낭/쇼핑백/쇼핑팩)
-    currentValue = currentValue.replace(/[소중대]박스\s*\d+개\s*(\(과적\))?/g, '').trim();
-    currentValue = currentValue.replace(/[소중대]행낭\s*\d+개\s*(\(과적\))?/g, '').trim();
-    currentValue = currentValue.replace(/[소중대]쇼핑[백팩]\s*\d+개/g, '').trim();
-    // 연속된 슬래시와 공백 정리
-    currentValue = currentValue.replace(/(\s*\/\s*)+/g, ' / ').trim();
-    currentValue = currentValue.replace(/^\s*\/\s*|\s*\/\s*$/g, '').trim();
-    
-    // 새로운 물품종류 정보 추가
-    if (parts.length > 0) {
-        const itemTypeText = parts.join(' / ');
-        if (currentValue) {
-            deliveryContentField.value = currentValue + ' / ' + itemTypeText;
-        } else {
-            deliveryContentField.value = itemTypeText;
-        }
-    } else {
-        deliveryContentField.value = currentValue;
-    }
-}
-
+// 물품종류 라디오 버튼 클릭 시 전달사항에 자동 입력
 document.addEventListener('DOMContentLoaded', function() {
-    toggleItemTypeSelection();
-    
-    // 배송수단 변경 시 물품종류 선택 옵션 업데이트
-    document.querySelectorAll('input[name="delivery_method"]').forEach(radio => {
+    // 물품종류 값과 텍스트 매핑
+    const itemTypeTextMap = {
+        '1': '서류봉투',
+        '2': '소박스',
+        '3': '중박스',
+        '4': '대박스'
+    };
+
+    // 이전에 입력된 물품종류 텍스트를 저장
+    let previousItemTypeText = '';
+
+    // 물품종류 라디오 버튼들
+    const itemTypeRadios = document.querySelectorAll('input[name="<?= esc($itemTypeName) ?>"]');
+
+    // 전달사항 필드 찾기
+    function getSpecialInstructionsField() {
+        return document.getElementById('special_instructions') ||
+               document.getElementById('delivery_content') ||
+               document.getElementById('deliveryInstructions') ||
+               document.querySelector('textarea[name="special_instructions"]') ||
+               document.querySelector('textarea[name="delivery_content"]') ||
+               document.querySelector('textarea[name="deliveryInstructions"]');
+    }
+
+    // 물품종류 텍스트 업데이트 함수
+    function updateItemTypeInSpecialInstructions(itemTypeValue, setFocus = false) {
+        const specialInstructions = getSpecialInstructionsField();
+        if (!specialInstructions) return;
+
+        const itemTypeName = itemTypeTextMap[itemTypeValue];
+        const newItemTypeText = itemTypeName + '( 개)';
+        let currentValue = specialInstructions.value || '';
+
+        // 이전 물품종류 텍스트 패턴 제거 (서류봉투, 소박스, 중박스, 대박스 + ( 개))
+        const itemTypePattern = /(서류봉투|소박스|중박스|대박스)\(\s*\d*\s*개\)/g;
+        currentValue = currentValue.replace(itemTypePattern, '').trim();
+
+        // 연속된 공백 정리
+        currentValue = currentValue.replace(/\s+/g, ' ').trim();
+
+        // 새로운 물품종류 텍스트 추가 (맨 앞에)
+        if (currentValue) {
+            specialInstructions.value = newItemTypeText + ' ' + currentValue;
+        } else {
+            specialInstructions.value = newItemTypeText;
+        }
+
+        previousItemTypeText = newItemTypeText;
+
+        // 포커스 설정 및 커서 위치 조정 (사용자가 클릭한 경우에만)
+        if (setFocus) {
+            specialInstructions.focus();
+            // 커서 위치: "서류봉투(" 다음, " 개)" 앞
+            const cursorPosition = itemTypeName.length + 1; // 물품종류명 + "(" 길이
+            specialInstructions.setSelectionRange(cursorPosition, cursorPosition);
+        }
+    }
+
+    // 라디오 버튼 변경 이벤트 리스너
+    itemTypeRadios.forEach(radio => {
         radio.addEventListener('change', function() {
-            toggleItemTypeSelection();
-            updateDeliveryInstructionsWithItemTypes();
-            setTimeout(toggleQuantityFields, 100);
+            if (this.checked) {
+                updateItemTypeInSpecialInstructions(this.value, true); // 클릭 시 포커스 설정
+            }
         });
     });
-    
-    // 개수 입력 필드 활성화/비활성화 함수
-    function toggleQuantityFields() {
-        const selectedVehicle = document.querySelector('input[name="delivery_method"]:checked');
-        if (!selectedVehicle || (selectedVehicle.value === 'damas' || selectedVehicle.value === 'labo' || selectedVehicle.value === 'truck')) {
-            return; // 다마스/라보/트럭일 때는 처리하지 않음
-        }
-        
-        // 박스 개수 필드
-        const boxSelection = document.getElementById('box_selection_other');
-        const boxQuantity = document.getElementById('box_quantity_other');
-        if (boxSelection && boxQuantity) {
-            if (boxSelection.value) {
-                boxQuantity.disabled = false;
-                boxQuantity.classList.remove('bg-gray-100', 'cursor-not-allowed');
-                boxQuantity.classList.add('bg-white');
-            } else {
-                boxQuantity.disabled = true;
-                boxQuantity.value = '0';
-                boxQuantity.classList.remove('bg-white');
-                boxQuantity.classList.add('bg-gray-100', 'cursor-not-allowed');
-            }
-        }
-        
-        // 행낭 개수 필드
-        const pouchSelection = document.getElementById('pouch_selection_other');
-        const pouchQuantity = document.getElementById('pouch_quantity_other');
-        if (pouchSelection && pouchQuantity) {
-            if (pouchSelection.value) {
-                pouchQuantity.disabled = false;
-                pouchQuantity.classList.remove('bg-gray-100', 'cursor-not-allowed');
-                pouchQuantity.classList.add('bg-white');
-            } else {
-                pouchQuantity.disabled = true;
-                pouchQuantity.value = '0';
-                pouchQuantity.classList.remove('bg-white');
-                pouchQuantity.classList.add('bg-gray-100', 'cursor-not-allowed');
-            }
-        }
-        
-        // 쇼핑백 개수 필드
-        const shoppingBagSelection = document.getElementById('shopping_bag_selection_other');
-        const shoppingBagQuantity = document.getElementById('shopping_bag_quantity_other');
-        if (shoppingBagSelection && shoppingBagQuantity) {
-            if (shoppingBagSelection.value) {
-                shoppingBagQuantity.disabled = false;
-                shoppingBagQuantity.classList.remove('bg-gray-100', 'cursor-not-allowed');
-                shoppingBagQuantity.classList.add('bg-white');
-            } else {
-                shoppingBagQuantity.disabled = true;
-                shoppingBagQuantity.value = '0';
-                shoppingBagQuantity.classList.remove('bg-white');
-                shoppingBagQuantity.classList.add('bg-gray-100', 'cursor-not-allowed');
-            }
-        }
-    }
-    
-    // 다른 배송수단일 때 물품종류 선택 값 변경 시 전달사항 업데이트
-    const itemTypeFields = [
-        'box_selection_other', 'box_quantity_other', 'box_medium_overload_check_other',
-        'pouch_selection_other', 'pouch_quantity_other', 'pouch_medium_overload_check_other',
-        'shopping_bag_selection_other', 'shopping_bag_quantity_other'
-    ];
-    
-    itemTypeFields.forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (field) {
-            field.addEventListener('change', function() {
-                toggleQuantityFields();
-                updateDeliveryInstructionsWithItemTypes();
-            });
-            field.addEventListener('input', function() {
-                updateDeliveryInstructionsWithItemTypes();
-            });
-        }
-    });
-    
-    // 배송수단 변경 시에도 개수 필드 상태 업데이트
-    document.querySelectorAll('input[name="delivery_method"]').forEach(radio => {
-        const originalHandler = radio.onchange;
-        radio.addEventListener('change', function() {
-            setTimeout(toggleQuantityFields, 100); // UI 업데이트 후 실행
-        });
-    });
-    
-    // 초기 상태 설정
-    setTimeout(toggleQuantityFields, 200);
-    
-    <?php if ($showOverloadCheckbox && $showBoxSelection): ?>
-    // 박스선택 중형 선택 시 과적 체크박스 표시/숨김
-    const boxSelection = document.getElementById('box_selection');
-    const boxMediumOverload = document.getElementById('box_medium_overload');
-    
-    if (boxSelection && boxMediumOverload) {
-        if (boxSelection.value === 'medium') {
-            boxMediumOverload.style.display = 'block';
-        }
-        
-        boxSelection.addEventListener('change', function() {
-            if (this.value === 'medium') {
-                boxMediumOverload.style.display = 'block';
-            } else {
-                boxMediumOverload.style.display = 'none';
-                const checkbox = document.getElementById('box_medium_overload_check');
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            }
-        });
-    }
-    <?php endif; ?>
-    
-    <?php if ($showOverloadCheckbox && $showPouchSelection): ?>
-    // 행낭선택 중형 선택 시 과적 체크박스 표시/숨김 (다마스/라보용)
-    const pouchSelection = document.getElementById('pouch_selection');
-    const pouchMediumOverload = document.getElementById('pouch_medium_overload');
-    
-    if (pouchSelection && pouchMediumOverload) {
-        if (pouchSelection.value === 'medium') {
-            pouchMediumOverload.style.display = 'block';
-        }
-        
-        pouchSelection.addEventListener('change', function() {
-            if (this.value === 'medium') {
-                pouchMediumOverload.style.display = 'block';
-            } else {
-                pouchMediumOverload.style.display = 'none';
-                const checkbox = document.getElementById('pouch_medium_overload_check');
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            }
-        });
-    }
-    
-    // 행낭선택 중형 선택 시 과적 체크박스 표시/숨김 (다른 배송수단용)
-    const pouchSelectionOther = document.getElementById('pouch_selection_other');
-    const pouchMediumOverloadOther = document.getElementById('pouch_medium_overload_other');
-    
-    if (pouchSelectionOther && pouchMediumOverloadOther) {
-        if (pouchSelectionOther.value === 'medium') {
-            pouchMediumOverloadOther.style.display = 'block';
-        }
-        
-        pouchSelectionOther.addEventListener('change', function() {
-            if (this.value === 'medium') {
-                pouchMediumOverloadOther.style.display = 'block';
-            } else {
-                pouchMediumOverloadOther.style.display = 'none';
-                const checkbox = document.getElementById('pouch_medium_overload_check_other');
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            }
-            updateDeliveryInstructionsWithItemTypes();
-        });
-    }
-    <?php endif; ?>
-    
-    // 박스선택 중형 선택 시 과적 체크박스 표시/숨김 (다른 배송수단용)
-    const boxSelectionOther = document.getElementById('box_selection_other');
-    const boxMediumOverloadOther = document.getElementById('box_medium_overload_other');
-    
-    if (boxSelectionOther && boxMediumOverloadOther) {
-        if (boxSelectionOther.value === 'medium') {
-            boxMediumOverloadOther.style.display = 'block';
-        }
-        
-        boxSelectionOther.addEventListener('change', function() {
-            if (this.value === 'medium') {
-                boxMediumOverloadOther.style.display = 'block';
-            } else {
-                boxMediumOverloadOther.style.display = 'none';
-                const checkbox = document.getElementById('box_medium_overload_check_other');
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            }
-            updateDeliveryInstructionsWithItemTypes();
-        });
+
+    // 페이지 로드 시 초기 선택된 값으로 전달사항 업데이트
+    const checkedRadio = document.querySelector('input[name="<?= esc($itemTypeName) ?>"]:checked');
+    if (checkedRadio) {
+        // 약간의 지연 후 실행 (전달사항 필드가 로드된 후)
+        setTimeout(function() {
+            updateItemTypeInSpecialInstructions(checkedRadio.value);
+        }, 100);
     }
 });
 </script>

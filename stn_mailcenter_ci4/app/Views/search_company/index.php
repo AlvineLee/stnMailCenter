@@ -28,7 +28,7 @@
         <!-- 결과 영역 -->
         <div id="resultSection" style="display: none; margin-top: 0;">
             <div id="compName" class="comp-name"></div>
-            <div id="paginationInfo" style="margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 4px; font-size: 12px; color: #64748b; display: none;">
+            <div id="paginationInfo" style="margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 4px; font-size: 12px; color: #64748b;">
             </div>
             <div class="list-table-container">
                 <table class="list-table">
@@ -239,69 +239,14 @@
             paginationInfo.style.display = 'none';
             
             if (pagination && pagination.total_count > 0) {
-                const start = (pagination.current_page - 1) * pagination.per_page + 1;
-                const end = Math.min(pagination.current_page * pagination.per_page, pagination.total_count);
-                paginationInfo.textContent = `총 ${pagination.total_count.toLocaleString()}건 중 ${start.toLocaleString()}-${end.toLocaleString()}건 표시`;
+                paginationInfo.textContent = `총 ${pagination.total_count.toLocaleString()}명`;
                 paginationInfo.style.display = 'block';
             } else {
                 paginationInfo.style.display = 'none';
             }
 
-            if (pagination.total_pages > 1) {
-                let paginationHTML = '<div class="pagination">';
-                
-                // 처음 버튼
-                if (pagination.has_prev) {
-                    paginationHTML += `<a href="javascript:void(0)" onclick="searchMembers(1)" class="nav-button">처음</a>`;
-                } else {
-                    paginationHTML += `<span class="nav-button disabled">처음</span>`;
-                }
-                
-                // 이전 버튼
-                if (pagination.has_prev) {
-                    paginationHTML += `<a href="javascript:void(0)" onclick="searchMembers(${pagination.prev_page})" class="nav-button">이전</a>`;
-                } else {
-                    paginationHTML += `<span class="nav-button disabled">이전</span>`;
-                }
-                
-                // 페이지 번호
-                const showPages = 5;
-                const halfPages = Math.floor(showPages / 2);
-                let startPage = Math.max(1, pagination.current_page - halfPages);
-                let endPage = Math.min(pagination.total_pages, startPage + showPages - 1);
-                
-                if (endPage - startPage < showPages - 1) {
-                    startPage = Math.max(1, endPage - showPages + 1);
-                }
-                
-                for (let i = startPage; i <= endPage; i++) {
-                    if (i === pagination.current_page) {
-                        paginationHTML += `<span class="page-number active">${i}</span>`;
-                    } else {
-                        paginationHTML += `<a href="javascript:void(0)" onclick="searchMembers(${i})" class="page-number">${i}</a>`;
-                    }
-                }
-                
-                // 다음 버튼
-                if (pagination.has_next) {
-                    paginationHTML += `<a href="javascript:void(0)" onclick="searchMembers(${pagination.next_page})" class="nav-button">다음</a>`;
-                } else {
-                    paginationHTML += `<span class="nav-button disabled">다음</span>`;
-                }
-                
-                // 끝 버튼
-                if (pagination.has_next) {
-                    paginationHTML += `<a href="javascript:void(0)" onclick="searchMembers(${pagination.total_pages})" class="nav-button">끝</a>`;
-                } else {
-                    paginationHTML += `<span class="nav-button disabled">끝</span>`;
-                }
-                
-                paginationHTML += '</div>';
-                paginationDiv.innerHTML = paginationHTML;
-                paginationDiv.style.display = 'block';
-            } else {
-                paginationDiv.style.display = 'none';
-            }
+            // 페이징 없이 전체 표시
+            paginationDiv.style.display = 'none';
         }
 
         document.getElementById('searchForm').addEventListener('submit', function(e) {

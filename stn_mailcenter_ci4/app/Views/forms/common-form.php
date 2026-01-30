@@ -486,6 +486,22 @@ const sessionData = {
     address_detail: '<?= esc($sessionAddressDetail, 'js') ?>'
 };
 
+// 주소에서 동 이름 추출하는 함수
+function extractDongFromAddress(address) {
+    if (!address) return '';
+    // "동"으로 끝나는 단어 찾기 (예: 논현동, 역삼동, 서초동 등)
+    const dongMatch = address.match(/([가-힣]+동)\s/);
+    if (dongMatch) {
+        return dongMatch[1];
+    }
+    // "동"으로 끝나는 마지막 단어 (주소 끝에 있는 경우)
+    const dongMatch2 = address.match(/([가-힣]+동)$/);
+    if (dongMatch2) {
+        return dongMatch2[1];
+    }
+    return '';
+}
+
 // 주문자 정보 자동 입력 기능 (세션 정보 사용)
 function copyOrdererInfo(type) {
     // 세션 정보 우선 사용, 없으면 주문자 정보 필드에서 가져오기
@@ -493,9 +509,13 @@ function copyOrdererInfo(type) {
     const contact = sessionData.phone || document.getElementById('contact').value;
     const department = sessionData.department || '';
     const manager = sessionData.real_name || '';
-    const dongName = sessionData.dong || ''; // 동 이름 사용 (우편번호 아님)
     const address = sessionData.address || '';
     const addressDetail = sessionData.address_detail || '';
+    // 동 이름: sessionData.dong이 없으면 주소에서 추출
+    let dongName = sessionData.dong || '';
+    if (!dongName && address) {
+        dongName = extractDongFromAddress(address);
+    }
     
     if (type === 'departure') {
         document.getElementById('departure_company_name').value = companyName;
@@ -513,17 +533,9 @@ function copyOrdererInfo(type) {
             document.getElementById('departure_address').value = address;
         }
         if (document.getElementById('departure_detail')) {
-            // addressDetail이 있으면 사용, 없으면 dongName 사용 (슬래시 처리 포함)
-            let detailValue = addressDetail;
-            if (!detailValue && dongName) {
-                // dongName에서 슬래시가 있으면 슬래시 뒤의 값만 사용
-                if (dongName.indexOf('/') !== -1) {
-                    detailValue = dongName.split('/').pop().trim();
-                } else {
-                    detailValue = dongName;
-                }
-            }
-            document.getElementById('departure_detail').value = detailValue || '';
+            // dongName(user_dong)을 우선 사용
+            let detailValue = dongName || addressDetail || '';
+            document.getElementById('departure_detail').value = detailValue;
         }
     } else if (type === 'destination') {
         document.getElementById('destination_company_name').value = companyName;
@@ -541,29 +553,14 @@ function copyOrdererInfo(type) {
             document.getElementById('destination_address').value = address;
         }
         if (document.getElementById('destination_detail')) {
-            // addressDetail이 있으면 사용, 없으면 dongName 사용 (슬래시 처리 포함)
-            let detailValue = addressDetail;
-            if (!detailValue && dongName) {
-                // dongName에서 슬래시가 있으면 슬래시 뒤의 값만 사용
-                if (dongName.indexOf('/') !== -1) {
-                    detailValue = dongName.split('/').pop().trim();
-                } else {
-                    detailValue = dongName;
-                }
-            }
-            document.getElementById('destination_detail').value = detailValue || '';
+            // dongName(user_dong)을 우선 사용
+            let detailValue = dongName || addressDetail || '';
+            document.getElementById('destination_detail').value = detailValue;
         } else if (document.getElementById('detail_address')) {
             // detail_address 필드도 확인 (STN_LOGIS 호환)
-            let detailValue = addressDetail;
-            if (!detailValue && dongName) {
-                // dongName에서 슬래시가 있으면 슬래시 뒤의 값만 사용
-                if (dongName.indexOf('/') !== -1) {
-                    detailValue = dongName.split('/').pop().trim();
-                } else {
-                    detailValue = dongName;
-                }
-            }
-            document.getElementById('detail_address').value = detailValue || '';
+            // dongName(user_dong)을 우선 사용
+            let detailValue = dongName || addressDetail || '';
+            document.getElementById('detail_address').value = detailValue;
         }
     }
 }

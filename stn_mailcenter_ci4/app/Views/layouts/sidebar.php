@@ -18,6 +18,7 @@
                 'isLoggedIn' => session()->get('is_logged_in'),
                 'apiName' => session()->get('api_name'),
                 'ccCompName' => session()->get('cc_comp_name'),
+                'compName' => session()->get('comp_name'),
                 'realName' => session()->get('real_name') ?? session()->get('user_name') ?? session()->get('username') ?? 'Guest',
                 'isSuperAdmin' => false,
                 'showOrderMenus' => true,
@@ -107,6 +108,11 @@
         $isLoggedIn = $sidebar['isLoggedIn'] ?? false;
         $apiName = $sidebar['apiName'] ?? null;
         $ccCompName = $sidebar['ccCompName'] ?? null;
+        $compName = $sidebar['compName'] ?? null;
+        // 거래처명에서 언더바 앞의 접두사 제거 (예: 'STN_TV조선(조선방송)' → 'TV조선(조선방송)')
+        if ($compName && strpos($compName, '_') !== false) {
+            $compName = preg_replace('/^[^_]+_/', '', $compName);
+        }
         $realName = $sidebar['realName'] ?? 'Guest';
         $isSuperAdmin = $sidebar['isSuperAdmin'] ?? false;
         $showOrderMenus = $sidebar['showOrderMenus'] ?? true;
@@ -124,19 +130,19 @@
                 </div>
             </a>
         <?php else: ?>
-            <?php if (!$isSubdomain && $isLoggedIn && ($apiName || $ccCompName)): ?>
-                <!-- 메인도메인 로그인: D 로고 + 콜센터명 -->
+            <?php if (!$isSubdomain && $isLoggedIn && ($apiName || $compName)): ?>
+                <!-- 메인도메인 로그인: D 로고 + 퀵사명 + 거래처명 -->
                 <a href="<?= base_url('/') ?>" class="logo-full" style="display: flex; align-items: center; gap: 10px;">
                     <div style="width: 45px; height: 50px; overflow: hidden; flex-shrink: 0; border-radius: 8px; background: #f3f4f6;">
                         <img src="<?= base_url('assets/images/logo/daumdata_logo_1.png') ?>" alt="D" style="height: 50px; width: auto; object-fit: cover; object-position: left center;">
                     </div>
                     <div style="flex: 1; min-width: 0; line-height: 1.3; color: #374151;">
                         <?php if ($apiName): ?>
-                            <div style="font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?= esc($apiName) ?></div>
+                            <div style="font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?= esc($apiName) ?></div>
                         <?php endif; ?>
-                        <?php if ($ccCompName): ?>
-                            <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">(<?= esc($ccCompName) ?>)</div>
-                        <?php endif; ?>
+                        <?php //if ($compName): ?>
+                            <!-- <div style="font-size: 14px; font-weight: 600; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">- <?= esc($compName) ?></div> -->
+                        <?php //endif; ?>
                     </div>
                 </a>
             <?php else: ?>
@@ -211,7 +217,9 @@
                         <span class="nav-text">배송조회</span>
                     </a>
                 </li>
-                <?php if (hasServicePermission('mailroom')): ?>
+                <?php
+                /*
+                if (hasServicePermission('mailroom')): ?>
                 <?php
                 $uriPath = service('uri')->getPath();
                 $mailroomActive = strpos($uriPath, 'mailroom') !== false;
@@ -231,7 +239,9 @@
                         <li<?= $driversActive ? ' class="active"' : '' ?>><a href="<?= base_url('mailroom/drivers') ?>">기사 관리</a></li>
                     </ul>
                 </li>
-                <?php endif; ?>
+                <?php endif; 
+                */
+                ?>
                 <li class="nav-item">
                     <a href="<?= base_url('history/list') ?>" class="nav-link">
                         <span class="nav-icon">📋</span>
@@ -326,6 +336,25 @@
                 </a>
                 <ul class="submenu">
                     <li><a href="<?= base_url('admin/company-list-cc') ?>">거래처관리</a></li>
+                </ul>
+            </li>
+            <?php
+                endif;
+
+                // 메일룸 담당자 메뉴 (user_class = 9만)
+                if ($userClass == '9'):
+            ?>
+            <li class="nav-item has-submenu">
+                <a href="#" class="nav-link" data-toggle="submenu">
+                    <span class="nav-icon">📬</span>
+                    <span class="nav-text">메일룸 관리</span>
+                    <span class="nav-arrow">v</span>
+                </a>
+                <ul class="submenu">
+                    <li><a href="<?= base_url('mailroom/pending-orders') ?>">승인 대기 주문</a></li>
+                    <li><a href="<?= base_url('mailroom') ?>">대시보드</a></li>
+                    <li><a href="<?= base_url('mailroom/buildings') ?>">건물 관리</a></li>
+                    <li><a href="<?= base_url('mailroom/drivers') ?>">기사 관리</a></li>
                 </ul>
             </li>
             <?php

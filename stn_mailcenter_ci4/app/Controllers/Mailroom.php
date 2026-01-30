@@ -727,4 +727,46 @@ class Mailroom extends BaseController
             'error' => '등록 중 오류가 발생했습니다.'
         ]);
     }
+
+    // ========================================
+    // 메일룸 주문 승인 관리
+    // ========================================
+
+    /**
+     * 메일룸 승인 대기 주문 목록 페이지
+     */
+    public function pendingOrders()
+    {
+        // 권한 확인 (메일룸 담당자 또는 관리자)
+        $userClass = session()->get('user_class');
+        if (!in_array($userClass, [1, 9])) {
+            return redirect()->to('/dashboard')->with('error', '메일룸 관리 권한이 없습니다.');
+        }
+
+        $db = \Config\Database::connect();
+
+        // 승인 대기 주문 조회
+        $builder = $db->table('tbl_orders o');
+        $builder->select('o.*, st.service_name, st.service_code');
+        $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
+        $builder->where('o.mailroom_status', 'pending');
+        $builder->orderBy('o.save_date', 'DESC');
+
+        $query = $builder->get();
+        $orders = $query ? $query->getResultArray() : [];
+
+        // 연락처 복호화
+        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+        foreach ($orders as &$order) {
+            $order = $encryptionHelper->decryptFields($order, ['contact', 'departure_contact', 'destination_contact']);
+        }
+        unset($order);
+
+        $data = [
+            'title' => '메일룸 승인 대기 주문',
+            'orders' => $orders
+        ];
+
+        return view('mailroom/pending_orders', $data);
+    }
 }

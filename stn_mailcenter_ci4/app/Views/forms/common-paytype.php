@@ -1,4 +1,8 @@
 <?php
+// Alert 모달 include (스크립트 실행 순서 보장)
+echo $this->include('forms/alert-modal');
+?>
+<?php
 // 공통 지급구분 컴포넌트
 // 인성 API credit 값: 숫자 또는 한글 문자열로 반환됨
 // 숫자: 1=선불, 2=착불, 3=신용, 4=송금, 5/6/7=카드
@@ -57,18 +61,19 @@ elseif ($isCardEnabled) $defaultPayment = 'card_payment';
             
             <!-- 버튼 영역 -->
             <div class="flex flex-col space-y-2">
-                <button type="submit" form="orderForm" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md text-sm font-semibold transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                <button type="submit" form="orderForm" id="orderSubmitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md text-sm font-semibold transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                     📦 주문 접수하기
                 </button>
-                <button type="button" id="reservationBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                <button type="button" id="reservationBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
                     📅 예약하기
                 </button>
-                <button type="button" class="w-full bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                <button type="button" id="cancelBtn" class="w-full bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2">
                     취소
                 </button>
             </div>
     </div>
 </div>
+
 
 <!-- 예약 날짜/시간 선택 레이어 팝업 -->
 <div id="reservationModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
@@ -121,6 +126,51 @@ elseif ($isCardEnabled) $defaultPayment = 'card_payment';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 계약 상태 체크
+    const isUncontracted = <?= json_encode($is_uncontracted ?? false) ?>;
+    const serviceTypeName = <?= json_encode($service_type_name ?? '') ?>;
+    const orderForm = document.getElementById('orderForm');
+    const orderSubmitBtn = document.getElementById('orderSubmitBtn');
+
+    console.log('계약 상태 체크:', { isUncontracted, serviceTypeName });
+
+    // 주문 접수 버튼 클릭 시 계약 상태 체크
+    if (orderForm) {
+        orderForm.addEventListener('submit', function(e) {
+            console.log('폼 제출 시도 - isUncontracted:', isUncontracted);
+            if (isUncontracted) {
+                e.preventDefault(); // 폼 제출 중단
+                const message = serviceTypeName
+                    ? `${serviceTypeName} 서비스는 계약 완료 후 접수하실 수 있습니다.\n계약담당자에게 문의하세요.`
+                    : '해당 서비스는 계약 완료 후 접수하실 수 있습니다.\n계약담당자에게 문의하세요.';
+                showErrorModal('서비스 이용 불가', message);
+                return false;
+            }
+
+            // 폼 제출 시 버튼 상태 변경
+            if (orderSubmitBtn) {
+                orderSubmitBtn.disabled = true;
+                orderSubmitBtn.innerHTML = '<span class="inline-flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>접수중...</span>';
+            }
+        });
+    }
+
+    // 취소 버튼 - 폼 리셋
+    const cancelBtn = document.getElementById('cancelBtn');
+    if (cancelBtn && orderForm) {
+        cancelBtn.addEventListener('click', function() {
+            showConfirmModal(
+                '확인',
+                '작성 중인 내용이 모두 삭제됩니다.\n계속하시겠습니까?',
+                function() {
+                    orderForm.reset();
+                    // 예약 버튼 초기화
+                    resetReservationBtn();
+                }
+            );
+        });
+    }
+
     const reservationBtn = document.getElementById('reservationBtn');
     const reservationModal = document.getElementById('reservationModal');
     const closeModal = document.getElementById('closeReservationModal');
@@ -132,7 +182,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const displayDateTime = document.getElementById('displayDateTime');
     const orderDateInput = document.getElementById('order_date');
     const orderTimeInput = document.getElementById('order_time');
-    
+
+    // 예약 버튼 초기화 함수
+    function resetReservationBtn() {
+        if (reservationBtn) {
+            reservationBtn.innerHTML = '📅 예약하기';
+            reservationBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+            reservationBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+        }
+        if (orderSubmitBtn) {
+            orderSubmitBtn.innerHTML = '📦 주문 접수하기';
+            orderSubmitBtn.classList.remove('bg-orange-600', 'hover:bg-orange-700');
+            orderSubmitBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            orderSubmitBtn.disabled = false;
+        }
+        if (orderDateInput) orderDateInput.value = '';
+        if (orderTimeInput) orderTimeInput.value = '';
+    }
+
     // 오늘 날짜를 최소 날짜로 설정
     const today = new Date().toISOString().split('T')[0];
     reservationDate.min = today;
@@ -151,12 +218,17 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedDateTime.classList.add('hidden');
         reservationModal.classList.remove('hidden');
     });
-    
-    // 모달 닫기
+
+    // 모달 닫기 (예약 취소)
     function closeModalFunc() {
         reservationModal.classList.add('hidden');
+        // 예약을 확정하지 않고 닫는 경우, 이전 예약 상태 확인
+        // 만약 예약 값이 비어있다면 버튼도 초기화
+        if (!orderDateInput.value && !orderTimeInput.value) {
+            resetReservationBtn();
+        }
     }
-    
+
     closeModal.addEventListener('click', closeModalFunc);
     cancelReservation.addEventListener('click', closeModalFunc);
     

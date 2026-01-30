@@ -194,28 +194,6 @@
         var employeesData = [];
         var employeeTable = null;
 
-        // 쿠키 관련 함수
-        function setCookie(name, value, days) {
-            var expires = "";
-            if (days) {
-                var date = new Date();
-                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-                expires = "; expires=" + date.toUTCString();
-            }
-            document.cookie = name + "=" + (value || "") + expires + "; path=/";
-        }
-
-        function getCookie(name) {
-            var nameEQ = name + "=";
-            var ca = document.cookie.split(';');
-            for (var i = 0; i < ca.length; i++) {
-                var c = ca[i];
-                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
-                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
-            }
-            return null;
-        }
-
         // 직원 목록 로드
         function loadEmployeeList() {
             const compCode = document.getElementById('comp_code').value.trim();
@@ -275,26 +253,16 @@
                     employeeTable.destroy();
                 }
 
-                // 쿠키에서 저장된 페이지당 항목 수 가져오기
-                var savedPageLength = parseInt(getCookie('employeeSearch_pageLength')) || 25;
-
-                // DataTables 초기화
+                // DataTables 초기화 (페이징 없이 전체 표시)
                 employeeTable = $('#employeeTable').DataTable({
                     "data": tableData,
-                    "pageLength": savedPageLength,
-                    "lengthMenu": [[10, 25, 50, 100], [10, 25, 50, 100]],
+                    "paging": false,
+                    "lengthChange": false,
                     "language": {
                         "search": "검색:",
-                        "lengthMenu": "_MENU_ 개씩 보기",
-                        "info": "_TOTAL_ 개 중 _START_ - _END_",
+                        "info": "총 _TOTAL_ 명",
                         "infoEmpty": "데이터가 없습니다",
-                        "infoFiltered": "(전체 _MAX_ 개 중 필터링)",
-                        "paginate": {
-                            "first": "처음",
-                            "last": "마지막",
-                            "next": "다음",
-                            "previous": "이전"
-                        },
+                        "infoFiltered": "(전체 _MAX_ 명 중 필터링)",
                         "zeroRecords": "검색 결과가 없습니다"
                     },
                     "order": [[0, "asc"]],
@@ -307,11 +275,6 @@
                             'cursor': 'pointer'
                         });
                     }
-                });
-
-                // 페이지당 항목 수 변경 시 쿠키에 저장
-                employeeTable.on('length.dt', function(e, settings, len) {
-                    setCookie('employeeSearch_pageLength', len, 365);
                 });
 
                 // 행 클릭 이벤트

@@ -123,8 +123,17 @@
                         <div>
                             <input type="text" id="username" name="username" value="<?= old('username') ?>" placeholder="아이디" required class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
-                        <div>
-                            <input type="password" id="password" name="password" placeholder="비밀번호" required class="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        <div class="relative">
+                            <input type="password" id="password" name="password" placeholder="비밀번호" required class="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 focus:outline-none bg-transparent border-0 p-0 m-0 cursor-pointer" style="background: none; border: none; padding: 0; margin: 0;">
+                                <svg id="eyeIconHide" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                                </svg>
+                                <svg id="eyeIconShow" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                     <button type="submit" id="loginButton" class="bg-gray-100 text-gray-700 border border-gray-300 px-4 rounded text-sm font-semibold hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors whitespace-nowrap h-full">
@@ -448,6 +457,25 @@
     </div>
 
     <script>
+        // 비밀번호 표시/숨김 토글
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const eyeIconShow = document.getElementById('eyeIconShow');
+            const eyeIconHide = document.getElementById('eyeIconHide');
+
+            if (passwordInput.type === 'password') {
+                // 비밀번호 보이기: 눈 뜨기 아이콘 표시
+                passwordInput.type = 'text';
+                eyeIconHide.classList.add('hidden');
+                eyeIconShow.classList.remove('hidden');
+            } else {
+                // 비밀번호 숨기기: 눈 가리기 아이콘 표시
+                passwordInput.type = 'password';
+                eyeIconHide.classList.remove('hidden');
+                eyeIconShow.classList.add('hidden');
+            }
+        }
+
         // reCAPTCHA v2 설정
         const recaptchaV2SiteKey = '<?= esc(getenv('RECAPTCHA_V2_SITE_KEY') ?: '') ?>';
         let recaptchaV2WidgetId = null;

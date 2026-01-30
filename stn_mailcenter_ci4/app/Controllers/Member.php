@@ -452,7 +452,8 @@ class Member extends BaseController
                     'user_dept' => $inputData['user_dept'] ?? null,
                     'user_tel1' => $inputData['phone'] ?? null,
                     'user_addr' => $inputData['address'] ?? null,
-                    'user_addr_detail' => $inputData['address_detail'] ?? null
+                    'user_addr_detail' => $inputData['address_detail'] ?? null,
+                    'user_dong' => $inputData['user_dong'] ?? null
                 ];
 
                 // 비밀번호 변경이 있는 경우 추가 (daumdata는 평문으로 저장)
@@ -469,6 +470,53 @@ class Member extends BaseController
 
                 if (!$updateResult) {
                     throw new \Exception('정보 저장에 실패했습니다.');
+                }
+
+                // 인성 API로 회원정보 수정 동기화
+                $mCode = $user['m_code'] ?? '';
+                $ccCode = $user['cc_code'] ?? '';
+                $token = $user['token'] ?? '';
+                $apiIdx = $user['api_idx'] ?? null;
+
+                if (!empty($mCode) && !empty($ccCode) && !empty($token)) {
+                    try {
+                        $insungApiService = new \App\Libraries\InsungApiService();
+
+                        // 비밀번호: 변경 시 새 비밀번호, 아니면 기존 복호화된 비밀번호
+                        $encryptionHelper = new \App\Libraries\EncryptionHelper();
+                        $password = $isPasswordChange
+                            ? $inputData['new_password']
+                            : $encryptionHelper->decrypt($user['user_pass']);
+
+                        // API 파라미터 준비
+                        $custName = $user['comp_name'] ?? '';           // 고객사명
+                        $dongName = $inputData['user_dong'] ?? $user['user_dong'] ?? '';  // 동명
+                        $telNo = $inputData['phone'] ?? $user['user_tel1'] ?? '';         // 전화번호
+                        $credit = $user['credit'] ?? '';                // 신용도 (기존 값 유지)
+                        $deptName = $inputData['user_dept'] ?? $user['user_dept'] ?? '';  // 부서명
+                        $chargeName = $inputData['real_name'];          // 담당자명
+                        $email = $user['user_email'] ?? '';             // 이메일
+                        $location = $inputData['address_detail'] ?? $user['user_addr_detail'] ?? '';  // 상세주소
+                        $lon = $user['user_lon'] ?? '';                 // 경도
+                        $lat = $user['user_lat'] ?? '';                 // 위도
+                        $address = $inputData['address'] ?? $user['user_addr'] ?? '';     // 기본주소
+                        $compNo = $user['comp_code'] ?? '';             // 거래처 코드
+
+                        $apiResult = $insungApiService->modifyMember(
+                            $mCode, $ccCode, $token, $userId, $password,
+                            $custName, $dongName, $telNo, $credit, $deptName,
+                            $chargeName, $email, $location, $lon, $lat, $address, $compNo, $apiIdx
+                        );
+
+                        if ($apiResult) {
+                            log_message('info', "Member::updateUserInfo - 인성 API 회원정보 수정 성공: user_id={$userId}");
+                        } else {
+                            log_message('warning', "Member::updateUserInfo - 인성 API 회원정보 수정 실패: user_id={$userId}");
+                        }
+                    } catch (\Exception $apiEx) {
+                        // API 실패해도 로컬 DB는 이미 저장되었으므로 경고 로그만 남김
+                        log_message('warning', "Member::updateUserInfo - 인성 API 호출 예외: " . $apiEx->getMessage());
+                    }
                 }
 
                 // 정산관리부서 저장

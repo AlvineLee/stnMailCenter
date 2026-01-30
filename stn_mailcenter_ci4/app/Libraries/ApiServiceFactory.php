@@ -45,6 +45,12 @@ class ApiServiceFactory
     public static function getApiTypeByService($serviceType)
     {
         $mapping = [
+            // 퀵서비스 -> 인성 API
+            'quick-motorcycle' => 'insung',   // 오토바이퀵 -> 인성 API
+            'quick-vehicle' => 'insung',      // 차량퀵 -> 인성 API
+            'quick-flex' => 'insung',         // 플렉스퀵 -> 인성 API
+            'quick-moving' => 'insung',       // 이사/용달 -> 인성 API
+            // 택배/해외특송 -> 일양 API
             'international' => 'ilyang',      // 해외특송 -> 일양 API
             'parcel-visit' => 'ilyang',       // 방문택배 -> 일양 API
             'parcel-same-day' => 'ilyang',    // 당일택배 -> 일양 API
