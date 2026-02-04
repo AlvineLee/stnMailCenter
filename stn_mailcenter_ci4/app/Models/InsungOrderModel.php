@@ -100,9 +100,15 @@ class InsungOrderModel extends Model
      */
     public function saveInsungOrderData($orderId, $params, $serialNumber = null)
     {
+        // ========== DB Insert 준비 로깅 (디버깅용) ==========
+        log_message('debug', "========== InsungOrderModel::saveInsungOrderData - DB Insert 준비 ==========");
+        log_message('debug', "Order ID: {$orderId}");
+        log_message('debug', "Serial Number: " . ($serialNumber ?? 'null'));
+
         // 기존 데이터 확인
         $existing = $this->where('order_id', $orderId)->first();
-        
+        log_message('debug', "기존 데이터 존재 여부: " . ($existing ? 'YES (UPDATE)' : 'NO (INSERT)'));
+
         // 인성 API request body ($params)를 테이블 필드로 매핑
         $data = [
             'order_id' => $orderId,
@@ -162,12 +168,50 @@ class InsungOrderModel extends Model
             'ins_serial_number' => $serialNumber
         ];
 
-        if ($existing) {
-            // 업데이트
-            return $this->update($existing['id'], $data);
-        } else {
-            // 신규 저장
-            return $this->insert($data);
+        // 각 필드의 데이터 길이 로깅 (긴 필드만)
+        log_message('debug', "--- DB Insert 데이터 필드 길이 체크 ---");
+        foreach ($data as $field => $value) {
+            if (is_string($value)) {
+                $length = mb_strlen($value, 'UTF-8');
+                if ($length > 50) { // 50자 이상인 필드만 로깅
+                    log_message('debug', sprintf("  [%-25s] 길이: %d, 값: %s", $field, $length, mb_substr($value, 0, 100, 'UTF-8') . ($length > 100 ? '...' : '')));
+                }
+            }
+        }
+
+        log_message('debug', "--- Full DB Insert Data ---");
+        log_message('debug', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        try {
+            if ($existing) {
+                // 업데이트
+                log_message('debug', "DB Update 실행 중... (existing id: {$existing['id']})");
+                $result = $this->update($existing['id'], $data);
+                log_message('debug', "DB Update 결과: " . ($result ? 'SUCCESS' : 'FAILED'));
+                log_message('debug', "==========================================================================");
+                return $result;
+            } else {
+                // 신규 저장
+                log_message('debug', "DB Insert 실행 중...");
+                $result = $this->insert($data);
+                $insertId = $this->getInsertID();
+                log_message('debug', "DB Insert 결과: " . ($result ? "SUCCESS (Insert ID: {$insertId})" : 'FAILED'));
+                if (!$result) {
+                    // Insert 실패 시 에러 정보 로깅
+                    $error = $this->errors();
+                    log_message('error', "DB Insert Error: " . json_encode($error, JSON_UNESCAPED_UNICODE));
+                }
+                log_message('debug', "==========================================================================");
+                return $result;
+            }
+        } catch (\Exception $e) {
+            log_message('error', "========== DB Insert Exception ==========");
+            log_message('error', "Exception Message: " . $e->getMessage());
+            log_message('error', "Exception Code: " . $e->getCode());
+            log_message('error', "Exception File: " . $e->getFile() . ":" . $e->getLine());
+            log_message('error', "Exception Trace: " . $e->getTraceAsString());
+            log_message('error', "==========================================");
+            throw $e;
         }
     }
 

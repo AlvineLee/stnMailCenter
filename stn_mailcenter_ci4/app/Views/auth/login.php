@@ -125,7 +125,7 @@
                         </div>
                         <div class="relative">
                             <input type="password" id="password" name="password" placeholder="비밀번호" required class="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
-                            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 focus:outline-none bg-transparent border-0 p-0 m-0 cursor-pointer" style="background: none; border: none; padding: 0; margin: 0;">
+                            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" style="background: none !important; background-color: transparent !important; border: none !important; padding: 0 !important; margin: 0 !important; outline: none !important; box-shadow: none !important;">
                                 <svg id="eyeIconHide" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
                                 </svg>
@@ -147,6 +147,12 @@
                 <a href="#" onclick="openPrivacyPopup(); return false;" class="text-xs text-gray-500 hover:text-gray-700 underline">
                     개인정보처리방침
                 </a>
+                <?php if (!empty($qr_code)): ?>
+                <span class="text-gray-300 mx-2">|</span>
+                <a href="#" onclick="openQRPopup(); return false;" class="text-xs text-gray-500 hover:text-gray-700 underline">
+                    URL QR코드
+                </a>
+                <?php endif; ?>
             </div>
             
             <!-- <div class="bg-blue-50 text-blue-800 p-3 rounded mt-4 text-xs">
@@ -155,13 +161,6 @@
                 비밀번호: admin
             </div> -->
         </div>
-        
-        <!-- QR코드 - 로그인 패널 바로 밑에 떠있는 형태 -->
-        <?php if (!empty($qr_code)): ?>
-        <div class="mt-6 flex justify-center">
-            <img src="<?= esc($qr_code) ?>" alt="QR Code" style="width: 150px; height: 150px; display: block; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1); border-radius: 8px; background: white; padding: 8px;">
-        </div>
-        <?php endif; ?>
     </div>
 
     <!-- 개인정보처리방침 레이어팝업 -->
@@ -276,6 +275,32 @@
             </div>
         </div>
     </div>
+
+    <!-- QR코드 레이어팝업 -->
+    <?php if (!empty($qr_code)): ?>
+    <div id="qrPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 overflow-y-auto p-4">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-sm max-h-[90vh] overflow-hidden my-auto flex flex-col">
+            <!-- 헤더 -->
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+                <h2 class="text-lg font-semibold text-gray-800">URL QR코드</h2>
+                <button onclick="closeQRPopup()" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+
+            <!-- 본문 -->
+            <div class="p-6 bg-white flex flex-col items-center">
+                <img src="<?= esc($qr_code) ?>" alt="QR Code" class="w-64 h-64 border border-gray-200 rounded-lg shadow-sm">
+                <p class="text-xs text-gray-500 mt-4 text-center">이 QR코드를 스캔하여 로그인 페이지로 바로 접속하실 수 있습니다.</p>
+            </div>
+
+            <!-- 하단 버튼 -->
+            <div class="flex justify-center gap-2 p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+                <button onclick="closeQRPopup()" class="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- 입점신청 레이어팝업 - Tailwind CSS -->
     <div id="registrationPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
@@ -721,6 +746,22 @@
             document.body.style.overflow = '';
         }
 
+        function openQRPopup() {
+            const popup = document.getElementById('qrPopup');
+            popup.classList.remove('hidden');
+            popup.classList.add('flex');
+            // body 스크롤 방지
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeQRPopup() {
+            const popup = document.getElementById('qrPopup');
+            popup.classList.add('hidden');
+            popup.classList.remove('flex');
+            // body 스크롤 복원
+            document.body.style.overflow = '';
+        }
+
         function openLoginErrorPopup(title, detail) {
             const popup = document.getElementById('loginErrorPopup');
             document.getElementById('loginErrorTitle').textContent = title;
@@ -915,6 +956,10 @@
                     closeLoginErrorPopup();
                 }
                 closePrivacyPopup();
+                const qrPopup = document.getElementById('qrPopup');
+                if (qrPopup && !qrPopup.classList.contains('hidden')) {
+                    closeQRPopup();
+                }
             }
         });
 
@@ -922,6 +967,23 @@
         document.getElementById('loginErrorPopup').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeLoginErrorPopup();
+            }
+        });
+
+        // QR 팝업 오버레이 클릭 시 닫기
+        const qrPopup = document.getElementById('qrPopup');
+        if (qrPopup) {
+            qrPopup.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeQRPopup();
+                }
+            });
+        }
+
+        // 개인정보처리방침 팝업 오버레이 클릭 시 닫기
+        document.getElementById('privacyPopup').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePrivacyPopup();
             }
         });
 

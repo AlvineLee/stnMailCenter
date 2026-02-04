@@ -909,15 +909,24 @@ button:hover {
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
     display: flex !important;
     flex-direction: column !important;
-    flex: 1 !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
     overflow-x: hidden !important;
 }
 
 .list-table-container {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: calc(100vh - 350px) !important; /* 고정 높이 - 스크롤바를 이 위치에 고정 */
+    min-height: 400px !important;
+    overflow: hidden !important;
+}
+
+/* 가로 스크롤바를 화면 하단에 고정 */
+.list-table-container .overflow-x-auto {
+    height: 100% !important;
     overflow: auto !important;
-    max-height: calc(100vh - 300px) !important;
 }
 
 .list-table-container table {

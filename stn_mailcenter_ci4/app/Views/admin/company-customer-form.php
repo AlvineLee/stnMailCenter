@@ -36,10 +36,16 @@
                     <div class="form-field">
                         <label class="form-label">사용자등급</label>
                         <select id="user_class" name="user_class" class="form-input">
-                            <option value="5" <?= (($customer_info['user_class'] ?? '5') == '5') ? 'selected' : '' ?>>일반</option>
-                            <option value="4" <?= (($customer_info['user_class'] ?? '') == '4') ? 'selected' : '' ?>>정산담당자</option>
-                            <option value="3" <?= (($customer_info['user_class'] ?? '') == '3') ? 'selected' : '' ?>>부서장</option>
-                            <option value="1" <?= (($customer_info['user_class'] ?? '') == '1') ? 'selected' : '' ?>>관리자</option>
+                            <?php if (!empty($active_classes)): ?>
+                                <?php foreach ($active_classes as $class): ?>
+                                    <option value="<?= esc($class['class_id']) ?>"
+                                            <?= (($customer_info['user_class'] ?? '5') == $class['class_id']) ? 'selected' : '' ?>>
+                                        <?= esc($class['class_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="5">일반 사용자</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="form-field">

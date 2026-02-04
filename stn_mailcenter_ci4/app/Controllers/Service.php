@@ -827,22 +827,26 @@ class Service extends BaseController
                             'company_name' => $this->request->getPost('company_name'),
                             'contact' => $this->request->getPost('contact'),
                             'sms_telno' => $this->request->getPost('sms_telno') ?? $this->request->getPost('contact'),
+                            'o_c_code' => $this->request->getPost('o_c_code') ?? '',
                             'departure_company_name' => $this->request->getPost('departure_company_name'),
                             'departure_contact' => $this->request->getPost('departure_contact'),
                             'departure_address' => $this->request->getPost('departure_address'),
                             'departure_detail' => $this->request->getPost('departure_detail'),
                             'departure_dong' => $this->request->getPost('departure_dong2') ?: $this->request->getPost('departure_dong'),
                             'departure_fulladdr' => $this->request->getPost('departure_fulladdr') ?? '',
+                            's_c_code' => $this->request->getPost('s_c_code') ?? '',
                             'destination_company_name' => $this->request->getPost('destination_company_name'),
                             'destination_contact' => $this->request->getPost('destination_contact'),
                             'destination_address' => $this->request->getPost('destination_address'),
                             'detail_address' => $this->request->getPost('detail_address'),
                             'destination_dong' => $this->request->getPost('destination_dong2') ?: $this->request->getPost('destination_dong'),
                             'destination_fulladdr' => $this->request->getPost('destination_fulladdr') ?? '',
+                            'd_c_code' => $this->request->getPost('d_c_code') ?? '',
                             'item_type' => $this->request->getPost('item_type') ?? $this->getDefaultItemType($serviceType),
                             'delivery_content' => $this->request->getPost('delivery_content') ?? '',
                             'notes' => $this->request->getPost('notes') ?? '',
                             'payment_type' => $this->request->getPost('payment_type'),
+                            'truck_capacity' => $this->request->getPost('truck_capacity'),
                             'car_kind' => $this->buildCarKind($this->request->getPost('truck_capacity'), $this->request->getPost('truck_body_type'))
                         ];
 
@@ -1051,6 +1055,7 @@ class Service extends BaseController
                             'discount_cost' => $this->request->getPost('discount_cost') ? (string)(float)$this->request->getPost('discount_cost') : '0',
                             'delivery_cost' => $this->request->getPost('delivery_cost') ? (string)(float)$this->request->getPost('delivery_cost') : '0',
                             // 차량무게와 차량종류를 조합하여 car_kind 생성
+                            'truck_capacity' => $this->request->getPost('truck_capacity'),
                             'car_kind' => $this->buildCarKind($this->request->getPost('truck_capacity'), $this->request->getPost('truck_body_type')),
                             'reserve_check' => $this->request->getPost('reserve_check') ?? '0',
                             'reserve_date' => $this->request->getPost('reserve_date') ?? '',
@@ -2271,6 +2276,7 @@ class Service extends BaseController
 
             // 인성 API 파라미터에 필요한 필드들 추출
             $insKind = $insungOrderInfo['ins_kind'] ?? null;
+            $insKindEtc = $insungOrderInfo['ins_kind_etc'] ?? ''; // 트럭 톤수 정보
             $insCarKind = $insungOrderInfo['ins_car_kind'] ?? '';
             $insDoc = $insungOrderInfo['ins_doc'] ?? null;
             $insSfast = $insungOrderInfo['ins_sfast'] ?? null;
@@ -2287,6 +2293,7 @@ class Service extends BaseController
             $insungOrderData = [
                 'service_type' => $serviceCode,
                 'kind' => $insKind, // tbl_orders_insung의 실제 ins_kind 값 사용
+                'kind_etc' => $insKindEtc, // tbl_orders_insung의 ins_kind_etc 값 사용 (트럭 톤수)
                 'delivery_method' => $order['delivery_method'] ?? 'motorcycle',
                 'deliveryMethod' => $insDoc ?? 'one_way', // tbl_orders_insung의 ins_doc 사용
                 'deliveryType' => $insSfast ?? 'normal', // tbl_orders_insung의 ins_sfast 사용

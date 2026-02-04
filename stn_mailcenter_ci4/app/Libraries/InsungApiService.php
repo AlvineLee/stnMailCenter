@@ -907,10 +907,14 @@ class InsungApiService
             $kind = $this->convertKind($orderData['service_type'] ?? '', $orderData['delivery_method'] ?? '');
         }
         
-        // kind_etc 변환 (플렉스일 때 배송수단 선택값)
+        // kind_etc 변환
         $kindEtc = '';
-        if ($kind === '7') { // 플렉스인 경우
+        if ($kind === '7') { // 플렉스인 경우 배송수단 선택값
             $kindEtc = $this->convertKindEtc($orderData['delivery_method'] ?? '');
+        } elseif ($kind === '3' && !empty($orderData['truck_capacity'])) { // 트럭인 경우 톤수 정보
+            // truck_capacity의 표시명을 kind_etc에 설정 (예: '1t_cargo' -> '1t화물')
+            $kindEtc = \App\Config\TruckOptions::getCapacityName($orderData['truck_capacity']) ?? '';
+            log_message('debug', "Insung::registerOrder - Truck kind_etc set: {$kindEtc} (from truck_capacity: {$orderData['truck_capacity']})");
         }
         
         // item_type 변환 (물품 종류에 따라 숫자로 변환)
@@ -1045,10 +1049,38 @@ class InsungApiService
             'distince' => $orderData['distance'] ?? '', // PHP 버전에는 없지만 API 문서에 있을 수 있음
             'o_c_code' => $orderData['o_c_code'] ?? '' // 주문자 고객사 코드 (PHP 버전: o_c_code=$o_ccode)
         ];
-        
+
+        // 고객 코드 필드가 비어있으면 파라미터에서 제거 (빈 값 전송 시 API 에러 방지)
+        if (empty($params['o_c_code'])) {
+            unset($params['o_c_code']);
+        }
+        if (empty($params['s_c_code'])) {
+            unset($params['s_c_code']);
+        }
+        if (empty($params['d_c_code'])) {
+            unset($params['d_c_code']);
+        }
+
+        // ========== API Request 파라미터 상세 로깅 (DB Insert 에러 디버깅용) ==========
+        log_message('debug', "========== Insung API Request Parameters (registerOrder) ==========");
+        log_message('debug', "API URL: {$url}");
+        log_message('debug', "--- Request Parameters Detail ---");
+        foreach ($params as $key => $value) {
+            $valueStr = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
+            $valueLength = mb_strlen($valueStr, 'UTF-8');
+            log_message('debug', sprintf("  [%-20s] = %s (길이: %d)", $key, $valueStr, $valueLength));
+        }
+        log_message('debug', "--- Full Request JSON ---");
+        log_message('debug', json_encode($params, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        log_message('debug', "=====================================================================");
+
         $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
-        
+
+        // ========== API Response 로깅 ==========
+        log_message('debug', "========== Insung API Response (registerOrder) ==========");
         if (!$result) {
+            log_message('error', "API 호출 실패: result is null or false");
+            log_message('debug', "=======================================================");
             return [
                 'success' => false,
                 'serial_number' => null,
@@ -1056,19 +1088,28 @@ class InsungApiService
                 'request_params' => $params  // request body 포함
             ];
         }
-        
+
+        log_message('debug', "Response Type: " . gettype($result));
+        log_message('debug', "Response Content: " . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
         // 응답이 배열인 경우 첫 번째 요소 확인
         if (is_array($result) && isset($result[0])) {
             $code = $result[0]->code ?? $result[0]['code'] ?? '';
             $msg = $result[0]->msg ?? $result[0]['msg'] ?? '';
-            
+
+            log_message('debug', "Response Code: {$code}");
+            log_message('debug', "Response Message: {$msg}");
+
             if ($code === '1000') {
                 // 성공 시 serial_number 추출
                 $serialNumber = null;
                 if (isset($result[1])) {
                     $serialNumber = $result[1]->serial_number ?? $result[1]['serial_number'] ?? null;
                 }
-                
+
+                log_message('info', "주문 접수 성공 - Serial Number: {$serialNumber}");
+                log_message('debug', "=======================================================");
+
                 return [
                     'success' => true,
                     'request_params' => $params,  // request body 포함
@@ -1076,6 +1117,9 @@ class InsungApiService
                     'message' => '주문 접수 성공'
                 ];
             } else {
+                log_message('error', "주문 접수 실패 - Code: {$code}, Message: {$msg}");
+                log_message('debug', "=======================================================");
+
                 return [
                     'success' => false,
                     'serial_number' => null,
@@ -1084,7 +1128,10 @@ class InsungApiService
                 ];
             }
         }
-        
+
+        log_message('error', "응답 형식 오류 - 배열이 아니거나 result[0]이 없음");
+        log_message('debug', "=======================================================");
+
         return [
             'success' => false,
             'serial_number' => null,
@@ -1173,10 +1220,18 @@ class InsungApiService
             $kind = $this->convertKind($orderData['service_type'] ?? '', $orderData['delivery_method'] ?? '');
         }
 
-        // kind_etc 변환
-        $kindEtc = '';
-        if ($kind === '7') {
-            $kindEtc = $this->convertKindEtc($orderData['delivery_method'] ?? '');
+        // kind_etc 변환 (이미 설정된 값이 있으면 우선 사용 - 메일룸 승인 시)
+        $kindEtc = $orderData['kind_etc'] ?? '';
+        if (empty($kindEtc)) {
+            if ($kind === '7') { // 플렉스인 경우 배송수단 선택값
+                $kindEtc = $this->convertKindEtc($orderData['delivery_method'] ?? '');
+            } elseif ($kind === '3' && !empty($orderData['truck_capacity'])) { // 트럭인 경우 톤수 정보
+                // truck_capacity의 표시명을 kind_etc에 설정 (예: '1t_cargo' -> '1t화물')
+                $kindEtc = \App\Config\TruckOptions::getCapacityName($orderData['truck_capacity']) ?? '';
+                log_message('debug', "Insung::buildOrderParams - Truck kind_etc set: {$kindEtc} (from truck_capacity: {$orderData['truck_capacity']})");
+            }
+        } else {
+            log_message('debug', "Insung::buildOrderParams - Using pre-set kind_etc: {$kindEtc}");
         }
 
         // item_type 변환
@@ -1283,6 +1338,17 @@ class InsungApiService
             'o_c_code' => $orderData['o_c_code'] ?? ''
         ];
 
+        // 고객 코드 필드가 비어있으면 파라미터에서 제거 (빈 값 전송 시 API 에러 방지)
+        if (empty($params['o_c_code'])) {
+            unset($params['o_c_code']);
+        }
+        if (empty($params['s_c_code'])) {
+            unset($params['s_c_code']);
+        }
+        if (empty($params['d_c_code'])) {
+            unset($params['d_c_code']);
+        }
+
         return [
             'success' => true,
             'params' => $params,
@@ -1301,8 +1367,8 @@ class InsungApiService
     {
         $url = $this->baseUrl . "/api/order_regist/";
 
-        // 인성 API 주문 접수 파라미터 로그 (kind 확인용)
-        log_message('info', "Insung API 주문 접수 - kind=" . ($params['kind'] ?? 'null') . ", car_kind=" . ($params['car_kind'] ?? 'null') . ", s_dest=" . ($params['s_dest'] ?? 'null'));
+        // 인성 API 주문 접수 파라미터 로그 (kind, kind_etc 확인용)
+        log_message('info', "Insung API 주문 접수 - kind=" . ($params['kind'] ?? 'null') . ", kind_etc=" . ($params['kind_etc'] ?? 'null') . ", car_kind=" . ($params['car_kind'] ?? 'null') . ", s_dest=" . ($params['s_dest'] ?? 'null'));
 
         $result = $this->callApiWithAutoTokenRefresh($url, $params, $apiIdx);
 
@@ -1853,14 +1919,14 @@ class InsungApiService
             $paramsWithoutState = $params;
             unset($paramsWithoutState['state']); // state íŒŒë¼ë¯¸í„° ì œê±°
             
-            log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 1/2 - state íŒŒë¼ë¯¸í„° ì—†ìŒ (ëª¨ë“  ìƒíƒœ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
+//             log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 1/2 - state íŒŒë¼ë¯¸í„° ì—†ìŒ (ëª¨ë“  ìƒíƒœ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
             
             $paramsWithoutState['page'] = 1;
             $queryString1 = http_build_query($paramsWithoutState);
-            log_message('info', "Insung API 1/2 - state 없음
-URL: {$urlDept}
-Params: {$queryString1}
-Full: {$urlDept}?{$queryString1}");
+            // log_message('info', "Insung API 1/2 - state 없음
+// URL: {$urlDept}
+// Params: {$queryString1}
+// Full: {$urlDept}?{$queryString1}");
             $resultDept1First = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithoutState, $apiIdx);
             
             
@@ -1871,7 +1937,7 @@ Full: {$urlDept}?{$queryString1}");
                 $ordersDept1First = $this->parseOrderListResponse($resultDept1First);
                 if ($ordersDept1First !== false && !empty($ordersDept1First)) {
                     $allOrdersDept = array_merge($allOrdersDept, $ordersDept1First);
-                    log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ 1/2 - íŽ˜ì´ì§€ 1/" . ($totalPage1 ?: 1) . " - " . count($ordersDept1First) . "ê±´ ìˆ˜ì§‘");
+//                     log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ 1/2 - íŽ˜ì´ì§€ 1/" . ($totalPage1 ?: 1) . " - " . count($ordersDept1First) . "ê±´ ìˆ˜ì§‘");
                 }
                 
                 // ë‚˜ë¨¸ì§€ íŽ˜ì´ì§€ ìˆœíšŒ
@@ -1895,11 +1961,11 @@ Full: {$urlDept}?{$queryString1}");
             $paramsWithCancel['state'] = '40'; // ì·¨ì†Œ ìƒíƒœ
             
             $queryString2 = http_build_query($paramsWithCancel);
-            log_message('info', "Insung API 2/2 - state=40 (취소)
-URL: {$urlDept}
-Params: {$queryString2}
-Full: {$urlDept}?{$queryString2}");
-            log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 2/2 - state=40 (ì·¨ì†Œ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
+            // log_message('info', "Insung API 2/2 - state=40 (취소)
+// URL: {$urlDept}
+// Params: {$queryString2}
+// Full: {$urlDept}?{$queryString2}");
+//             log_message('debug', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ í˜¸ì¶œ 2/2 - state=40 (ì·¨ì†Œ), ëª¨ë“  íŽ˜ì´ì§€ ìˆœíšŒ");
             
             $paramsWithCancel['page'] = 1;
             $resultDept2First = $this->callApiWithAutoTokenRefresh($urlDept, $paramsWithCancel, $apiIdx);
@@ -1907,7 +1973,7 @@ Full: {$urlDept}?{$queryString2}");
             // API ì‘ë‹µ JSON ì „ì²´ ì¶œë ¥
             if ($resultDept2First) {
                 $responseJson = json_encode($resultDept2First, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-                log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´ (2/2 - state=40):\n" . $responseJson);
+//                 log_message('info', "Insung API: ë¶€ì„œë³„ ì˜¤ë”ëª©ë¡ ì‘ë‹µ JSON ì „ì²´ (2/2 - state=40):\n" . $responseJson);
             }
             
             if ($resultDept2First) {
@@ -1918,7 +1984,7 @@ Full: {$urlDept}?{$queryString2}");
                 $ordersDept2First = $this->parseOrderListResponse($resultDept2First);
                 if ($ordersDept2First !== false && !empty($ordersDept2First)) {
                     $allOrdersDept = array_merge($allOrdersDept, $ordersDept2First);
-                    log_message('debug', "Insung API: 부서별 오더목록 2/2 - state=40, 페이지 1/" . ($totalPage2 ?: 1) . " - " . count($ordersDept2First) . "건 수집");
+                    // log_message('debug', "Insung API: 부서별 오더목록 2/2 - state=40, 페이지 1/" . ($totalPage2 ?: 1) . " - " . count($ordersDept2First) . "건 수집");
                 }
                 
                 // 나머지 페이지 순회

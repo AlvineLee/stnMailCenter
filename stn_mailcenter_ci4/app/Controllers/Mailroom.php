@@ -750,7 +750,7 @@ class Mailroom extends BaseController
         $builder->select('o.*, st.service_name, st.service_code');
         $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
         $builder->where('o.mailroom_status', 'pending');
-        $builder->orderBy('o.save_date', 'DESC');
+        $builder->orderBy('o.id', 'DESC'); // 최신 주문이 위로 (id 내림차순)
 
         $query = $builder->get();
         $orders = $query ? $query->getResultArray() : [];

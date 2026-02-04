@@ -151,16 +151,13 @@ tr.deleted-order:hover {
                         <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="11" draggable="true">라이더연락처</th>
                         <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="12" draggable="true">주문번호</th>
                         <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="13" draggable="true">출발지고객명</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">출발지담당명</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">출발지동</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착지고객명</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">도착지동</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">지불</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">배송</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">배송수단</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="21" draggable="true">기사번호</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="22" draggable="true">기사이름</th>
-                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b delivery-list-header delivery-list-cell-action" data-column-index="23">액션</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="14" draggable="true">출발지동</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="15" draggable="true">도착지고객명</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="16" draggable="true">도착지동</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="17" draggable="true">지불</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="18" draggable="true">배송수단</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="19" draggable="true">기사번호</th>
+                        <th class="px-4 py-2 text-left text-sm sm:text-xs font-medium text-gray-700 uppercase border-b draggable-header delivery-list-header draggable" data-column-index="20" draggable="true">기사이름</th>
                 </tr>
             </thead>
                 <tbody class="divide-y divide-gray-200">
@@ -221,32 +218,28 @@ tr.deleted-order:hover {
                             <?php endif; ?>
                         </span>
                     </td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="14"><?= esc($order['departure_manager'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="15"><?= esc($order['departure_dong'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="16"><?= esc($order['destination_company_name'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="17"><?= esc($order['destination_dong'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="18">
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="13"><?= esc($order['departure_company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="14"><?= esc($order['departure_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="15"><?= esc($order['destination_company_name'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="16"><?= esc($order['destination_dong'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="17">
                         <?= esc($order['payment_type_label'] ?? '-') ?>
                     </td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="19">
-                        <?= esc($order['general_status_label'] ?? '-') ?>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="18">
+                        <?php
+                        $carType = $order['car_type'] ?? ($order['delivery_method'] ?? '-');
+                        $kindEtc = $order['ins_kind_etc'] ?? '';
+
+                        // 트럭인 경우 톤수 정보도 함께 표시 (tbl_orders_insung의 ins_kind_etc 사용)
+                        if ($carType !== '-' && !empty($kindEtc)) {
+                            echo esc($carType . ' (' . $kindEtc . ')');
+                        } else {
+                            echo esc($carType);
+                        }
+                        ?>
                     </td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="20"><?= esc($order['car_type'] ?? ($order['delivery_method'] ?? '-')) ?></td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="21"><?= esc($order['rider_code_no'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="22"><?= esc($order['rider_name'] ?? '-') ?></td>
-                    <td class="px-4 py-2 text-sm delivery-list-cell-action" data-column-index="23">
-                        <span class="delivery-list-cell-action-buttons">
-                            <button onclick="viewOrderDetail('<?= esc($order['encrypted_order_number'] ?? '') ?>')" class="delivery-list-cell-action-button">상세</button>
-                            <?php if (($order['status'] ?? '') === 'pending'): ?>
-                                <button onclick="cancelOrder(<?= $order['id'] ?? 0 ?>)" class="delivery-list-cell-action-button">취소</button>
-                            <?php endif; ?>
-                            <?php if ($order['show_map_on_click'] ?? false): ?>
-                                <button onclick="openMapView('<?= esc($order['insung_order_number_for_map'] ?? '') ?>', <?= ($order['is_riding'] ?? false) ? 'true' : 'false' ?>)" class="delivery-list-cell-action-button">
-                                    🗺️ 위치
-                                </button>
-                            <?php endif; ?>
-                        </span>
-                    </td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="19"><?= esc($order['rider_code_no'] ?? '-') ?></td>
+                    <td class="px-4 py-2 text-base sm:text-sm" data-column-index="20"><?= esc($order['rider_name'] ?? '-') ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -1544,15 +1537,13 @@ function closeIlyangDetail() {
         11: 'rider_tel_number', // 라이더연락처
         12: 'order_number', // 주문번호
         13: 'departure_customer_name', // 출발지고객명
-        14: 'departure_manager', // 출발지담당명
-        15: 'departure_dong', // 출발지동
-        16: 'destination_customer_name', // 도착지고객명
-        17: 'destination_dong', // 도착지동
-        18: 'payment_method', // 지불
-        19: 'delivery_method', // 배송
-        20: 'delivery_vehicle', // 배송수단
-        21: 'rider_id', // 기사번호
-        22: 'rider_name' // 기사이름
+        14: 'departure_dong', // 출발지동
+        15: 'destination_customer_name', // 도착지고객명
+        16: 'destination_dong', // 도착지동
+        17: 'payment_method', // 지불
+        18: 'delivery_vehicle', // 배송수단
+        19: 'rider_id', // 기사번호
+        20: 'rider_name' // 기사이름
     };
 
     // 현재 정렬 상태

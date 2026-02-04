@@ -128,9 +128,10 @@
         }
     </style>
     <style>
+        /* 인성주문 리스트 - 테이블 컨테이너 고정 높이 */
         .table-scroll-container {
             position: relative;
-            max-height: calc(100vh - 350px);
+            height: calc(100vh - 280px); /* 고정 높이 - 스크롤바를 이 위치에 고정 */
             min-height: 400px;
             overflow: auto;
             border: 1px solid #e5e7eb;

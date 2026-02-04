@@ -341,8 +341,8 @@
             <?php
                 endif;
 
-                // 메일룸 담당자 메뉴 (user_class = 9만)
-                if ($userClass == '9'):
+                // 메일룸 관리 메뉴 (user_type = 3, user_class = 1, user_class = 9)
+                if ($userType == '3' || $userClass == '1' || $userClass == '9'):
             ?>
             <li class="nav-item has-submenu">
                 <a href="#" class="nav-link" data-toggle="submenu">
@@ -351,8 +351,8 @@
                     <span class="nav-arrow">v</span>
                 </a>
                 <ul class="submenu">
-                    <li><a href="<?= base_url('mailroom/pending-orders') ?>">승인 대기 주문</a></li>
-                    <li><a href="<?= base_url('mailroom') ?>">대시보드</a></li>
+                    <li><a href="<?= base_url('mailroom/pending-orders') ?>">접수 대기 주문</a></li>
+                    <!-- <li><a href="<?= base_url('mailroom') ?>">대시보드</a></li> -->
                     <li><a href="<?= base_url('mailroom/buildings') ?>">건물 관리</a></li>
                     <li><a href="<?= base_url('mailroom/drivers') ?>">기사 관리</a></li>
                 </ul>

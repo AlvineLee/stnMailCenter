@@ -405,6 +405,12 @@ $routes->group('admin', function($routes) {
     $routes->get('getApiDetail', 'Admin::getApiDetail');
     $routes->post('refreshApiToken', 'Admin::refreshApiToken');
     $routes->post('refreshAllApiTokens', 'Admin::refreshAllApiTokens');
+    // 권한(user_class) 관리
+    $routes->get('class-list', 'Admin::classList');
+    $routes->get('class-form', 'Admin::classForm');
+    $routes->get('class-form/(:num)', 'Admin::classForm/$1');
+    $routes->post('class-save', 'Admin::classSave');
+    $routes->post('class-delete', 'Admin::classDelete');
 });
 
 // 인성주문 관련 라우트 (거래처 코드 2338395 전용)
@@ -413,6 +419,7 @@ $routes->group('insung-order', function($routes) {
     $routes->post('fetchOrders', 'InsungOrder::fetchOrders');
     $routes->get('getRedisStats', 'InsungOrder::getRedisStats');
     $routes->get('getCachedOrders', 'InsungOrder::getCachedOrders');
+    $routes->get('debug-call-center/(:any)', 'InsungOrder::debugCallCenter/$1');
 });
 
 // 테스트 라우트

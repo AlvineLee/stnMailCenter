@@ -565,11 +565,10 @@ function updateCompanySelect(companies, selectedCompCode = null, openModal = fal
     // 메일룸 권한은 $has_mailroom_permission 변수로 별도 관리됨
     ?>
 
-    <!-- 주문유형 그리드 + 메일룸서비스 (분리 배치) -->
-    <div class="flex gap-4 mb-6">
-        <!-- 메인 서비스 그리드 (왼쪽) -->
-        <div class="flex-1">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" id="service-types-grid">
+    <!-- 주문유형 그리드 -->
+    <div class="mb-6">
+        <!-- 메인 서비스 그리드 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" id="service-types-grid">
         <?php
         // 카테고리별로 그룹화된 데이터 정렬 (메일룸 제외)
         $sortedCategories = [];
@@ -665,38 +664,9 @@ function updateCompanySelect(companies, selectedCompCode = null, openModal = fal
         endforeach;
         endif;
         ?>
-            </div>
         </div>
-        <!-- // 메인 서비스 그리드 끝 -->
-
-        <!-- 메일룸 권한 패널 (오른쪽) - service_types와 독립적으로 관리 -->
-        <?php if (!empty($show_contract_settings)): ?>
-        <div class="w-52 flex-shrink-0">
-            <div class="bg-red-50 rounded-lg p-3 border-2 border-red-300 sticky top-4">
-                <h3 class="text-sm font-bold text-red-700 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                    </svg>
-                    메일룸 권한
-                </h3>
-                <p class="text-xs text-red-600 mb-3">계약 거래처 주문을 메일룸 대기열로 이동</p>
-                <div class="space-y-1">
-                    <div class="hover:bg-red-100 py-2 px-2 rounded transition-colors"
-                         style="display: flex !important; align-items: center !important; justify-content: space-between !important;">
-                        <span class="text-sm text-red-700 font-medium">메일룸 사용</span>
-                        <label class="relative inline-flex items-center cursor-pointer" onclick="event.stopPropagation();" title="메일룸 사용 권한">
-                            <input type="checkbox"
-                                   class="sr-only peer mailroom-permission-toggle"
-                                   <?= !empty($has_mailroom_permission) ? 'checked' : '' ?>>
-                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
     </div>
-    <!-- // 주문유형 그리드 + 메일룸서비스 끝 -->
+    <!-- // 주문유형 그리드 끝 -->
 
     <!-- 액션 버튼들 (한 줄 배치) -->
     <div class="flex items-center justify-between gap-3 flex-nowrap">
@@ -707,6 +677,22 @@ function updateCompanySelect(companies, selectedCompCode = null, openModal = fal
 
         <!-- 설정 패널들 + 저장 버튼 (오른쪽) -->
         <div class="flex items-center gap-2 flex-nowrap">
+            <?php if (!empty($show_contract_settings)): ?>
+            <!-- 메일룸권한 사용 패널 (빨간색) -->
+            <div class="flex items-center gap-2 px-2 py-1 bg-red-50 rounded border border-red-300 flex-nowrap flex-shrink-0">
+                <svg class="w-4 h-4 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+                <span class="text-xs font-semibold text-red-700 whitespace-nowrap">메일룸권한 사용</span>
+                <label class="relative inline-flex items-center cursor-pointer" onclick="event.stopPropagation();" title="메일룸 사용 권한">
+                    <input type="checkbox"
+                           class="sr-only peer mailroom-permission-toggle"
+                           <?= !empty($has_mailroom_permission) ? 'checked' : '' ?>>
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                </label>
+            </div>
+            <?php endif; ?>
+
             <!-- 오픈여부 설정 패널 (파란색) -->
             <div class="flex items-center gap-2 px-2 py-1 bg-blue-50 rounded border border-blue-200 flex-nowrap flex-shrink-0">
                 <span class="text-xs font-semibold text-blue-700 whitespace-nowrap">오픈여부</span>

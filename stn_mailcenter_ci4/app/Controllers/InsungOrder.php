@@ -129,6 +129,67 @@ class InsungOrder extends BaseController
     }
 
     /**
+     * 특정 콜센터 디버그 (개발용)
+     * URL: /insung-order/debug-call-center/11846
+     */
+    public function debugCallCenter($ccCode = null)
+    {
+        // 거래처 코드 확인
+        $userCompCode = session()->get('user_company');
+        if ($userCompCode != '2338395') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '접근 권한이 없습니다.'
+            ]);
+        }
+
+        if (!$ccCode) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => '콜센터 코드를 입력하세요.'
+            ]);
+        }
+
+        $db = \Config\Database::connect();
+
+        // 1. v_cc_api_user_simple 뷰에서 해당 콜센터 조회
+        $query = $db->query("SELECT * FROM v_cc_api_user_simple WHERE cccode = ?", [$ccCode]);
+        $viewResult = $query ? $query->getResultArray() : [];
+
+        // 2. tbl_cc_list에서 직접 조회
+        $ccQuery = $db->query("SELECT * FROM tbl_cc_list WHERE cccode = ?", [$ccCode]);
+        $ccResult = $ccQuery ? $ccQuery->getRowArray() : null;
+
+        // 3. tbl_api_list에서 조회
+        $apiQuery = $db->query("SELECT * FROM tbl_api_list WHERE cccode = ?", [$ccCode]);
+        $apiResult = $apiQuery ? $apiQuery->getResultArray() : [];
+
+        // 4. 해당 콜센터의 거래처 목록
+        $compQuery = $db->query("
+            SELECT cl.*,
+                   (SELECT COUNT(*) FROM tbl_users_list ul
+                    WHERE ul.user_company = cl.comp_code
+                    AND ul.user_ccode IS NOT NULL AND ul.user_ccode != '') as user_count
+            FROM tbl_company_list cl
+            WHERE cl.cc_idx = (SELECT idx FROM tbl_cc_list WHERE cccode = ?)
+        ", [$ccCode]);
+        $compResult = $compQuery ? $compQuery->getResultArray() : [];
+
+        return $this->response->setJSON([
+            'success' => true,
+            'cc_code' => $ccCode,
+            'view_result' => $viewResult,
+            'view_count' => count($viewResult),
+            'cc_list' => $ccResult,
+            'api_list' => $apiResult,
+            'api_count' => count($apiResult),
+            'company_list' => $compResult,
+            'company_count' => count($compResult),
+            'message' => count($viewResult) > 0 ? 'View에서 조회됨' : 'View에서 조회 안 됨 (user_id가 없거나 API 정보 없음)'
+        ]);
+    }
+
+    /**
      * Redis + DB 통합 주문 조회 (AJAX)
      * 페이지 로드 시 자동 호출
      * Redis(진행중) + DB(완료/취소) 모두 반환

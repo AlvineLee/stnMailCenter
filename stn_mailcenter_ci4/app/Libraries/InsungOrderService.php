@@ -447,58 +447,61 @@ class InsungOrderService
 
         // JSON 디코딩 (UTF-8 정리 후)
         $cleanedResponse = mb_convert_encoding($cleanedResponse, 'UTF-8', 'UTF-8');
-        $data = json_decode($cleanedResponse, true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
+
+        // JSON_INVALID_UTF8_SUBSTITUTE: UTF-8 문제 대체
+        // JSON_BIGINT_AS_STRING: 큰 숫자를 문자열로
+        $data = json_decode($cleanedResponse, true, 512, JSON_INVALID_UTF8_SUBSTITUTE | JSON_BIGINT_AS_STRING);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // 에러 위치 찾기: 이진 탐색으로 JSON이 깨지는 지점 찾기
-            // $errorPos = $this->findJsonErrorPosition($cleanedResponse);
-            // if ($errorPos > 0) {
-            //     $errorContext = substr($cleanedResponse, max(0, $errorPos - 50), 100);
-            //     log_message('error', "InsungOrderService: JSON 에러 위치 ccCode={$ccCode} pos={$errorPos}: " . addcslashes($errorContext, "\r\n\t\""));
+            $jsonError = json_last_error_msg();
+            $responseLen = strlen($response);
+            $cleanedLen = strlen($cleanedResponse);
 
-            //     // 해당 위치의 hex dump
-            //     $hexContext = substr($cleanedResponse, max(0, $errorPos - 10), 30);
-            //     $hex = '';
-            //     for ($i = 0; $i < strlen($hexContext); $i++) {
-            //         $hex .= sprintf("%02X ", ord($hexContext[$i]));
-            //     }
-            //     log_message('debug', "InsungOrderService: HEX at error pos: " . $hex);
+            // 에러 로그 기록
+            log_message('error', "InsungOrderService: JSON Parse Error [{$jsonError}] - ccCode={$ccCode}, originalLen={$responseLen}, cleanedLen={$cleanedLen}");
+
+            // 원본 JSON을 파일로 저장 (디버깅용)
+            // $debugDir = WRITEPATH . 'logs/json_errors';
+            // if (!is_dir($debugDir)) {
+            //     @mkdir($debugDir, 0777, true);
             // }
-            // $jsonError = json_last_error_msg();
-            // $responseLen = strlen($response);
-            // $cleanedLen = strlen($cleanedResponse);
-            // log_message('warning', "InsungOrderService: JSON Parse Error [{$jsonError}] - ccCode={$ccCode}, originalLen={$responseLen}, cleanedLen={$cleanedLen}");
+            // $debugFile = $debugDir . '/error_' . $ccCode . '_' . date('YmdHis') . '.json';
+            // @file_put_contents($debugFile, $response);
+            // log_message('error', "InsungOrderService: 원본 JSON 저장됨 - {$debugFile}");
 
-            // // 정리된 JSON 시작/끝 부분 출력
-            // $firstPart = substr($cleanedResponse, 0, 300);
-            // $lastPart = substr($cleanedResponse, -300);
-            // log_message('debug', "InsungOrderService: 정리된 JSON 시작: " . addcslashes($firstPart, "\r\n\t"));
-            // log_message('debug', "InsungOrderService: 정리된 JSON 끝: " . addcslashes($lastPart, "\r\n\t"));
+            // // 정리된 JSON도 저장
+            // $cleanedFile = $debugDir . '/cleaned_' . $ccCode . '_' . date('YmdHis') . '.json';
+            // @file_put_contents($cleanedFile, $cleanedResponse);
+            // log_message('error', "InsungOrderService: 정리된 JSON 저장됨 - {$cleanedFile}");
 
-            // // 정리 후에도 제어문자가 남아있는지 확인 (전체 검사)
-            // if (preg_match_all('/[\x00-\x1F\x7F]/', $cleanedResponse, $remaining, PREG_OFFSET_CAPTURE)) {
-            //     $chars = [];
-            //     foreach (array_slice($remaining[0], 0, 10) as $m) {
-            //         $pos = $m[1];
-            //         $context = substr($cleanedResponse, max(0, $pos - 20), 50);
-            //         $chars[] = sprintf("0x%02X@%d near '%s'", ord($m[0]), $pos, addcslashes($context, "\r\n\t"));
-            //     }
-            //     log_message('error', "InsungOrderService: 정리 후에도 제어문자 존재! ccCode={$ccCode}: " . implode(' | ', $chars));
-            // } else {
-            //     log_message('debug', "InsungOrderService: 제어문자 모두 제거됨 (ccCode={$ccCode})");
-            // }
+            // JSON 시작/끝 부분 출력
+            $firstPart = substr($cleanedResponse, 0, 300);
+            $lastPart = substr($cleanedResponse, -300);
+            log_message('debug', "InsungOrderService: 정리된 JSON 시작: " . addcslashes($firstPart, "\r\n\t"));
+            log_message('debug', "InsungOrderService: 정리된 JSON 끝: " . addcslashes($lastPart, "\r\n\t"));
 
-            // // JSON 구조 검증 - 대괄호/중괄호 균형 확인
-            // $openBrackets = substr_count($cleanedResponse, '[');
-            // $closeBrackets = substr_count($cleanedResponse, ']');
-            // $openBraces = substr_count($cleanedResponse, '{');
-            // $closeBraces = substr_count($cleanedResponse, '}');
-            // log_message('debug', "InsungOrderService: 괄호 균형 ccCode={$ccCode}: [ {$openBrackets}/{$closeBrackets} ] { {$openBraces}/{$closeBraces} }");
+            // JSON 구조 검증 - 대괄호/중괄호 균형 확인
+            $openBrackets = substr_count($cleanedResponse, '[');
+            $closeBrackets = substr_count($cleanedResponse, ']');
+            $openBraces = substr_count($cleanedResponse, '{');
+            $closeBraces = substr_count($cleanedResponse, '}');
+            log_message('debug', "InsungOrderService: 괄호 균형 ccCode={$ccCode}: [ {$openBrackets}/{$closeBrackets} ] { {$openBraces}/{$closeBraces} }");
 
-            // // 따옴표 개수 확인 (홀수면 문제)
-            // $quotes = substr_count($cleanedResponse, '"');
-            // $isOdd = ($quotes % 2 === 1) ? '홀수(문제!)' : '짝수(정상)';
-            // log_message('debug', "InsungOrderService: 따옴표 개수 ccCode={$ccCode}: {$quotes}개 ({$isOdd})");
+            // 따옴표 개수 확인 (홀수면 문제)
+            $quotes = substr_count($cleanedResponse, '"');
+            $isOdd = ($quotes % 2 === 1) ? '홀수(문제!)' : '짝수(정상)';
+            log_message('debug', "InsungOrderService: 따옴표 개수 ccCode={$ccCode}: {$quotes}개 ({$isOdd})");
+
+            // 제어문자 검사
+            if (preg_match_all('/[\x00-\x1F\x7F]/', $cleanedResponse, $remaining, PREG_OFFSET_CAPTURE)) {
+                $chars = [];
+                foreach (array_slice($remaining[0], 0, 5) as $m) {
+                    $pos = $m[1];
+                    $context = substr($cleanedResponse, max(0, $pos - 20), 50);
+                    $chars[] = sprintf("0x%02X@%d near '%s'", ord($m[0]), $pos, addcslashes($context, "\r\n\t"));
+                }
+                log_message('error', "InsungOrderService: 제어문자 발견! ccCode={$ccCode}: " . implode(' | ', $chars));
+            }
 
             return [];
         }
@@ -535,7 +538,7 @@ class InsungOrderService
         }
 
         if ($code !== '1000') {
-            // log_message('warning', "InsungOrderService: API 오류 응답 - code={$code}, msg={$msg}, ccCode={$ccCode}");
+            log_message('warning', "InsungOrderService: API 오류 응답 - code={$code}, msg={$msg}, ccCode={$ccCode}");
             return [];
         }
 
@@ -598,7 +601,7 @@ class InsungOrderService
             }
 
             try {
-                // log_message('debug', "InsungOrderService: [{$apiName}] API 호출 시작 - ccCode={$ccCode}, mCode={$mCode}, userId={$userId}, apiIdx={$apiIdx}");
+                log_message('debug', "InsungOrderService: [{$apiName}] API 호출 시작 - ccCode={$ccCode}, mCode={$mCode}, userId={$userId}, apiIdx={$apiIdx}");
 
                 $orders = $this->callOrderListApi(
                     $mCode,
@@ -610,16 +613,16 @@ class InsungOrderService
                     $apiIdx
                 );
 
-                // $orderCount = count($orders);
-                // if ($orderCount === 0) {
-                //     log_message('info', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 주문 0건 (응답 정상, 데이터 없음)");
-                // } else {
-                //     log_message('info', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 주문 {$orderCount}건 조회 성공");
-                // }
+                $orderCount = count($orders);
+                if ($orderCount === 0) {
+                    log_message('warning', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 주문 0건 (JSON 파싱 실패 또는 데이터 없음)");
+                } else {
+                    log_message('info', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 주문 {$orderCount}건 조회 성공");
+                }
 
                 $results[$ccCode] = ['orders' => $orders];
             } catch (\Exception $e) {
-                // log_message('error', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 예외 발생: " . $e->getMessage());
+                log_message('error', "InsungOrderService: [{$apiName}] ccCode={$ccCode} - 예외 발생: " . $e->getMessage());
                 $results[$ccCode] = ['error' => $e->getMessage()];
             }
         }
@@ -901,26 +904,28 @@ class InsungOrderService
      */
     protected function sanitizeJsonResponse(string $response): string
     {
-        // 0단계: 모든 실제 줄바꿈/캐리지리턴 제거
-        $response = str_replace(["\r\n", "\r", "\n"], '', $response);
+        // BOM 제거
+        $response = preg_replace('/^\xEF\xBB\xBF/', '', $response);
 
-        // 1단계: 문자열 값 끝의 잘못된 백슬래시 수정
-        // API에서 "value\" 형태로 잘못 내려오는 경우 처리
-        // \"," → ","  (값 끝의 백슬래시 제거)
-        // \"} → "}
-        // \"] → "]
-        $response = preg_replace('/\\\\"\\s*,/', '",', $response);
-        $response = preg_replace('/\\\\"\\s*}/', '"}', $response);
-        $response = preg_replace('/\\\\"\\s*\\]/', '"]', $response);
+        // 1. 먼저 모든 문자열 값을 추출하고 처리 (간단하고 빠른 방법)
+        // JSON 파서가 문제 삼는 제어문자를 미리 제거
+        $response = strtr($response, [
+            "\r" => '',  // CR 완전 제거
+            "\n" => '',  // LF 완전 제거
+            "\t" => ' '  // TAB을 공백으로
+        ]);
 
-        // 2단계: 파싱 시도
-        $testDecode = json_decode($response, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-            return $response;
-        }
+        // 기타 제어문자 제거 (0x00-0x1F, 0x7F)
+        $response = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $response);
 
-        // 3단계: 그래도 실패하면 다른 제어문자 처리 (탭 등)
-        $response = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', ' ', $response);
+        // 2. 잘못된 백슬래시 이스케이프 수정
+        // JSON에서 올바른 이스케이프: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+        // 잘못된 이스케이프 (예: \$, \상, \4, \박 등)를 \\로 변경
+        $response = preg_replace('/\\\\(?!["\\\\\/bfnrtu])/', '\\\\\\\\', $response);
+
+        // 3. 단독 백슬래시 값 처리: "field": "\" → "field": "\\"
+        // 필드 값이 백슬래시 하나만 있는 경우, 닫는 따옴표를 이스케이프해버려 JSON 구조 파괴
+        $response = preg_replace('/(:\s*)"\\\\"(\s*[,\}\]])/', '$1"\\\\\\\\"$2', $response);
 
         return $response;
     }

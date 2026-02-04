@@ -59,9 +59,10 @@ class DeliveryModel extends Model
             oq.pouch_quantity,
             oq.shopping_bag_selection,
             COALESCE(oq.departure_address, o.departure_address) as departure_address,
-            COALESCE(oq.destination_address, o.destination_address) as destination_address
+            COALESCE(oq.destination_address, o.destination_address) as destination_address,
+            oi.ins_kind_etc
         ');
-        
+
         $builder->join('tbl_service_types st', 'o.service_type_id = st.id', 'left');
         // customer_id JOIN: 인성 API 주문은 comp_code를 통해, 일반 주문은 customer_id를 통해
         $builder->join('tbl_customer_hierarchy ch', 'o.customer_id = ch.id', 'left');
@@ -71,6 +72,8 @@ class DeliveryModel extends Model
         // 일반 주문의 경우 tbl_users를 통해 user_name 가져오기
         $builder->join('tbl_users u', 'o.user_id = u.id', 'left');
         $builder->join('tbl_orders_quick oq', 'o.id = oq.order_id', 'left');
+        // 인성 주문 톤수 정보를 위한 JOIN
+        $builder->join('tbl_orders_insung oi', 'o.id = oi.order_id', 'left');
         
         // 서브도메인 기반 필터링 (최우선)
         $hasSubdomainFilter = isset($filters['subdomain_comp_code']) && $filters['subdomain_comp_code'];
